@@ -23,7 +23,7 @@ export class AuthService {
 
       const isPasswordValid = await bcryptjs.compare(password, user.password);
       const id = user.id;
-      console.log("ID Auth Service: ", id);
+      
       if(!isPasswordValid) throw new BadRequestException('Contraseña incorrecta');
       const token = this.jwtService.sign({ email, id });
 

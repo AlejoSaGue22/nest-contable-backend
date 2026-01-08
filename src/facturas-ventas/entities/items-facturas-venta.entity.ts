@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { FacturasVenta } from "./facturas-venta.entity";
 import { Producto } from "src/productos/entities/producto.entity";
 
@@ -9,6 +9,7 @@ export class ItemsFacturaVenta {
     id: string;
 
     @ManyToOne(()=> Producto)
+    // @JoinColumn({ name: 'productoId' })
     producto: Producto;
 
     @Column()

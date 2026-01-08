@@ -152,11 +152,6 @@ export class FacturasVentasService {
         const { offset = 1, limit = 10, ...where } = options;
         const skip = (offset < 1 ? 0 : (offset - 1)) * limit;
 
-        console.log('Offset:', offset);
-        console.log('Limit:', limit);
-        console.log('Skip:', skip);
-
-
         const queryBuilder = this.facturaVentaRepository
           .createQueryBuilder('invoice')
           .leftJoinAndSelect('invoice.client', 'client')
@@ -211,10 +206,23 @@ export class FacturasVentasService {
 
   async findOne(id: string) {
     try {
-      const invoice = await this.facturaVentaRepository.findOne({
-        where: { id },
-        relations: ['clientId', 'items', 'createdBy'],
-      });
+      const invoice = await this.facturaVentaRepository
+      .createQueryBuilder('invoice')
+      .leftJoinAndSelect('invoice.client', 'client')
+      .leftJoinAndSelect('invoice.items', 'items')
+      .leftJoinAndSelect('items.producto', 'producto') // ← Relación con producto
+      .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+      .where('invoice.id = :id', { id })
+      .select([
+        'invoice',
+        'client',
+        'items',
+        'producto.id',
+        'producto.nombre',
+        'producto.codigo', // Solo los campos que necesitas
+        'createdBy'
+      ])
+      .getOne();
 
       if (!invoice) {
         throw new NotFoundException(`Factura con ID ${id} no encontrada`);

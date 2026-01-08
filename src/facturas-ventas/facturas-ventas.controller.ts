@@ -33,10 +33,10 @@ export class FacturasVentasController {
   }
 
   @Get(':id')
-  @Permissions(Permission.INVOICE_READ)
+  // @Permissions(Permission.INVOICE_READ)
   async findOne(@Param('id') id: string) {
     const invoice = await this.facturasVentasService.findOne(id);
-    return toInvoiceResponse(invoice, 'Factura obtenida exitosamente');
+    return toInvoiceResponse([invoice], 'Factura obtenida exitosamente');
   }
 
   @Patch(':id')
