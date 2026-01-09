@@ -5,6 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductosModule } from './productos/productos.module';
 import { AuthModule } from './auth/auth.module';
 import { FacturasVentasModule } from './facturas-ventas/facturas-ventas.module';
+import { RolesModule } from './roles/roles.module';
+import { MenuModule } from './menu/menu.module';
 
 @Module({
   imports: [TypeOrmModule.forRoot({
@@ -23,7 +25,9 @@ import { FacturasVentasModule } from './facturas-ventas/facturas-ventas.module';
            ProductosModule,
            UsersModule,
            AuthModule,
-           FacturasVentasModule],
+           FacturasVentasModule,
+           RolesModule,
+           MenuModule],
   controllers: [],
 })
 

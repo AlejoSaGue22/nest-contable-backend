@@ -1,10 +1,13 @@
-import { UserRole } from "src/common/constants/roles.constants"
+import { Permission, UserRole } from "src/common/constants/roles.constants"
 import { User } from "src/users/entities/user.entity"
 
 export interface JwtPayload {
-    email: string
-    id?: string
-    role?: string
+    sub: string;
+    email: string;
+    name: string;
+    role: UserRole;
+    permissions: Permission[];
+    exp?: number;
 }
 
 export interface RequestWithUser extends Request {

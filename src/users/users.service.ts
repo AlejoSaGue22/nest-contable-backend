@@ -4,13 +4,16 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
+import { Role } from 'src/roles/entities/role.entity';
 
 @Injectable()
 export class UsersService {
 
   constructor(
     @InjectRepository(User)
-    private readonly usersRepository: Repository<User>
+    private readonly usersRepository: Repository<User>,
+    @InjectRepository(Role)
+    private rolesRepository: Repository<Role>,
   ){}
 
   async create(createUserDto: CreateUserDto) {
@@ -18,6 +21,10 @@ export class UsersService {
     const user = this.usersRepository.create(createUserDto);
 
     return this.usersRepository.save(user);
+  }
+
+  async save(createUserDto: CreateUserDto) {
+    return await this.usersRepository.save(createUserDto);
   }
 
   async findAll() {
@@ -44,7 +51,8 @@ export class UsersService {
     
     const user = await this.usersRepository.findOne({
       where: { email },
-      select: ['id', 'fullName', 'email', 'password']
+      select: ['id', 'fullName', 'email', 'password'],
+      relations: ['role']
     });
 
     return user;
