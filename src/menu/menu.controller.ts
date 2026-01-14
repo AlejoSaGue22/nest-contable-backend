@@ -1,8 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { MenuService } from './menu.service';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
+import { User } from 'src/users/entities/user.entity';
+import { Permission } from 'src/common/constants/roles.constants';
+import { Permissions } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 @Controller('menu')
 @UseGuards(AuthGuard)
@@ -58,11 +63,11 @@ export class MenuController {
   @Post()
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
-  async createMenuItem(@Body() createDto: CreateMenuItemDto) {
-    const menuItem = await this.menuService.createMenuItem(createDto);
+  async createMenuItem(@Body() createDto: CreateMenuDto) {
+    // const menuItem = await this.menuService.createMenuItem(createDto);
     return {
       success: true,
-      data: menuItem,
+      // data: menuItem,
       message: 'Item del menú creado exitosamente',
     };
   }
@@ -72,7 +77,7 @@ export class MenuController {
   @Permissions(Permission.MENU_MANAGE)
   async updateMenuItem(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateDto: UpdateMenuItemDto,
+    @Body() updateDto: UpdateMenuDto,
   ) {
     const menuItem = await this.menuService.updateMenuItem(id, updateDto);
     return {

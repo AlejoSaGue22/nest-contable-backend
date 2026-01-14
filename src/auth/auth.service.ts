@@ -126,6 +126,8 @@ export class AuthService {
 
   }
 
+  
+
   async checkStatus( user: User){
       const payload: JwtPayload = {
         sub: user.id,

@@ -1,27 +1,31 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MenuItem } from './entities/menu.entity';
-import { TreeRepository } from 'typeorm';
+import { In, TreeRepository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
-import { Permission } from 'src/common/constants/roles.constants';
+import { Permission, ROLE_PERMISSIONS } from 'src/common/constants/roles.constants';
+import { MenuSeedItem } from './interfaces/menu-seed.interface';
+import { DEFAULT_MENU_ITEMS } from 'src/common/constants/menu.constants';
 
 @Injectable()
 export class MenuService {
+  private readonly logger = new Logger(MenuService.name);
+
   constructor(
     @InjectRepository(MenuItem)
     private menuItemRepository: TreeRepository<MenuItem>,
   ) {}
   
-  async getMenuForUser(user: User): Promise<MenuItem[]> {
+  async getMenuForUser(user: User): Promise<MenuSeedItem[]> {
     const userPermissions = user.getPermissions();
     
     // Obtener todos los items activos
     const allItems = await this.menuItemRepository.findTrees();
     
     // Filtrar según permisos y visibilidad
-    const filterMenu = (items: MenuItem[]): MenuItem[] => {
+    const filterMenu = (items: MenuSeedItem[]): MenuSeedItem[] => {
       return items
         .filter(item => item.isActive && item.isVisible)
         .filter(item => !item.requiredPermission || userPermissions.includes(item.requiredPermission))
@@ -35,13 +39,13 @@ export class MenuService {
     return filterMenu(allItems);
   }
 
-  async getMenuForRole(roleName: string): Promise<MenuItem[]> {
+  async getMenuForRole(roleName: string): Promise<MenuSeedItem[]> {
     // Obtener permisos del rol
     const rolePermissions = ROLE_PERMISSIONS[roleName as any] || [];
     
     const allItems = await this.menuItemRepository.findTrees();
     
-    const filterMenu = (items: MenuItem[]): MenuItem[] => {
+    const filterMenu = (items: MenuSeedItem[]): MenuSeedItem[] => {
       return items
         .filter(item => item.isActive && item.isVisible)
         .filter(item => !item.requiredPermission || rolePermissions.includes(item.requiredPermission))
@@ -57,7 +61,7 @@ export class MenuService {
 
   async getAllMenuItems(): Promise<MenuItem[]> {
     return await this.menuItemRepository.findTrees({
-      order: { order: 'ASC' },
+      // order: { order: 'ASC' },
     });
   }
 
@@ -74,28 +78,30 @@ export class MenuService {
     return menuItem;
   }
 
-  async createMenuItem(createDto: CreateMenuItemDto): Promise<MenuItem> {
-    let parent: MenuItem | null = null;
+  // ***! QUEDA PENDIENTE SOLUCIONAR YA QUE ARROJA UN ERROR */
+
+  // async createMenuItem(createDto: CreateMenuDto): Promise<MenuSeedItem> {
+  //   let parent: MenuSeedItem | null = null;
     
-    if (createDto.parentId) {
-      parent = await this.menuItemRepository.findOne({
-        where: { id: createDto.parentId },
-      });
+  //   if (createDto.parentId) {
+  //     parent = await this.menuItemRepository.findOne({
+  //       where: { id: createDto.parentId },
+  //     });
       
-      if (!parent) {
-        throw new NotFoundException(`Menu item padre con ID ${createDto.parentId} no encontrado`);
-      }
-    }
+  //     if (!parent) {
+  //       throw new NotFoundException(`Menu item padre con ID ${createDto.parentId} no encontrado`);
+  //     }
+  //   }
 
-    const menuItem = this.menuItemRepository.create({
-      ...createDto,
-      parent,
-    });
+  //   const menuItem = this.menuItemRepository.create({
+  //     ...createDto,
+  //     parent,
+  //   });
 
-    return await this.menuItemRepository.save(menuItem);
-  }
+  //   return await this.menuItemRepository.save(menuItem);
+  // }
 
-  async updateMenuItem(id: string, updateDto: UpdateMenuItemDto): Promise<MenuItem> {
+  async updateMenuItem(id: string, updateDto: UpdateMenuDto): Promise<MenuItem> {
     const menuItem = await this.getMenuItem(id);
     
     if (updateDto.parentId) {
@@ -146,7 +152,9 @@ export class MenuService {
   }
 
   async reorderMenuItems(orderedIds: string[]): Promise<MenuItem[]> {
-    const menuItems = await this.menuItemRepository.findByIds(orderedIds);
+    const menuItems = await this.menuItemRepository.findBy({
+      id: In(orderedIds),
+    });
     
     const updatePromises = menuItems.map((item, index) => {
       item.order = index;
@@ -158,112 +166,28 @@ export class MenuService {
     return this.getAllMenuItems();
   }
 
-  async seedDefaultMenu(): Promise<void> {
-    const defaultMenu: Partial<MenuItem>[] = [
-      {
-        title: 'Dashboard',
-        icon: 'dashboard',
-        route: '/dashboard',
-        requiredPermission: Permission.DASHBOARD_VIEW,
-        order: 0,
-        isActive: true,
-        isVisible: true,
-      },
-      {
-        title: 'Facturación',
-        icon: 'receipt',
-        route: '/invoices',
-        requiredPermission: Permission.INVOICE_READ,
-        order: 1,
-        isActive: true,
-        isVisible: true,
-      },
-      {
-        title: 'Clientes',
-        icon: 'people',
-        route: '/clients',
-        requiredPermission: Permission.CLIENT_READ,
-        order: 2,
-        isActive: true,
-        isVisible: true,
-      },
-      {
-        title: 'Productos',
-        icon: 'inventory',
-        route: '/products',
-        requiredPermission: Permission.PRODUCT_READ,
-        order: 3,
-        isActive: true,
-        isVisible: true,
-      },
-      {
-        title: 'Reportes',
-        icon: 'assessment',
-        route: '/reports',
-        requiredPermission: Permission.REPORT_VIEW,
-        order: 4,
-        isActive: true,
-        isVisible: true,
-      },
-      {
-        title: 'Administración',
-        icon: 'admin_panel_settings',
-        route: '/admin',
-        requiredPermission: Permission.USER_READ,
-        order: 5,
-        isActive: true,
-        isVisible: true,
-        children: [
-          {
-            title: 'Usuarios',
-            icon: 'manage_accounts',
-            route: '/admin/users',
-            requiredPermission: Permission.USER_READ,
-            order: 0,
-            isActive: true,
-            isVisible: true,
-          },
-          {
-            title: 'Roles',
-            icon: 'admin_panel_settings',
-            route: '/admin/roles',
-            requiredPermission: Permission.ROLE_READ,
-            order: 1,
-            isActive: true,
-            isVisible: true,
-          },
-          {
-            title: 'Menú',
-            icon: 'menu',
-            route: '/admin/menu',
-            requiredPermission: Permission.MENU_MANAGE,
-            order: 2,
-            isActive: true,
-            isVisible: true,
-          },
-          {
-            title: 'Configuración',
-            icon: 'settings',
-            route: '/admin/settings',
-            requiredPermission: Permission.SETTINGS_VIEW,
-            order: 3,
-            isActive: true,
-            isVisible: true,
-          },
-        ],
-      },
-    ];
-
+   async seedDefaultMenu(): Promise<void> {
+    this.logger.log('Iniciando seed del menú por defecto...');
+    
     // Verificar si ya existe menú
     const existingMenu = await this.menuItemRepository.count();
     if (existingMenu > 0) {
-      return; // No hacer seed si ya hay datos
+      this.logger.log('El menú ya existe, omitiendo seed');
+      return;
     }
 
-    await this.createMenuTree(defaultMenu);
+    const defaultMenu: Partial<MenuSeedItem>[] = DEFAULT_MENU_ITEMS; 
+
+    try {
+      await this.createMenuTree(defaultMenu);
+      this.logger.log('Seed del menú completado exitosamente');
+    } catch (error) {
+      this.logger.error('Error durante el seed del menú:', error);
+      throw error;
+    }
   }
 
-  private async createMenuTree(items: Partial<MenuItem>[], parent?: MenuItem): Promise<void> {
+  private async createMenuTree(items: Partial<MenuSeedItem>[], parent?: MenuSeedItem): Promise<void> {
     for (const itemData of items) {
       const menuItem = this.menuItemRepository.create({
         ...itemData,

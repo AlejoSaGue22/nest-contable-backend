@@ -1,6 +1,6 @@
-// menu/entities/menu-item.entity.ts
 import { Permission } from 'src/common/constants/roles.constants';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, Tree, TreeParent, TreeChildren } from 'typeorm';
+
 
 @Entity('menu_items')
 @Tree('closure-table')
