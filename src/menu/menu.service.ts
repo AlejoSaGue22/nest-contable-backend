@@ -8,6 +8,7 @@ import { User } from 'src/users/entities/user.entity';
 import { Permission, ROLE_PERMISSIONS } from 'src/common/constants/roles.constants';
 import { MenuSeedItem } from './interfaces/menu-seed.interface';
 import { DEFAULT_MENU_ITEMS } from 'src/common/constants/menu.constants';
+import { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
 
 @Injectable()
 export class MenuService {
@@ -18,8 +19,11 @@ export class MenuService {
     private menuItemRepository: TreeRepository<MenuItem>,
   ) {}
   
-  async getMenuForUser(user: User): Promise<MenuSeedItem[]> {
-    const userPermissions = user.getPermissions();
+  async getMenuForUser(user: JwtPayload): Promise<MenuSeedItem[]> {
+    // El user viene del JWT payload, no es una instancia de User entity
+    console.log("user", user);  
+    const userPermissions = user.permissions || [];
+    console.log("userPermissions", userPermissions);  
     
     // Obtener todos los items activos
     const allItems = await this.menuItemRepository.findTrees();
@@ -171,6 +175,7 @@ export class MenuService {
     
     // Verificar si ya existe menú
     const existingMenu = await this.menuItemRepository.count();
+    
     if (existingMenu > 0) {
       this.logger.log('El menú ya existe, omitiendo seed');
       return;

@@ -8,6 +8,7 @@ import { User } from 'src/users/entities/user.entity';
 import { Permission } from 'src/common/constants/roles.constants';
 import { Permissions } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
 
 @Controller('menu')
 @UseGuards(AuthGuard)
@@ -15,7 +16,7 @@ export class MenuController {
   constructor(private readonly menuService: MenuService) {}
 
   @Get()
-  async getMenu(@CurrentUser() user: User) {
+  async getMenu(@CurrentUser() user: JwtPayload) {
     const menu = await this.menuService.getMenuForUser(user);
     return {
       success: true,

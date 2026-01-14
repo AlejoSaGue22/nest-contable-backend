@@ -3,7 +3,7 @@ import { Permission } from "./roles.constants";
 export const DEFAULT_MENU_ITEMS = [
       {
         title: 'Dashboard',
-        icon: 'dashboard',
+        icon: '<i class="fa-solid fa-chart-simple"></i>',
         route: '/dashboard',
         requiredPermission: Permission.DASHBOARD_VIEW,
         order: 0,
@@ -13,7 +13,7 @@ export const DEFAULT_MENU_ITEMS = [
       },
       {
         title: 'Ventas',
-        icon: 'point_of_sale',
+        icon: '<i class="fa-solid fa-hand-holding-dollar"></i>',
         route: '/ventas',
         requiredPermission: Permission.USER_READ,
         order: 5,
@@ -58,7 +58,7 @@ export const DEFAULT_MENU_ITEMS = [
       },
       {
         title: 'Compras y Gastos',
-        icon: 'shopping_cart',
+        icon: '<i class="fa-solid fa-cart-shopping"></i>',
         route: '/purchases',
         requiredPermission: Permission.USER_READ,
         order: 5,
@@ -92,7 +92,7 @@ export const DEFAULT_MENU_ITEMS = [
       },
       {
         title: 'Reportes',
-        icon: 'assessment',
+        icon: '<i class="fa-solid fa-chart-line"></i>',
         route: '/reports',
         requiredPermission: Permission.REPORT_VIEW,
         order: 4,
@@ -102,7 +102,7 @@ export const DEFAULT_MENU_ITEMS = [
       },
       {
         title: 'Administración',
-        icon: 'admin_panel_settings',
+        icon: '<i class="fa-solid fa-admin_panel_settings"></i>',
         route: '/admin',
         requiredPermission: Permission.USER_READ,
         order: 5,
@@ -112,7 +112,7 @@ export const DEFAULT_MENU_ITEMS = [
         children: [
           {
             title: 'Usuarios',
-            icon: 'manage_accounts',
+            icon: '<i class="fa-solid fa-manage_accounts"></i>',
             route: '/admin/users',
             requiredPermission: Permission.USER_READ,
             order: 0,
@@ -122,7 +122,7 @@ export const DEFAULT_MENU_ITEMS = [
           },
           {
             title: 'Roles',
-            icon: 'admin_panel_settings',
+            icon: '<i class="fa-solid fa-admin_panel_settings"></i>',
             route: '/admin/roles',
             requiredPermission: Permission.ROLE_READ,
             order: 1,
@@ -132,7 +132,7 @@ export const DEFAULT_MENU_ITEMS = [
           },
           {
             title: 'Menú',
-            icon: 'menu',
+            icon: '<i class="fa-solid fa-menu"></i>',
             route: '/admin/menu',
             requiredPermission: Permission.MENU_MANAGE,
             order: 2,
@@ -142,7 +142,7 @@ export const DEFAULT_MENU_ITEMS = [
           },
           {
             title: 'Configuración',
-            icon: 'settings',
+            icon: '<i class="fa-solid fa-settings"></i>',
             route: '/admin/settings',
             requiredPermission: Permission.SETTINGS_VIEW,
             order: 3,

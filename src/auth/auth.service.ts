@@ -24,6 +24,7 @@ export class AuthService {
     const user = await this.usersRepository.findOne({
       where: { email },
       relations: ['role'],
+      select: ['id', 'email', 'fullName', 'password', 'role', 'roleId', 'isActive', 'lastLogin'],
     });
 
     if (!user) {
@@ -43,20 +44,21 @@ export class AuthService {
   }
 
   async login(createAuthDto: LoginAuthDto) {
-
+    try {
       const { email, password } = createAuthDto;
-      const user = await this.validateUser(email, password);
 
       // Actualizar último login
+      const user = await this.validateUser(email, password);
+
       user.lastLogin = new Date();
       await this.usersRepository.save(user);
 
       const payload: JwtPayload = {
-        sub: user.id,
-        email: user.email,
-        name: user.fullName,
-        role: user.role.name as UserRole,
-        permissions: user.role.permissions,
+            sub: user.id,
+            email: user.email,
+            name: user.fullName,
+            role: user.role.name as UserRole,
+            permissions: user.role.permissions,
       };
 
       const token = this.jwtService.sign(payload);
@@ -71,7 +73,10 @@ export class AuthService {
           permissions: user.role.permissions,
           lastLogin: user.lastLogin,
         },
-    };
+      };
+    } catch (error) {
+      throw new BadRequestException(`Error al iniciar sesión: ${error.message}`);
+    }
   }
 
   async register(createAuthDto: RegisteAuthDto) {
@@ -123,28 +128,28 @@ export class AuthService {
         },
     }
 
-
   }
 
-  
-
-  async checkStatus( user: User){
+  async checkStatus( user: JwtPayload){
       const payload: JwtPayload = {
-        sub: user.id,
+        sub: user.sub,
         email: user.email,
-        name: user.fullName,
-        role: user.role.name as UserRole,
-        permissions: user.role.permissions,
+        name: user.name,
+        role: user.role,
+        permissions: user.permissions,
       };
 
+      console.log("payload", payload);
+      const token = this.jwtService.sign(payload);
+      console.log("token", token);
       return {
         user: user,
-        token: this.getJwtToken(payload)
+        token
       }
   }
 
-  private getJwtToken( payload: JwtPayload ) {
-      const token = this.jwtService.sign( payload );   
+  private async getJwtToken( payload: JwtPayload ) {
+      const token = await this.jwtService.signAsync( payload );   
       return token;
   }
 

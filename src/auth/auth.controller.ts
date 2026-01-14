@@ -45,10 +45,10 @@ export class AuthController {
 
   @Get('check-status')
   @UseGuards(AuthGuard)
-  check_status(@Req() req: RequestWithUser) {
-    const user = req.user;
+  async check_status(@Req() req: RequestWithUser) {
+    const {user, token} = await this.authService.checkStatus(req.user);
     
-    return this.authService.checkStatus(user);
+    return {user, token};
   }
 
 

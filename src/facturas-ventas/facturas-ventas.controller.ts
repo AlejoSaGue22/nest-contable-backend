@@ -21,7 +21,7 @@ export class FacturasVentasController {
   @Post()
   // @Permissions(Permission.INVOICE_CREATE)
   async create(@Body() createFacturasVentaDto: CreateFacturasVentaDto, @Req() req: AuthenticatedRequest) {
-    const invoice = await this.facturasVentasService.create(createFacturasVentaDto, req.user.id);
+    const invoice = await this.facturasVentasService.create(createFacturasVentaDto, req.user.sub);
     return toInvoiceResponse(invoice, 'Factura creada exitosamente'); 
   }
 
