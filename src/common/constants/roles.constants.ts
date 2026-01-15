@@ -47,6 +47,27 @@ export enum Permission {
     REPORT_EXPORT = 'report:export',
     REPORT_VIEW = 'report:view',
 
+    // Purchases
+    PURCHASE_CREATE = 'purchase:create',
+    PURCHASE_READ = 'purchase:read',
+    PURCHASE_UPDATE = 'purchase:update',
+    PURCHASE_DELETE = 'purchase:delete',
+    PURCHASE_EXPORT = 'purchase:export',
+
+    // Products Purchase
+    PRODUCT_PURCHASE_CREATE = 'product_purchase:create',
+    PRODUCT_PURCHASE_READ = 'product_purchase:read',
+    PRODUCT_PURCHASE_UPDATE = 'product_purchase:update',
+    PRODUCT_PURCHASE_DELETE = 'product_purchase:delete',
+    PRODUCT_PURCHASE_EXPORT = 'product_purchase:export',
+
+    // Providers
+    PROVIDER_CREATE = 'provider:create',
+    PROVIDER_READ = 'provider:read',
+    PROVIDER_UPDATE = 'provider:update',
+    PROVIDER_DELETE = 'provider:delete',
+    PROVIDER_EXPORT = 'provider:export',
+
     // Users
     USER_CREATE = 'user:create',
     USER_READ = 'user:read',
@@ -72,6 +93,8 @@ export enum Permission {
     MENU_MANAGE = 'menu:manage',
 }
 
+
+
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.SUPER_ADMIN]: Object.values(Permission),
   [UserRole.ADMIN]: [
@@ -80,8 +103,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.INVOICE_DELETE, Permission.INVOICE_EXPORT, Permission.INVOICE_CANCEL,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ, Permission.CLIENT_UPDATE, Permission.CLIENT_DELETE,
     Permission.PRODUCT_CREATE, Permission.PRODUCT_READ, Permission.PRODUCT_UPDATE, Permission.PRODUCT_DELETE,
+    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE, Permission.PURCHASE_EXPORT,
+    Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
+    Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
-    Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE,
+    Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
     Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
   ],
   [UserRole.MANAGER]: [
@@ -89,7 +115,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.INVOICE_UPDATE, Permission.INVOICE_EXPORT,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ, Permission.CLIENT_UPDATE,
     Permission.PRODUCT_READ, Permission.PRODUCT_UPDATE,
+    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE, Permission.PURCHASE_EXPORT,
+    Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
+    Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
+    Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
   ],
   [UserRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,

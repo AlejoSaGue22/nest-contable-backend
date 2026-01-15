@@ -139,9 +139,7 @@ export class AuthService {
         permissions: user.permissions,
       };
 
-      console.log("payload", payload);
       const token = this.jwtService.sign(payload);
-      console.log("token", token);
       return {
         user: user,
         token

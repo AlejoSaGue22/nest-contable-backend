@@ -7,6 +7,7 @@ export interface MenuSeedItem {
   externalUrl?: string;
   requiredPermission?: Permission;
   order: number;
+  other?: string;
   isActive: boolean;
   isVisible: boolean;
   metadata?: any;

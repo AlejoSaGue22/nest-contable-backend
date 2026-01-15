@@ -21,13 +21,12 @@ export class MenuService {
   
   async getMenuForUser(user: JwtPayload): Promise<MenuSeedItem[]> {
     // El user viene del JWT payload, no es una instancia de User entity
-    console.log("user", user);  
     const userPermissions = user.permissions || [];
     console.log("userPermissions", userPermissions);  
     
     // Obtener todos los items activos
     const allItems = await this.menuItemRepository.findTrees();
-    
+    console.log("allItems", allItems);
     // Filtrar según permisos y visibilidad
     const filterMenu = (items: MenuSeedItem[]): MenuSeedItem[] => {
       return items

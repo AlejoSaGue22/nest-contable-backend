@@ -32,6 +32,9 @@ export class MenuItem {
   @Column({ default: false })
   isVisible: boolean;
 
+  @Column({ default: 'NO' })
+  other: string;
+
   @TreeParent()
   parent?: MenuItem;
 

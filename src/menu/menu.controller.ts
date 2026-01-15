@@ -17,7 +17,7 @@ export class MenuController {
 
   @Get()
   async getMenu(@CurrentUser() user: JwtPayload) {
-    const menu = await this.menuService.getMenuForUser(user);
+    const menu = await this.menuService.getMenuForRole(user.role);
     return {
       success: true,
       data: menu,

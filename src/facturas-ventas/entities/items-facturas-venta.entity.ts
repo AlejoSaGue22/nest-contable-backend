@@ -21,19 +21,19 @@ export class ItemsFacturaVenta {
     @Column('int')
     unitPrice: number; // Precio unitario en ese momento
 
-    @Column('int')
+    @Column('int', { default: 0})
     iva: number; // % impuesto IVA en ese momento
 
-    @Column('int')
+    @Column('int', { default: 0})
     valor_iva: number; // Valor impuesto IVA en ese momento
 
-    @Column('int')
+    @Column('int', { default: 0})
     discount: number; // % Descuento en ese momento
 
-    @Column('int')
+    @Column('int', { default: 0})
     valor_discount: number; // % Descuento en ese momento
 
-    @Column('int')
+    @Column('int')  
     quantity: number; // Cantidad
 
     @Column('int')
