@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { FacturasVenta } from "./facturas-venta.entity";
-import { Producto } from "src/productos/entities/producto.entity";
+import { Articulo } from "src/articulos/entities/articulos.entity";
 
 @Entity('item_factura_venta')
 export class ItemsFacturaVenta {
@@ -8,12 +8,12 @@ export class ItemsFacturaVenta {
     @PrimaryGeneratedColumn()
     id: string;
 
-    @ManyToOne(()=> Producto)
+    @ManyToOne(() => Articulo)
     // @JoinColumn({ name: 'productoId' })
-    producto: Producto;
+    articulo: Articulo;
 
     @Column()
-    productoId: string;
+    articuloId: string;
 
     @Column('text')
     description: string;
@@ -21,19 +21,19 @@ export class ItemsFacturaVenta {
     @Column('int')
     unitPrice: number; // Precio unitario en ese momento
 
-    @Column('int', { default: 0})
+    @Column('int', { default: 0 })
     iva: number; // % impuesto IVA en ese momento
 
-    @Column('int', { default: 0})
+    @Column('int', { default: 0 })
     valor_iva: number; // Valor impuesto IVA en ese momento
 
-    @Column('int', { default: 0})
+    @Column('int', { default: 0 })
     discount: number; // % Descuento en ese momento
 
-    @Column('int', { default: 0})
+    @Column('int', { default: 0 })
     valor_discount: number; // % Descuento en ese momento
 
-    @Column('int')  
+    @Column('int')
     quantity: number; // Cantidad
 
     @Column('int')
@@ -50,7 +50,7 @@ export class ItemsFacturaVenta {
     factura: FacturasVenta;
 
     @Column()
-    facturaId: string; 
+    facturaId: string;
 
     @CreateDateColumn()
     createdAt: Date;

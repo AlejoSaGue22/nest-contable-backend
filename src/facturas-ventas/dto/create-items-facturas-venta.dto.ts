@@ -4,7 +4,7 @@ export class CreateItemsFacturasVentaDto {
 
     @IsUUID()
     @IsNotEmpty()
-    productoId: string;
+    articuloId: string;
 
     @IsString()
     @IsOptional()

@@ -4,10 +4,10 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMan
 import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
 
 export enum FacturaEstado {
-    BORRADOR = 'borrador',
-    EMITIDO = 'emitido',
-    CANCELADO = 'cancelado',
-    PAGADO = 'pagado'
+  BORRADOR = 'borrador',
+  EMITIDO = 'emitido',
+  CANCELADO = 'cancelado',
+  PAGADO = 'pagado'
 }
 
 export enum InvoiceType {
@@ -30,74 +30,74 @@ export enum DianStatus {
 
 @Entity('facturas_venta')
 export class FacturasVenta {
-    @PrimaryGeneratedColumn("uuid")
-    id: string;
-    
-    @Column()
-    prefijo: string;
+  @PrimaryGeneratedColumn("uuid")
+  id: string;
 
-    @Column()
-    comprobante: string;
+  @Column()
+  prefijo: string;
 
-    @Column()
-    comprobante_completo: string;
+  @Column()
+  comprobante: string;
 
-    @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })
-    status: InvoiceStatus;
+  @Column()
+  comprobante_completo: string;
 
-    @Column()
-    vendedor: string;
+  @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })
+  status: InvoiceStatus;
 
-    @Column()
-    canalventa: string;
+  @Column({ nullable: true })
+  vendedor: string;
 
-    @Column({ type: 'date' })
-    fecha: Date;
+  @Column()
+  canalventa: string;
 
-    @Column()
-    formapago: string;
+  @Column({ type: 'date' })
+  fecha: Date;
 
-    // Items de la factura
-    @OneToMany(() => ItemsFacturaVenta, item => item.factura, { cascade: true })
-    items: ItemsFacturaVenta[];
+  @Column()
+  formapago: string;
 
-    @Column('int')
-    iva: number;
+  // Items de la factura
+  @OneToMany(() => ItemsFacturaVenta, item => item.factura, { cascade: true })
+  items: ItemsFacturaVenta[];
 
-    @Column('int')
-    descuento: number;
+  @Column('int')
+  iva: number;
 
-    @ManyToOne(() => Cliente)
-    client: Cliente;
+  @Column('int')
+  descuento: number;
 
-    @Column()
-    clientId: string;
+  @ManyToOne(() => Cliente)
+  client: Cliente;
 
-    // Totales (calculados automáticamente)
-    @Column('int')
-    subtotal: number;
+  @Column()
+  clientId: string;
 
-    @Column('int')
-    total: number;
+  // Totales (calculados automáticamente)
+  @Column('int')
+  subtotal: number;
 
-    // Campos DIAN
-    @Column({ nullable: true })
-    cufe: string;
+  @Column('int')
+  total: number;
 
-    // @Column({ type: 'jsonb', nullable: true })
-    // dianResponse: any;
+  // Campos DIAN
+  @Column({ nullable: true })
+  cufe: string;
 
-    @Column({ type: 'enum', enum: DianStatus, default: DianStatus.PENDING })
-    dianStatus: DianStatus;
+  // @Column({ type: 'jsonb', nullable: true })
+  // dianResponse: any;
 
-    @ManyToOne(() => User, (user) => user.id)
-    createdBy: User;
-    
-    @Column()
-    createdById: string;
+  @Column({ type: 'enum', enum: DianStatus, default: DianStatus.PENDING })
+  dianStatus: DianStatus;
 
-    @CreateDateColumn()
-    createdAt: Date;
+  @ManyToOne(() => User, (user) => user.id)
+  createdBy: User;
+
+  @Column()
+  createdById: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
 
 }
 

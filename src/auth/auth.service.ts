@@ -18,7 +18,7 @@ export class AuthService {
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
     private readonly jwtService: JwtService
-  ){}
+  ) { }
 
   async validateUser(email: string, password: string): Promise<User> {
     const user = await this.usersRepository.findOne({
@@ -28,14 +28,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('Credenciales incorrectas');
+      throw new BadRequestException('Usuario no encontrado');
     }
 
     if (!user.isActive) {
       throw new BadRequestException('Usuario inactivo');
     }
 
+    console.log("User password", user.password);
+    console.log("Password", password);
     const isPasswordValid = await bcryptjs.compare(password, user.password);
+    console.log("Password valid", isPasswordValid);
     if (!isPasswordValid) {
       throw new BadRequestException('Credenciales incorrectas');
     }
@@ -54,11 +57,11 @@ export class AuthService {
       await this.usersRepository.save(user);
 
       const payload: JwtPayload = {
-            sub: user.id,
-            email: user.email,
-            name: user.fullName,
-            role: user.role.name as UserRole,
-            permissions: user.role.permissions,
+        sub: user.id,
+        email: user.email,
+        name: user.fullName,
+        role: user.role.name as UserRole,
+        permissions: user.role.permissions,
       };
 
       const token = this.jwtService.sign(payload);
@@ -86,7 +89,7 @@ export class AuthService {
       where: { email },
     });
 
-    if(existingUser) throw new BadRequestException('Usuario ya se encuentra registrado');
+    if (existingUser) throw new BadRequestException('Usuario ya se encuentra registrado');
 
     // Obtener rol por defecto (Viewer)
     const defaultRole = await this.rolesRepository.findOne({
@@ -118,37 +121,37 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
 
     return {
-        token: token,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.fullName,
-          role: user.role.name,
-          permissions: user.role.permissions,
-        },
+      token: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.fullName,
+        role: user.role.name,
+        permissions: user.role.permissions,
+      },
     }
 
   }
 
-  async checkStatus( user: JwtPayload){
-      const payload: JwtPayload = {
-        sub: user.sub,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        permissions: user.permissions,
-      };
+  async checkStatus(user: JwtPayload) {
+    const payload: JwtPayload = {
+      sub: user.sub,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      permissions: user.permissions,
+    };
 
-      const token = this.jwtService.sign(payload);
-      return {
-        user: user,
-        token
-      }
+    const token = this.jwtService.sign(payload);
+    return {
+      user: user,
+      token
+    }
   }
 
-  private async getJwtToken( payload: JwtPayload ) {
-      const token = await this.jwtService.signAsync( payload );   
-      return token;
+  private async getJwtToken(payload: JwtPayload) {
+    const token = await this.jwtService.signAsync(payload);
+    return token;
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string) {

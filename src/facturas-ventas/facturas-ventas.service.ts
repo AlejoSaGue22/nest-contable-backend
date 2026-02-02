@@ -6,10 +6,11 @@ import { FacturasVenta, InvoiceStatus } from './entities/facturas-venta.entity';
 import { DataSource, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
-import { Producto } from 'src/productos/entities/producto.entity';
 import { User } from 'src/users/entities/user.entity';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
+import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { Articulo } from 'src/articulos/entities/articulos.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -17,16 +18,18 @@ export class FacturasVentasService {
 
   constructor(
     @InjectRepository(FacturasVenta)
-     private readonly facturaVentaRepository: Repository<FacturasVenta>,
+    private readonly facturaVentaRepository: Repository<FacturasVenta>,
 
     @InjectRepository(ItemsFacturaVenta) private ItemsfacturaVentaRepository: Repository<ItemsFacturaVenta>,
 
     @InjectRepository(Cliente) private ClienteRepository: Repository<Cliente>,
 
-    @InjectRepository(Producto) private ProductoRepository: Repository<Producto>,
+    @InjectRepository(Articulo) private ArticuloRepository: Repository<Articulo>,
 
     private dataSource: DataSource,
-  ){}
+
+    private asientosContablesService: AsientosContablesService,
+  ) { }
 
   async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -34,103 +37,120 @@ export class FacturasVentasService {
     await queryRunner.startTransaction();
 
     try {
-       const client = await queryRunner.manager.findOne(Cliente, {
-         where: { id: createFacturasVentaDto.clientId }
-       });
+      const client = await queryRunner.manager.findOne(Cliente, {
+        where: { id: createFacturasVentaDto.clientId }
+      });
 
-       if (!client) {
-          throw new NotFoundException('Cliente no encontrado');
-       }
+      if (!client) {
+        throw new NotFoundException('Cliente no encontrado');
+      }
 
-       const invoiceItems: Partial<FacturasVenta>[] = [];
-       let subtotal = 0;
-       let iva = 0;
-       let descuento = 0;
+      const invoiceItems: Partial<FacturasVenta>[] = [];
+      let subtotal = 0;
+      let iva = 0;
+      let descuento = 0;
 
-       console.log("User ID: ", userId);
+      for (const itemDto of createFacturasVentaDto.items) {
+        const product = await queryRunner.manager.findOne(Articulo, {
+          where: { id: itemDto.articuloId },
+          relations: ['cuentaContable', 'cuentaIva']
+        })
 
-       for (const itemDto of createFacturasVentaDto.items) {
-              const product = await queryRunner.manager.findOne(Producto, {
-                  where: { id: itemDto.productoId }
-              })
+        if (!product) {
+          throw new NotFoundException(`Producto no encontrado: ${itemDto.articuloId}`);
+        }
 
-              if (!product) {
-                  throw new NotFoundException(`Producto no encontrado: ${itemDto.productoId}`);
-              }
+        if (!product.isActive) {
+          throw new BadRequestException(`El producto ${product.nombre} no está activo`);
+        }
 
-              if (!product.isActive) {
-                throw new BadRequestException(`El producto ${product.nombre} no está activo`);
-              }
+        // Validar que el artículo tenga cuenta contable
+        if (!product.cuentaContable) {
+          throw new BadRequestException(
+            `El artículo del producto ${product.nombre} no tiene cuenta contable asignada`
+          );
+        }
 
-          // Validar stock para ventas
-          // if (product.stock < itemDto.quantity) {
-          //   throw new BadRequestException(
-          //     `Stock insuficiente para ${product.nombre}. Disponible: ${product.stock}, Solicitado: ${itemDto.quantity}`
-          //   );
-          // }
+        // Validar stock para ventas
+        // if (product.stock < itemDto.quantity) {
+        //   throw new BadRequestException(
+        //     `Stock insuficiente para ${product.nombre}. Disponible: ${product.stock}, Solicitado: ${itemDto.quantity}`
+        //   );
+        // }
 
-              const unitPrice = itemDto.unitPrice || parseInt(product.precioventa1);
-              const ivaPercent = itemDto.iva !== undefined ? itemDto.iva : parseFloat(product.impuesto);
+        const unitPrice = itemDto.unitPrice || product.precio;
+        const ivaPercent = itemDto.iva !== undefined ? itemDto.iva : product.impuesto;
 
-              const itemSubtotal = unitPrice * itemDto.quantity;
-              const itemDiscountValor = itemSubtotal * (itemDto.discount / 100);
-              const itemIvaValor = itemSubtotal * (ivaPercent / 100);
-              const itemTotal = (itemSubtotal + itemIvaValor) - itemDiscountValor;
+        const itemSubtotal = unitPrice * itemDto.quantity;
+        const itemDiscountValor = itemSubtotal * (itemDto.discount / 100);
+        const itemIvaValor = itemSubtotal * (ivaPercent / 100);
+        const itemTotal = (itemSubtotal + itemIvaValor) - itemDiscountValor;
 
-              const invoiceItem: Partial<ItemsFacturaVenta> = {
-                    productoId: product.id,
-                    description: itemDto.description || product.observacion,
-                    unitPrice: unitPrice,
-                    iva: ivaPercent,
-                    valor_iva: itemIvaValor,
-                    quantity: itemDto.quantity,
-                    discount: itemDto.discount,
-                    valor_discount: itemDiscountValor,
-                    importe: itemSubtotal - itemDiscountValor,
-                    subtotal: itemSubtotal,
-                    total: itemTotal,
-              };
+        const invoiceItem: Partial<ItemsFacturaVenta> = {
+          articuloId: product.id,
+          description: itemDto.description || product.observacion,
+          unitPrice: unitPrice,
+          iva: ivaPercent,
+          valor_iva: itemIvaValor,
+          quantity: itemDto.quantity,
+          discount: itemDto.discount,
+          valor_discount: itemDiscountValor,
+          importe: itemSubtotal - itemDiscountValor,
+          subtotal: itemSubtotal,
+          total: itemTotal,
+        };
 
-              invoiceItems.push(invoiceItem);
-              subtotal += itemSubtotal;
-              iva += itemIvaValor; 
-              descuento += itemDiscountValor; 
+        invoiceItems.push(invoiceItem);
+        subtotal += itemSubtotal;
+        iva += itemIvaValor;
+        descuento += itemDiscountValor;
 
-              // Actualizar stock para ventas
-              // if (createInvoiceDto.type === InvoiceType.SALE) {
-              //   await queryRunner.manager.decrement(
-              //     Product,
-              //     { id: product.id },
-              //     'stock',
-              //     itemDto.quantity
-              //   );
-              // }
-       }
+        // Actualizar stock para ventas
+        // if (createInvoiceDto.type === InvoiceType.SALE) {
+        //   await queryRunner.manager.decrement(
+        //     Product,
+        //     { id: product.id },
+        //     'stock',
+        //     itemDto.quantity
+        //   );
+        // }
+      }
 
-       const total = (subtotal - descuento) + iva;
-       const numberFactura = await this.generateInvoiceNumber();
-       const prefijo = 'FAC';
-       // Create Invoice
-       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
-          ...createFacturasVentaDto,
-          comprobante: numberFactura,
-          comprobante_completo: `${prefijo}-${numberFactura}`,
-          prefijo,
-          createdById: userId,
-          subtotal,
-          descuento,
-          iva,
-          total,
-          status: InvoiceStatus.ISSUED,
-          items: invoiceItems
-       });
+      const total = (subtotal - descuento) + iva;
+      const numberFactura = await this.generateInvoiceNumber();
+      const prefijo = 'FAC';
+      // Create Invoice
+      const facturaVenta = queryRunner.manager.create(FacturasVenta, {
+        ...createFacturasVentaDto,
+        comprobante: numberFactura,
+        comprobante_completo: `${prefijo}-${numberFactura}`,
+        prefijo,
+        createdById: userId,
+        subtotal,
+        descuento,
+        iva,
+        total,
+        status: InvoiceStatus.ISSUED,
+        items: invoiceItems
+      });
 
-       const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
-       await queryRunner.commitTransaction();
+      const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
 
-       this.logger.log(`Factura creada exitosamente: ${savedInvoice.comprobante_completo}`);
+      // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO
+      try {
+        await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
+        this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento contable: ${asientoError.message}`);
+        // No revertir la transacción, solo loguear el error
+        // El asiento se puede generar manualmente después
+      }
 
-       return savedInvoice;
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Factura creada exitosamente: ${savedInvoice.comprobante_completo}`);
+
+      return savedInvoice;
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -139,90 +159,90 @@ export class FacturasVentasService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      
+
       throw new InternalServerErrorException('Error al crear la factura');
     } finally {
-        await queryRunner.release();
+      await queryRunner.release();
     }
 
   }
 
   async findAll(options: InvoiceFilterDto): Promise<{ data: FacturasVenta[], meta: any }> {
-      try {
-        const { offset = 1, limit = 10, ...where } = options;
-        const skip = (offset < 1 ? 0 : (offset - 1)) * limit;
+    try {
+      const { offset = 1, limit = 10, ...where } = options;
+      const skip = (offset < 1 ? 0 : (offset - 1)) * limit;
 
-        const queryBuilder = this.facturaVentaRepository
-          .createQueryBuilder('invoice')
-          .leftJoinAndSelect('invoice.client', 'client')
-          .leftJoinAndSelect('invoice.items', 'items')
-          .leftJoinAndSelect('invoice.createdBy', 'createdBy')
-          .where('1=1');
+      const queryBuilder = this.facturaVentaRepository
+        .createQueryBuilder('invoice')
+        .leftJoinAndSelect('invoice.client', 'client')
+        .leftJoinAndSelect('invoice.items', 'items')
+        .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+        .where('1=1');
 
-        // Aplicar filtros
-        if (where.status) {
-          queryBuilder.andWhere('invoice.status = :status', { status: where.status });
-        }
-
-        // if (where.type) {
-        //   queryBuilder.andWhere('invoice.type = :type', { type: where.type });
-        // }
-
-        if (where.clientName) {
-          queryBuilder.andWhere('client.name ILIKE :clientName', { 
-            clientName: `%${where.clientName}%` 
-          });
-        }
-
-        if (where.startDate && where.endDate) {
-          queryBuilder.andWhere('invoice.createdAt BETWEEN :startDate AND :endDate', {
-            startDate: where.startDate,
-            endDate: where.endDate,
-          });
-        }
-
-        // Ordenar y paginar
-        queryBuilder
-          .orderBy('invoice.createdAt', 'DESC')
-          .skip(skip)
-          .take(limit);
-
-        const [data, total] = await queryBuilder.getManyAndCount();
-
-        const meta = {
-          offset,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        };
-
-        return { data, meta };
-
-      } catch (error) {
-        this.logger.error(`Error obteniendo facturas: ${error.message}`, error.stack);
-        throw new InternalServerErrorException('Error al obtener las facturas');
+      // Aplicar filtros
+      if (where.status) {
+        queryBuilder.andWhere('invoice.status = :status', { status: where.status });
       }
+
+      // if (where.type) {
+      //   queryBuilder.andWhere('invoice.type = :type', { type: where.type });
+      // }
+
+      if (where.clientName) {
+        queryBuilder.andWhere('client.name ILIKE :clientName', {
+          clientName: `%${where.clientName}%`
+        });
+      }
+
+      if (where.startDate && where.endDate) {
+        queryBuilder.andWhere('invoice.createdAt BETWEEN :startDate AND :endDate', {
+          startDate: where.startDate,
+          endDate: where.endDate,
+        });
+      }
+
+      // Ordenar y paginar
+      queryBuilder
+        .orderBy('invoice.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      const [data, total] = await queryBuilder.getManyAndCount();
+
+      const meta = {
+        offset,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      };
+
+      return { data, meta };
+
+    } catch (error) {
+      this.logger.error(`Error obteniendo facturas: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al obtener las facturas');
+    }
   }
 
   async findOne(id: string) {
     try {
       const invoice = await this.facturaVentaRepository
-      .createQueryBuilder('invoice')
-      .leftJoinAndSelect('invoice.client', 'client')
-      .leftJoinAndSelect('invoice.items', 'items')
-      .leftJoinAndSelect('items.producto', 'producto') // ← Relación con producto
-      .leftJoinAndSelect('invoice.createdBy', 'createdBy')
-      .where('invoice.id = :id', { id })
-      .select([
-        'invoice',
-        'client',
-        'items',
-        'producto.id',
-        'producto.nombre',
-        'producto.codigo', // Solo los campos que necesitas
-        'createdBy'
-      ])
-      .getOne();
+        .createQueryBuilder('invoice')
+        .leftJoinAndSelect('invoice.client', 'client')
+        .leftJoinAndSelect('invoice.items', 'items')
+        .leftJoinAndSelect('items.articulo', 'articulo') // ← Relación con producto
+        .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+        .where('invoice.id = :id', { id })
+        .select([
+          'invoice',
+          'client',
+          'items',
+          'articulo.id',
+          'articulo.nombre',
+          'articulo.codigo', // Solo los campos que necesitas
+          'createdBy'
+        ])
+        .getOne();
 
       if (!invoice) {
         throw new NotFoundException(`Factura con ID ${id} no encontrada`);
@@ -239,24 +259,24 @@ export class FacturasVentasService {
   }
 
   async update(id: string, updateFacturasVentaDto: UpdateFacturasVentaDto) {
-      const invoice = await this.findOne(id);
+    const invoice = await this.findOne(id);
 
-      if (invoice.status !== InvoiceStatus.DRAFT) {
-        throw new BadRequestException('Solo se pueden modificar facturas en estado borrador');
-      }
+    if (invoice.status !== InvoiceStatus.DRAFT) {
+      throw new BadRequestException('Solo se pueden modificar facturas en estado borrador');
+    }
 
-      try {
-        const updatedInvoice = await this.facturaVentaRepository.preload({
-          id,
-          ...updateFacturasVentaDto,
-        });
+    try {
+      const updatedInvoice = await this.facturaVentaRepository.preload({
+        id,
+        ...updateFacturasVentaDto,
+      });
 
-        return await this.facturaVentaRepository.save(updatedInvoice!);
+      return await this.facturaVentaRepository.save(updatedInvoice!);
 
-      } catch (error) {
-        this.logger.error(`Error actualizando factura ${id}: ${error.message}`, error.stack);
-        throw new InternalServerErrorException('Error al actualizar la factura');
-      }
+    } catch (error) {
+      this.logger.error(`Error actualizando factura ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al actualizar la factura');
+    }
 
   }
 

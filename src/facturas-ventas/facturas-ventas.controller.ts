@@ -11,18 +11,16 @@ import { Permissions } from 'src/auth/decorators/roles.decorator';
 import { toInvoiceResponse } from './dto/invoice-response.dto';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 
-
-
 @Controller('facturas-ventas')
 @UseGuards(AuthGuard, RolesGuard)
 export class FacturasVentasController {
-  constructor(private readonly facturasVentasService: FacturasVentasService) {}
+  constructor(private readonly facturasVentasService: FacturasVentasService) { }
 
   @Post()
   // @Permissions(Permission.INVOICE_CREATE)
   async create(@Body() createFacturasVentaDto: CreateFacturasVentaDto, @Req() req: AuthenticatedRequest) {
     const invoice = await this.facturasVentasService.create(createFacturasVentaDto, req.user.sub);
-    return toInvoiceResponse(invoice, 'Factura creada exitosamente'); 
+    return toInvoiceResponse(invoice, 'Factura creada exitosamente');
   }
 
   @Get()
@@ -46,5 +44,5 @@ export class FacturasVentasController {
     return toInvoiceResponse(invoice, 'Factura actualizada exitosamente');
   }
 
-  
+
 }

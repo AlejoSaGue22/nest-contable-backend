@@ -5,11 +5,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacturasVenta } from './entities/facturas-venta.entity';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
-import { Producto } from 'src/productos/entities/producto.entity';
+import { Articulo } from 'src/articulos/entities/articulos.entity';
+import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Producto])],
+  imports: [TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo]), AsientosContablesModule],
   controllers: [FacturasVentasController],
   providers: [FacturasVentasService],
 })
-export class FacturasVentasModule {}
+export class FacturasVentasModule { }

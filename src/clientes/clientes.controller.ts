@@ -8,30 +8,30 @@ import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 @Controller('clientes')
 @UseGuards(AuthGuard)
 export class ClientesController {
-  constructor(private readonly clientesService: ClientesService) {}
+    constructor(private readonly clientesService: ClientesService) { }
 
-  @Post()
-  create(@Body() createClienteDto: CreateClienteDto) {
-      return this.clientesService.create(createClienteDto);
-  }
+    @Post()
+    create(@Body() createClienteDto: CreateClienteDto) {
+        return this.clientesService.create(createClienteDto);
+    }
 
-  @Get()
-  findAll(@Query() pagination: PaginatioDto) {
-      return this.clientesService.findAll(pagination);
-  }
+    @Get()
+    findAll(@Query() pagination: PaginatioDto) {
+        return this.clientesService.findAll(pagination);
+    }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-      return this.clientesService.findOne(id);
-  }
+    @Get(':id')
+    findOne(@Param('id') id: string) {
+        return this.clientesService.findOne(id);
+    }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
-      return this.clientesService.update(id, updateClienteDto);
-  }
+    @Patch(':id')
+    update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
+        return this.clientesService.update(id, updateClienteDto);
+    }
 
-  @Delete('delete/:id')
-  remove(@Param('id') id: string) {
-      return this.clientesService.remove(id);
-  }
+    @Delete('delete/:id')
+    remove(@Param('id') id: string) {
+        return this.clientesService.remove(id);
+    }
 }

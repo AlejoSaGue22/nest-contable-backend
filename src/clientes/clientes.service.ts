@@ -12,47 +12,47 @@ export class ClientesService {
   constructor(
     @InjectRepository(Cliente)
     private readonly clientesRepository: Repository<Cliente>
-  ){}
+  ) { }
 
   async create(createClienteDto: CreateClienteDto) {
     const cliente = this.clientesRepository.create(createClienteDto)
-    
+
     return await this.clientesRepository.save(cliente);
   }
 
   async findAll(options: PaginatioDto) {
 
-      const  { limit = 10, offset = 0 } = options;
+    const { limit = 10, offset = 0 } = options;
 
-      const clientes = await this.clientesRepository.find({
-        take: limit,
-        skip: offset,
-        order: {
-          id: 'DESC'
-        }
-      });
+    const clientes = await this.clientesRepository.find({
+      take: limit,
+      skip: offset,
+      order: {
+        id: 'DESC'
+      }
+    });
 
-      const totalClients = await this.clientesRepository.count();
+    const totalClients = await this.clientesRepository.count();
 
-      const clientesMap = clientes.map((cli, indx) => {
-        return {
-          ...cli,
-          fullName: `${cli.nombre} ${cli.apellido}`,
-          tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
-          estado: cli.isActive == true ? 'Activo' : 'Inactivo',
-          ind: (indx + 1).toString()
-        }
-      })
-      
+    const clientesMap = clientes.map((cli, indx) => {
       return {
-          count: totalClients,
-          pages: Math.ceil(totalClients / limit),
-          clientes: clientesMap
-      };
+        ...cli,
+        fullName: `${cli.nombre} ${cli.apellido}`,
+        tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
+        estado: cli.isActive == true ? 'Activo' : 'Inactivo',
+        ind: (indx + 1).toString()
+      }
+    })
+
+    return {
+      count: totalClients,
+      pages: Math.ceil(totalClients / limit),
+      clientes: clientesMap
+    };
   }
 
   async findOne(id: string) {
-    if (!isUUID(id)) {  
+    if (!isUUID(id)) {
       throw new BadRequestException('Formato ID no valido');
     }
 
@@ -61,7 +61,7 @@ export class ClientesService {
     });
 
     if (!cliente) {
-        throw new BadRequestException('Cliente no encontrado');
+      throw new BadRequestException('Cliente no encontrado');
     }
     return cliente;
   }
