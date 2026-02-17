@@ -188,7 +188,8 @@ export class AsientosContablesService {
         }
 
         const cuentaId = articulo.cuentaContableId;
-        const valor = item.valor;
+        const valor = item.valorSubtotal;
+
 
         if (gastosAgrupados.has(cuentaId)) {
           gastosAgrupados.set(cuentaId, gastosAgrupados.get(cuentaId)! + valor);
@@ -230,7 +231,7 @@ export class AsientosContablesService {
         cuentaId: cuentaPago.id,
         debito: 0,
         credito: totalGasto,
-        descripcion: `Pago de gasto - Proveedor: ${gasto.proveedor.nombre}`
+        descripcion: `Pago de gasto - Proveedor: ${gasto.proveedorId}`
       });
 
       // Crear asiento

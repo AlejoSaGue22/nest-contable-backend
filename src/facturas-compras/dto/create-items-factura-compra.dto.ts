@@ -1,27 +1,32 @@
 import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class CreateFacturaCompraItemDto {
-    @IsString()
-    @IsOptional()
-    id?: string;
 
     @IsString()
     @IsOptional()
     descripcion?: string;
 
     @IsUUID()
-    @IsOptional()
-    articuloId?: string;
+    @IsNotEmpty()
+    articuloId: string;
 
     @IsNumber()
     @IsNotEmpty()
-    valor: number;
+    unitPrice: number;
 
     @IsNumber()
     @IsOptional()
-    porcentajeIva?: number;
+    iva: number;
 
     @IsNumber()
     @IsOptional()
-    valorIva?: number;
+    discount: number;
+
+    @IsNumber()
+    @IsNotEmpty()
+    quantity: number; // Cantidad
+
+    @IsNumber()
+    @IsOptional()
+    importe?: number;
 }

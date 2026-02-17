@@ -25,6 +25,15 @@ export const PLAN_CUENTAS_MINIMO = [
         isActive: true
     },
     {
+        codigo: '3',
+        nombre: 'PATRIMONIO',
+        tipo: TipoCuenta.PATRIMONIO,
+        naturaleza: NaturalezaCuenta.CREDITO,
+        nivel: 1,
+        aceptaMovimiento: false,
+        isActive: true
+    },
+    {
         codigo: '4',
         nombre: 'INGRESOS',
         tipo: TipoCuenta.INGRESO,

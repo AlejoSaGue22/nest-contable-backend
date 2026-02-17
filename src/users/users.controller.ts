@@ -12,7 +12,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 @Controller('users')
 @UseGuards(AuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post()
   @Permissions(Permission.USER_CREATE)

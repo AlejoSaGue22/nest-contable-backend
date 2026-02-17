@@ -8,7 +8,7 @@ import { User } from 'src/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Role } from 'src/roles/entities/role.entity';
 import { Repository } from 'typeorm';
-import { UserRole } from 'src/common/constants/roles.constants';
+import { SystemRole } from 'src/common/constants/roles.constants';
 
 @Injectable()
 export class AuthService {
@@ -35,10 +35,7 @@ export class AuthService {
       throw new BadRequestException('Usuario inactivo');
     }
 
-    console.log("User password", user.password);
-    console.log("Password", password);
     const isPasswordValid = await bcryptjs.compare(password, user.password);
-    console.log("Password valid", isPasswordValid);
     if (!isPasswordValid) {
       throw new BadRequestException('Credenciales incorrectas');
     }
@@ -59,8 +56,8 @@ export class AuthService {
       const payload: JwtPayload = {
         sub: user.id,
         email: user.email,
-        name: user.fullName,
-        role: user.role.name as UserRole,
+        fullName: user.fullName,
+        role: user.role.name as SystemRole,
         permissions: user.role.permissions,
       };
 
@@ -71,7 +68,7 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          name: user.fullName,
+          fullName: user.fullName,
           role: user.role.name,
           permissions: user.role.permissions,
           lastLogin: user.lastLogin,
@@ -93,7 +90,7 @@ export class AuthService {
 
     // Obtener rol por defecto (Viewer)
     const defaultRole = await this.rolesRepository.findOne({
-      where: { name: UserRole.VIEWER },
+      where: { name: SystemRole.VIEWER },
     });
 
     if (!defaultRole) {
@@ -114,8 +111,8 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
-      name: user.fullName,
-      role: user.role.name as UserRole,
+      fullName: user.fullName,
+      role: user.role.name as SystemRole,
       permissions: user.role.permissions,
     };
     const token = this.jwtService.sign(payload);
@@ -137,7 +134,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.sub,
       email: user.email,
-      name: user.name,
+      fullName: user.fullName,
       role: user.role,
       permissions: user.permissions,
     };

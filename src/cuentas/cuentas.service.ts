@@ -22,7 +22,6 @@ export class CuentasService {
 
     // Verificar si ya existen
     const count = await repository.count();
-    console.log('count', count);
     if (count > 0) {
       console.log('⏭️  Cuentas ya existen, saltando seed');
       return;

@@ -9,7 +9,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('register')
   registerAuth(@Body() createAuthDto: RegisteAuthDto) {
@@ -18,7 +18,7 @@ export class AuthController {
 
   @Post('login')
   loginAuth(@Body() createAuthDto: LoginAuthDto) {
-      return this.authService.login(createAuthDto)
+    return this.authService.login(createAuthDto)
   }
 
   @Get('profile')
@@ -46,9 +46,9 @@ export class AuthController {
   @Get('check-status')
   @UseGuards(AuthGuard)
   async check_status(@Req() req: RequestWithUser) {
-    const {user, token} = await this.authService.checkStatus(req.user);
-    
-    return {user, token};
+    const { user, token } = await this.authService.checkStatus(req.user);
+
+    return { user, token };
   }
 
 

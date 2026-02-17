@@ -22,14 +22,29 @@ export class FacturaCompraDetalle {
     @Column({ type: 'text', nullable: true })
     descripcion: string;
 
-    @Column('decimal', { precision: 15, scale: 2 })
-    valor: number;
+    @Column('int')
+    unitPrice: number;
 
-    @Column('decimal', { precision: 5, scale: 2, default: 0 })
+    @Column('int')
+    quantity: number;
+
+    @Column('int', { default: 0 })
     porcentajeIva: number;
 
-    @Column('decimal', { precision: 15, scale: 2, default: 0 })
+    @Column('int', { default: 0 })
     valorIva: number;
+
+    @Column('int', { default: 0 })
+    descuento: number;
+
+    @Column('int', { default: 0 })
+    valorDescuento: number;
+
+    @Column('int', { default: 0 })
+    valorSubtotal: number;
+
+    @Column('int', { default: 0 })
+    itemTotal: number;
 
     @CreateDateColumn()
     createdAt: Date;

@@ -5,6 +5,7 @@ import { User } from "src/users/entities/user.entity";
 
 export enum GastoEstado {
     BORRADOR = 'borrador',
+    ERROR_ASIENTO = 'error_asiento',
     REGISTRADO = 'registrado',
     PAGADO = 'pagado',
     ANULADO = 'anulado'
@@ -30,19 +31,34 @@ export class FacturaCompra {
     @Column({ nullable: true })
     observaciones: string;
 
+    @Column()
+    formaPago: string;
+
+    // @Column({ type: 'date', nullable: true })
+    // fechaVencimiento: Date;
+
     @Column({ type: 'enum', enum: GastoEstado, default: GastoEstado.BORRADOR })
     estado: GastoEstado;
+
+    @Column({ nullable: true })
+    asientoError?: string;
+
+    @Column({ nullable: true })
+    fechaAsientoError?: Date;
 
     @OneToMany(() => FacturaCompraDetalle, detalle => detalle.facturaCompra, { cascade: true })
     items: FacturaCompraDetalle[];
 
-    @Column('decimal', { precision: 15, scale: 2 })
+    @Column('int')
     subtotal: number;
 
-    @Column('decimal', { precision: 15, scale: 2, default: 0 })
+    @Column('int')
+    descuento: number;
+
+    @Column('int')
     iva: number;
 
-    @Column('decimal', { precision: 15, scale: 2 })
+    @Column('int')
     total: number;
 
     @Column({ nullable: true })

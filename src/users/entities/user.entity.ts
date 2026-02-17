@@ -1,4 +1,4 @@
-import { UserRole } from "src/common/constants/roles.constants";
+import { SystemRole } from "src/common/constants/roles.constants";
 import { Role } from "src/roles/entities/role.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
@@ -17,13 +17,16 @@ export class User {
     @Column()
     fullName: string;
 
+    @Column()
+    phone: string;
+
     @Column('bool', { default: true })
     isActive: boolean;
 
     @ManyToOne(() => Role, { eager: true })
     @JoinColumn({ name: 'role_id' })
     role: Role;
-    
+
     @Column({ name: 'role_id' })
     roleId: string;
 

@@ -7,7 +7,7 @@ import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
-import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
+import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
 
 @Injectable()
 export class FacturasComprasService {
@@ -46,6 +46,7 @@ export class FacturasComprasService {
 
             let subtotal = 0;
             let totalIva = 0;
+            let descuento = 0;
             const detalles: Partial<FacturaCompraDetalle>[] = [];
 
             // Procesar items
@@ -65,20 +66,30 @@ export class FacturasComprasService {
                     );
                 }
 
-                const valor = itemDto.valor;
-                const porcentajeIva = itemDto.porcentajeIva || articulo.porcentajeIva || 0;
-                const valorIva = valor * (porcentajeIva / 100);
+                const unitPrice = itemDto.unitPrice | articulo.precio;
+                const porcentajeIva = itemDto.iva || articulo.porcentajeIva || 0;
+
+                const itemSubtotal = itemDto.quantity * unitPrice;
+                const descuentoValor = (itemDto.discount / 100) * itemSubtotal;
+                const valorIva = itemSubtotal * (porcentajeIva / 100);
+                const itemTotal = (itemSubtotal - descuentoValor) + valorIva;
 
                 detalles.push({
                     articuloId: articulo.id,
                     descripcion: itemDto.descripcion || articulo.nombre,
-                    valor,
+                    unitPrice,
+                    quantity: itemDto.quantity,
                     porcentajeIva,
-                    valorIva
+                    valorIva,
+                    valorSubtotal: itemSubtotal,
+                    descuento,
+                    valorDescuento: descuentoValor,
+                    itemTotal
                 });
 
-                subtotal += valor;
+                subtotal += itemSubtotal;
                 totalIva += valorIva;
+                descuento += descuentoValor;
             }
 
             const total = subtotal + totalIva;
@@ -93,6 +104,7 @@ export class FacturasComprasService {
                 numeroFacturaProveedor: createFacturaCompraDto.numero,
                 subtotal,
                 iva: totalIva,
+                descuento,
                 total,
                 estado: GastoEstado.REGISTRADO,
                 createdById: userId,
@@ -106,7 +118,20 @@ export class FacturasComprasService {
                 await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
                 this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
             } catch (asientoError) {
-                this.logger.error(`Error generando asiento: ${asientoError.message}`);
+                await queryRunner.manager.update(
+                    FacturaCompra,
+                    { id: gastoGuardado.id },
+                    {
+                        estado: GastoEstado.ERROR_ASIENTO,
+                        asientoError: asientoError.message,
+                        fechaAsientoError: new Date()
+                    }
+                );
+
+                this.logger.error(
+                    `Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`
+                );
+
             }
 
             await queryRunner.commitTransaction();
@@ -128,32 +153,62 @@ export class FacturasComprasService {
         }
     }
 
-    async findAll(page = 1, limit = 10): Promise<{ data: FacturaCompra[], meta: any }> {
+    async findAll(options: InvoiceFilterDto): Promise<{ data: FacturaCompra[], meta: any }> {
         try {
-            const skip = (page - 1) * limit;
+            const { offset = 1, limit = 10, ...where } = options;
+            const skip = (offset < 1 ? 0 : (offset - 1)) * limit;
 
-            const [data, total] = await this.facturaCompraRepository.findAndCount({
-                relations: ['proveedor', 'items', 'items.articulo', 'createdBy'],
-                order: { createdAt: 'DESC' },
-                skip,
-                take: limit
-            });
+            const queryBuilder = this.facturaCompraRepository
+                .createQueryBuilder('invoice')
+                .leftJoinAndSelect('invoice.proveedor', 'proveedor')
+                .leftJoinAndSelect('invoice.items', 'items')
+                .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+                .where('1=1');
 
-            return {
-                data,
-                meta: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit)
-                }
+            // Aplicar filtros
+            if (where.status) {
+                queryBuilder.andWhere('invoice.estado = :status', { status: where.status });
+            }
+
+            if (where.type) {
+                queryBuilder.andWhere('invoice.type = :type', { type: where.type });
+            }
+
+            if (where.providerName) {
+                queryBuilder.andWhere('proveedor.nombre ILIKE :proveedorName', {
+                    proveedorName: `%${where.clientName}%`
+                });
+            }
+
+            if (where.startDate && where.endDate) {
+                queryBuilder.andWhere('invoice.createdAt BETWEEN :startDate AND :endDate', {
+                    startDate: where.startDate,
+                    endDate: where.endDate,
+                });
+            }
+
+            // Ordenar y paginar
+            queryBuilder
+                .orderBy('invoice.createdAt', 'DESC')
+                .skip(skip)
+                .take(limit);
+
+            const [data, total] = await queryBuilder.getManyAndCount();
+
+            const meta = {
+                offset,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
             };
+
+            return { data, meta };
+
         } catch (error) {
-            this.logger.error(`Error obteniendo gastos: ${error.message}`, error.stack);
-            throw new InternalServerErrorException('Error al obtener los gastos');
+            this.logger.error(`Error obteniendo facturas de compra: ${error.message}`, error.stack);
+            throw new InternalServerErrorException('Error al obtener las facturas de compra');
         }
     }
-
 
     async findOne(id: string): Promise<FacturaCompra> {
         try {
@@ -179,10 +234,10 @@ export class FacturasComprasService {
     private async generarNumeroGasto(queryRunner: any): Promise<string> {
         const ultimoGasto = await queryRunner.manager.findOne(FacturaCompra, {
             where: {},
-            order: { createdAt: 'DESC' }
+            order: { numero: 'DESC' }
         });
 
-        const ultimoNumero = ultimoGasto ? parseInt(ultimoGasto.numero) : 0;
+        const ultimoNumero = ultimoGasto ? parseInt(ultimoGasto.numero?.split('-')[1]) : 0;
         return `FC-${(ultimoNumero + 1).toString().padStart(6, '0')}`;
     }
 

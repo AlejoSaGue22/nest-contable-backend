@@ -2,11 +2,11 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from 'src/auth/decorators/public.decorator';
 import { PERMISSIONS_KEY, ROLES_KEY } from 'src/auth/decorators/roles.decorator';
-import { Permission, ROLE_PERMISSIONS, UserRole } from 'src/common/constants/roles.constants';
+import { Permission, ROLE_PERMISSIONS, SystemRole } from 'src/common/constants/roles.constants';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -23,7 +23,7 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
+    const requiredRoles = this.reflector.getAllAndOverride<SystemRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -34,7 +34,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    
+
     if (!user) {
       throw new ForbiddenException('Usuario no autenticado');
     }
@@ -51,14 +51,14 @@ export class RolesGuard implements CanActivate {
 
     // Verificar permisos si se especifican
     if (requiredPermissions && requiredPermissions.length > 0) {
-        const userPermissions = ROLE_PERMISSIONS[user.role] || [];
-        const hasPermission = requiredPermissions.some(permission => 
-            userPermissions.includes(permission)
-        );
+      const userPermissions = ROLE_PERMISSIONS[user.role] || [];
+      const hasPermission = requiredPermissions.some(permission =>
+        userPermissions.includes(permission)
+      );
 
-        if (!hasPermission) {
-            throw new ForbiddenException('No tiene permisos para realizar esta acción');
-        }
+      if (!hasPermission) {
+        throw new ForbiddenException('No tiene permisos para realizar esta acción');
+      }
     }
 
     return true;

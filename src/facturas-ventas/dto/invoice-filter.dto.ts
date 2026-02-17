@@ -17,6 +17,10 @@ export class InvoiceFilterDto {
   clientName?: string;
 
   @IsOptional()
+  @IsString()
+  providerName?: string;
+
+  @IsOptional()
   @IsDate()
   @Type(() => Date)
   startDate?: Date;

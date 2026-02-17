@@ -141,6 +141,15 @@ export class FacturasVentasService {
         await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
         this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
       } catch (asientoError) {
+        await queryRunner.manager.update(
+          FacturasVenta,
+          { id: savedInvoice.id },
+          {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date()
+          }
+        );
         this.logger.error(`Error generando asiento contable: ${asientoError.message}`);
         // No revertir la transacción, solo loguear el error
         // El asiento se puede generar manualmente después
@@ -184,9 +193,9 @@ export class FacturasVentasService {
         queryBuilder.andWhere('invoice.status = :status', { status: where.status });
       }
 
-      // if (where.type) {
-      //   queryBuilder.andWhere('invoice.type = :type', { type: where.type });
-      // }
+      if (where.type) {
+        queryBuilder.andWhere('invoice.type = :type', { type: where.type });
+      }
 
       if (where.clientName) {
         queryBuilder.andWhere('client.name ILIKE :clientName', {

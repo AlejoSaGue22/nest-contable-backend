@@ -24,10 +24,26 @@ export class CreateFacturaCompraDto {
     fechaVencimiento?: string;
 
     @IsString()
-    @IsOptional()
-    formaPago?: string;
+    @IsNotEmpty()
+    formaPago: string;
 
     @IsArray()
     @IsNotEmpty()
     items: CreateFacturaCompraItemDto[];
+
+    @IsNumber()
+    @IsOptional()
+    iva: number;
+
+    @IsNumber()
+    @IsOptional()
+    descuento: number;
+
+    @IsNumber()
+    @IsOptional()
+    subtotal: number;
+
+    @IsNumber()
+    @IsOptional()
+    total: number;
 }

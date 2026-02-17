@@ -11,21 +11,22 @@ export enum FacturaEstado {
 }
 
 export enum InvoiceType {
-  SALE = 'sale',
-  ELECTRONIC = 'electronic'
+  SALE = 'sale', // Venta
+  ELECTRONIC = 'electronic' // Electronica
 }
 
 export enum InvoiceStatus {
-  DRAFT = 'draft',
-  ISSUED = 'issued',
-  CANCELLED = 'cancelled',
-  PAID = 'paid'
+  DRAFT = 'draft', // Borrador
+  ISSUED = 'issued', // Emitido
+  ERROR_ASIENTO = 'error_asiento', // Error en asiento
+  CANCELLED = 'cancelled', // Cancelado
+  PAID = 'paid' // Pagado
 }
 
 export enum DianStatus {
-  PENDING = 'pending',
-  ACCEPTED = 'accepted',
-  REJECTED = 'rejected'
+  PENDING = 'pending', // Pendiente
+  ACCEPTED = 'accepted', // Aceptado
+  REJECTED = 'rejected' // Rechazado
 }
 
 @Entity('facturas_venta')
@@ -56,6 +57,12 @@ export class FacturasVenta {
 
   @Column()
   formapago: string;
+
+  @Column({ nullable: true })
+  asientoError: string;
+
+  @Column({ nullable: true })
+  fechaAsientoError: Date;
 
   // Items de la factura
   @OneToMany(() => ItemsFacturaVenta, item => item.factura, { cascade: true })

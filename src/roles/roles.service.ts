@@ -4,15 +4,15 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Role } from './entities/role.entity';
 import { Repository } from 'typeorm';
-import { Permission, ROLE_PERMISSIONS, UserRole } from 'src/common/constants/roles.constants';
+import { Permission, ROLE_PERMISSIONS, SystemRole } from 'src/common/constants/roles.constants';
 
 @Injectable()
 export class RolesService {
   constructor(
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
-  ) {}
-  
+  ) { }
+
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
     // Verificar si el nombre ya existe
     const existingRole = await this.rolesRepository.findOne({
@@ -63,7 +63,7 @@ export class RolesService {
     return role;
   }
 
-   async update(id: string, updateRoleDto: UpdateRoleDto): Promise<Role> {
+  async update(id: string, updateRoleDto: UpdateRoleDto): Promise<Role> {
     const role = await this.findOne(id);
 
     // Verificar si es un rol del sistema
@@ -105,7 +105,7 @@ export class RolesService {
 
   async addPermission(id: string, permission: Permission): Promise<Role> {
     const role = await this.findOne(id);
-    
+
     if (role.isSystem) {
       throw new BadRequestException('No se pueden modificar los permisos de roles del sistema');
     }
@@ -120,7 +120,7 @@ export class RolesService {
 
   async removePermission(id: string, permission: Permission): Promise<Role> {
     const role = await this.findOne(id);
-    
+
     if (role.isSystem) {
       throw new BadRequestException('No se pueden modificar los permisos de roles del sistema');
     }
@@ -134,7 +134,7 @@ export class RolesService {
   }
 
   async seedDefaultRoles(): Promise<void> {
-    const defaultRoles = Object.values(UserRole).map(roleName => ({
+    const defaultRoles = Object.values(SystemRole).map(roleName => ({
       name: roleName,
       description: this.getRoleDescription(roleName),
       permissions: ROLE_PERMISSIONS[roleName] || [],
@@ -154,16 +154,16 @@ export class RolesService {
     }
   }
 
-  private getRoleDescription(roleName: UserRole): string {
-    const descriptions: Record<UserRole, string> = {
-      [UserRole.SUPER_ADMIN]: 'Acceso completo a todo el sistema',
-      [UserRole.ADMIN]: 'Administrador con acceso a la mayoría de funciones',
-      [UserRole.MANAGER]: 'Gerente con acceso a operaciones y reportes',
-      [UserRole.ACCOUNTANT]: 'Contador con acceso a facturación y reportes',
-      [UserRole.SALES]: 'Vendedor con acceso a clientes y facturación',
-      [UserRole.VIEWER]: 'Solo lectura en la mayoría de módulos',
+  private getRoleDescription(roleName: SystemRole): string {
+    const descriptions: Record<SystemRole, string> = {
+      [SystemRole.SUPER_ADMIN]: 'Acceso completo a todo el sistema',
+      [SystemRole.ADMIN]: 'Administrador con acceso a la mayoría de funciones',
+      [SystemRole.MANAGER]: 'Gerente con acceso a operaciones y reportes',
+      [SystemRole.ACCOUNTANT]: 'Contador con acceso a facturación y reportes',
+      [SystemRole.SALES]: 'Vendedor con acceso a clientes y facturación',
+      [SystemRole.VIEWER]: 'Solo lectura en la mayoría de módulos',
     };
-    
+
     return descriptions[roleName] || 'Rol del sistema';
   }
 

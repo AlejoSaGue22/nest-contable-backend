@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import { Role } from 'src/roles/entities/role.entity';
-import { UserRole } from 'src/common/constants/roles.constants';
+import { SystemRole } from 'src/common/constants/roles.constants';
 import * as bcryptjs from 'bcryptjs';
 
 @Injectable()
@@ -16,7 +16,7 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
-  ){}
+  ) { }
 
   async create(createUserDto: CreateUserDto, currentUser: User): Promise<User> {
     // Verificar si el email ya existe
@@ -42,13 +42,13 @@ export class UsersService {
       where: { id: currentUser.roleId },
     });
 
-    if (currentUserRole?.name !== UserRole.SUPER_ADMIN && role.name === UserRole.SUPER_ADMIN) {
+    if (currentUserRole?.name !== SystemRole.SUPER_ADMIN && role.name === SystemRole.SUPER_ADMIN) {
       throw new BadRequestException('No tienes permisos para crear un Super Admin');
     }
 
     // Crear usuario
     const hashedPassword = await bcryptjs.hash(createUserDto.password, 10);
-    
+
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
@@ -65,7 +65,7 @@ export class UsersService {
 
   async findAll(page: number = 1, limit: number = 10, search?: string) {
     const skip = (page - 1) * limit;
-    
+
     const queryBuilder = this.usersRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
@@ -108,20 +108,20 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User> {
-      const user = await this.usersRepository.findOne({
-        where: { email },
-        relations: ['role'],
-      });
+    const user = await this.usersRepository.findOne({
+      where: { email },
+      relations: ['role'],
+    });
 
-      if (!user) {
-        throw new NotFoundException(`Usuario con email ${email} no encontrado`);
-      }
+    if (!user) {
+      throw new NotFoundException(`Usuario con email ${email} no encontrado`);
+    }
 
-      return user;
+    return user;
   }
 
   async findOneEmailWithPassword(email: string) {
-    
+
     const user = await this.usersRepository.findOne({
       where: { email },
       select: ['id', 'fullName', 'email', 'password'],
@@ -132,39 +132,39 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto, currentUser: User): Promise<User> {
-      const user = await this.findOne(id);
+    const user = await this.findOne(id);
 
-      // Verificar si se está actualizando el rol
-      if (updateUserDto.roleId && updateUserDto.roleId !== user.roleId) {
-        const newRole = await this.rolesRepository.findOne({
-          where: { id: updateUserDto.roleId },
-        });
+    // Verificar si se está actualizando el rol
+    if (updateUserDto.roleId && updateUserDto.roleId !== user.roleId) {
+      const newRole = await this.rolesRepository.findOne({
+        where: { id: updateUserDto.roleId },
+      });
 
-        if (!newRole) {
-          throw new NotFoundException('Rol no encontrado');
-        }
-
-        // Verificar permisos
-        const currentUserRole = await this.rolesRepository.findOne({
-          where: { id: currentUser.roleId },
-        });
-
-        if (currentUserRole?.name !== UserRole.SUPER_ADMIN && newRole.name === UserRole.SUPER_ADMIN) {
-          throw new BadRequestException('No tienes permisos para asignar el rol Super Admin');
-        }
-
-        user.role = newRole;
+      if (!newRole) {
+        throw new NotFoundException('Rol no encontrado');
       }
 
-      // Actualizar otros campos
-      Object.assign(user, updateUserDto);
+      // Verificar permisos
+      const currentUserRole = await this.rolesRepository.findOne({
+        where: { id: currentUser.roleId },
+      });
 
-      // Si se actualiza la contraseña
-      if (updateUserDto.password) {
-        user.password = await bcryptjs.hash(updateUserDto.password, 10);
+      if (currentUserRole?.name !== SystemRole.SUPER_ADMIN && newRole.name === SystemRole.SUPER_ADMIN) {
+        throw new BadRequestException('No tienes permisos para asignar el rol Super Admin');
       }
 
-      return await this.usersRepository.save(user);
+      user.role = newRole;
+    }
+
+    // Actualizar otros campos
+    Object.assign(user, updateUserDto);
+
+    // Si se actualiza la contraseña
+    if (updateUserDto.password) {
+      user.password = await bcryptjs.hash(updateUserDto.password, 10);
+    }
+
+    return await this.usersRepository.save(user);
   }
 
   async remove(id: string, currentUser: User): Promise<void> {
@@ -173,14 +173,14 @@ export class UsersService {
     }
 
     const user = await this.findOne(id);
-    
+
     // Verificar si es un usuario del sistema
     const userRole = await this.rolesRepository.findOne({
       where: { id: user.roleId },
     });
 
-    if (userRole?.name === UserRole.SUPER_ADMIN) {
-      throw new BadRequestException('No se puede eliminar un Super Admin');
+    if (userRole?.name === SystemRole.SUPER_ADMIN) {
+      throw new BadRequestException('No puedes eliminar un Super Admin');
     }
 
     // Soft delete
@@ -195,7 +195,7 @@ export class UsersService {
 
     const user = await this.findOne(id);
     user.isActive = isActive;
-    
+
     return await this.usersRepository.save(user);
   }
 

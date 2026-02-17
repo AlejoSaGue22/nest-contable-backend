@@ -1,13 +1,13 @@
 
 
-export enum UserRole {
-  SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-  MANAGER = 'manager',
-  ACCOUNTANT = 'accountant',
-  SALES = 'sales',
-  VIEWER = 'viewer'
-}
+// export enum SystemRole {
+//   SUPER_ADMIN = 'super_admin', // Super Admin
+//   ADMIN = 'admin', // Administrador
+//   MANAGER = 'manager', // Gerente
+//   ACCOUNTANT = 'accountant', // Contador
+//   SALES = 'sales', // Vendedor
+//   VIEWER = 'viewer' // Observador
+// }
 
 export enum SystemRole {
   SUPER_ADMIN = 'Super Admin',
@@ -93,9 +93,9 @@ export enum Permission {
   MENU_MANAGE = 'menu:manage',
 }
 
-export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  [UserRole.SUPER_ADMIN]: Object.values(Permission),
-  [UserRole.ADMIN]: [
+export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
+  [SystemRole.SUPER_ADMIN]: Object.values(Permission),
+  [SystemRole.ADMIN]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.INVOICE_UPDATE,
     Permission.INVOICE_DELETE, Permission.INVOICE_EXPORT, Permission.INVOICE_CANCEL,
@@ -108,7 +108,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
     Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
   ],
-  [UserRole.MANAGER]: [
+  [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.INVOICE_UPDATE, Permission.INVOICE_EXPORT,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ, Permission.CLIENT_UPDATE,
@@ -119,20 +119,20 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
   ],
-  [UserRole.ACCOUNTANT]: [
+  [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ, Permission.INVOICE_EXPORT,
     Permission.CLIENT_READ,
     Permission.PRODUCT_READ,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
   ],
-  [UserRole.SALES]: [
+  [SystemRole.SALES]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_CREATE, Permission.INVOICE_READ,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ,
     Permission.PRODUCT_READ,
   ],
-  [UserRole.VIEWER]: [
+  [SystemRole.VIEWER]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ,
     Permission.CLIENT_READ,

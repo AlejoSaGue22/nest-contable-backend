@@ -112,7 +112,7 @@ export const DEFAULT_MENU_ITEMS = [
     order: 4,
     isActive: true,
     isVisible: true,
-    other: 'SI',
+    other: 'NO',
     metadata: { badge: null }
   },
   {
@@ -123,7 +123,7 @@ export const DEFAULT_MENU_ITEMS = [
     order: 5,
     isActive: true,
     isVisible: true,
-    other: 'SI',
+    other: 'NO',
     metadata: { badge: null },
     children: [
       {
