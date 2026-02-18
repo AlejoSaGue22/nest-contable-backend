@@ -14,6 +14,7 @@ import { CuentasModule } from './cuentas/cuentas.module';
 import { AsientosContablesModule } from './asientos-contables/asientos-contables.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { ArticulosModule } from './articulos/articulos.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { CuentasService } from './cuentas/cuentas.service';
 import { DataSource } from 'typeorm';
 
@@ -39,7 +40,8 @@ import { DataSource } from 'typeorm';
     ArticulosModule,
     CuentasModule,
     AsientosContablesModule,
-    ReportesModule],
+    ReportesModule,
+    DashboardModule],
   controllers: [],
 })
 

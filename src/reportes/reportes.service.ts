@@ -53,12 +53,10 @@ export class ReportesService {
 
       const totalIngresos = ingresosDetalle.reduce((sum, i) => sum + i.valor, 0);
 
-      // 2. Obtener COSTOS (cuentas 6xxx)
-      const cuentasCostos = await this.cuentaRepository
-        .createQueryBuilder('cuenta')
-        .where("cuenta.codigo LIKE '6%'")
-        .andWhere('cuenta.isActive = true')
-        .getMany();
+      // 2. Obtener COSTOS (cuentas tipo COSTO - clase 6)
+      const cuentasCostos = await this.cuentaRepository.find({
+        where: { tipo: TipoCuenta.COSTO, isActive: true }
+      });
 
       const costosDetalle = await Promise.all(
         cuentasCostos.map(async (cuenta) => {
@@ -327,13 +325,17 @@ export class ReportesService {
 
     if (!cuenta) return 0;
 
+    // Asegurar que la fecha fin incluya todo el día
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
     const movimientos = await this.asientoDetalleRepository
       .createQueryBuilder('detalle')
       .leftJoin('detalle.asiento', 'asiento')
       .where('detalle.cuentaId = :cuentaId', { cuentaId })
       .andWhere('asiento.fecha BETWEEN :inicio AND :fin', {
         inicio: fechaInicio,
-        fin: fechaFin
+        fin: fin
       })
       .select('SUM(detalle.debito)', 'totalDebito')
       .addSelect('SUM(detalle.credito)', 'totalCredito')
@@ -343,7 +345,7 @@ export class ReportesService {
     const totalCredito = parseFloat(movimientos?.totalCredito || '0');
 
     // Calcular saldo según naturaleza de la cuenta
-    if (cuenta.naturaleza === 'debito') {
+    if (cuenta.naturaleza === 'DEBITO') {
       return totalDebito - totalCredito;
     } else {
       return totalCredito - totalDebito;

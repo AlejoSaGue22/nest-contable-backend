@@ -11,5 +11,6 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
   imports: [TypeOrmModule.forFeature([FacturasVenta, FacturaCompra, AsientoDetalle, CuentaContable])],
   controllers: [ReportesController],
   providers: [ReportesService],
+  exports: [ReportesService],
 })
 export class ReportesModule { }

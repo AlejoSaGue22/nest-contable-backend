@@ -1,12 +1,12 @@
-import { Column, DeleteDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export enum TipoCuenta {
     ACTIVO = 'ACTIVO',
     PASIVO = 'PASIVO',
+    PATRIMONIO = 'PATRIMONIO',
     INGRESO = 'INGRESO',
     GASTO = 'GASTO',
     COSTO = 'COSTO',
-    PATRIMONIO = 'PATRIMONIO'
 }
 
 export enum NaturalezaCuenta {
@@ -49,6 +49,9 @@ export class CuentaContable {
 
     @Column({ default: true })
     isActive: boolean;
+
+    @CreateDateColumn()
+    createdAt: Date;
 
     @DeleteDateColumn()
     deleteAt: Date;

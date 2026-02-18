@@ -32,14 +32,14 @@ export class CuentasService {
     const cuentasMap = new Map<string, CuentaContable>();
 
     // 1️⃣ Crear primero las cuentas padre
-    for (const data of PLAN_CUENTAS_MINIMO.filter(c => c.nivel === 1)) {
+    for (const data of PLAN_CUENTAS_MINIMO.filter(c => c.nivel === 1 && c.nombre === 'PATRIMONIO')) {
       const cuenta = repository.create(data);
       await repository.save(cuenta);
       cuentasMap.set(data.codigo, cuenta);
     }
 
     // 2️⃣ Crear las cuentas hijas
-    for (const data of PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1)) {
+    for (const data of PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1 && c.nombre === 'INGRESOS')) {
       const { cuentaPadreId, ...rest } = data;
 
       const cuenta = repository.create({
@@ -49,6 +49,7 @@ export class CuentasService {
 
       await repository.save(cuenta);
     }
+
     console.log('✅ Plan de cuentas básico creado (14 cuentas)');
   }
 }
