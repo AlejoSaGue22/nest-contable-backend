@@ -8,7 +8,6 @@ import { CuentaContable } from './entities/cuenta.entity';
 @Injectable()
 export class CuentasService {
 
-
   create(createCuentaDto: CreateCuentaDto) {
     return 'This action adds a new cuenta';
   }

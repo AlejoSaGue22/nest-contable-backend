@@ -45,8 +45,9 @@ export class CreateClienteDto {
     @IsString()
     observacion: string;
 
-    // @IsString()
-    // condicionIva: string;
+    @IsString()
+    @IsNotEmpty()
+    tributo: string;
 
     @IsString()
     @IsNotEmpty()

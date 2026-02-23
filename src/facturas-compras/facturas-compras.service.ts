@@ -102,6 +102,8 @@ export class FacturasComprasService {
                 proveedorId: proveedor.id,
                 observaciones: createFacturaCompraDto.observaciones,
                 numeroFacturaProveedor: createFacturaCompraDto.numero,
+                formaPago: createFacturaCompraDto.formaPago,
+                metodoPago: createFacturaCompraDto.metodoPago,
                 subtotal,
                 iva: totalIva,
                 descuento,

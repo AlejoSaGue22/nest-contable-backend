@@ -29,6 +29,10 @@ export class CreateFacturasVentaDto {
     @IsNotEmpty()
     formapago: string;
 
+    @IsString()
+    @IsOptional()
+    metodoPago?: string;
+
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => CreateItemsFacturasVentaDto)

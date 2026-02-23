@@ -27,6 +27,10 @@ export class CreateFacturaCompraDto {
     @IsNotEmpty()
     formaPago: string;
 
+    @IsString()
+    @IsOptional()
+    metodoPago?: string;
+
     @IsArray()
     @IsNotEmpty()
     items: CreateFacturaCompraItemDto[];

@@ -1,8 +1,8 @@
 import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
 
-@Entity({ name: 'clientes'})
+@Entity({ name: 'clientes' })
 export class Cliente {
-    
+
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
@@ -18,10 +18,13 @@ export class Cliente {
     @Column()
     numeroDocumento: string;
 
+    @Column({ nullable: true })
+    dv: string;  // Dígito de verificación (solo para NIT)  -- FALTA AGREGARLO EN EL FRONT
+
     @Column()
     tipoPersona: string;
 
-    @Column({ nullable: true})
+    @Column({ nullable: true })
     razonSocial: string;
 
     @Column()
@@ -38,6 +41,9 @@ export class Cliente {
 
     @Column()
     observacion: string;
+
+    @Column()
+    tributo: string;
 
     @Column()
     responsableFiscal: string;

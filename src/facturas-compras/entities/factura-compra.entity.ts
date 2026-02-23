@@ -34,6 +34,9 @@ export class FacturaCompra {
     @Column()
     formaPago: string;
 
+    @Column({ nullable: true })
+    metodoPago: string;
+
     // @Column({ type: 'date', nullable: true })
     // fechaVencimiento: Date;
 
