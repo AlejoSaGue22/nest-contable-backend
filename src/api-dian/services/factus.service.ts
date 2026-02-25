@@ -216,7 +216,7 @@ export class FactusService {
             //   observation: factura?.observaciones || "",
 
             // Método de pago: "10" = Efectivo
-            payment_method_code: this.mapearMetodoPago(factura.formapago),
+            payment_method_code: this.mapearMetodoPago(factura.formaPago),
 
             // Datos del establecimiento/sucursal
             establishment: {

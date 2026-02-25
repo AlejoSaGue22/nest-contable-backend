@@ -26,9 +26,9 @@ import { ApiDianModule } from './api-dian/api-dian.module';
   imports: [TypeOrmModule.forRoot({
     type: 'mysql',
     host: 'localhost',
-    port: 3307,
+    port: 3306,
     username: 'root',
-    password: 'root',
+    password: '',
     database: 'finance_tejo',
     autoLoadEntities: true,
     synchronize: true // ⚠️ nunca true en producción

@@ -1,6 +1,7 @@
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { CreateItemsFacturasVentaDto } from "./create-items-facturas-venta.dto";
 import { Type } from "class-transformer";
+import { FormaPago, TipoFactura } from "../entities/facturas-venta.entity";
 
 export class CreateFacturasVentaDto {
 
@@ -8,11 +9,9 @@ export class CreateFacturasVentaDto {
     @IsNotEmpty()
     clientId: string;
 
-    // @IsString()
-    // comprobante: string;
-
-    // @IsString()
-    // prefijo: string;
+    @IsOptional()
+    @IsString()
+    prefijo?: string;
 
     @IsOptional()
     @IsString()
@@ -25,9 +24,13 @@ export class CreateFacturasVentaDto {
     @IsString()
     fecha: string;
 
-    @IsString()
+    @IsEnum(TipoFactura)
+    @IsOptional()
+    tipoFactura?: TipoFactura;
+
+    @IsEnum(FormaPago)
     @IsNotEmpty()
-    formapago: string;
+    formaPago: FormaPago;
 
     @IsString()
     @IsOptional()

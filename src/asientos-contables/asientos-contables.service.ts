@@ -6,7 +6,7 @@ import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entit
 import { DataSource, Repository } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
-import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FacturasVenta, FormaPago } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 
@@ -51,16 +51,17 @@ export class AsientosContablesService {
     try {
       const detalles: DetalleAsiento[] = [];
 
-      // 1. Cuenta de CAJA o CXC (DEBITO)
-      const cuentaCaja = await this.obtenerCuentaPorCodigo('1105'); // Caja
+      // 1. Cuenta de CAJA/BANCOS o Clientes (DEBITO)
+      const isContado = factura.formaPago === FormaPago.CONTADO;
+      const codigoCuenta = isContado ? '1105' : '1305';
+      const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCuenta);
       const totalFactura = factura.total;
 
-
       detalles.push({
-        cuentaId: cuentaCaja.id,
+        cuentaId: cuentaDebito.id,
         debito: totalFactura,
         credito: 0,
-        descripcion: `Factura de venta ${factura.comprobante_completo} - Cliente: ${factura.clientId}`
+        descripcion: `Factura de venta ${factura.comprobante_completo} - Cliente: ${factura.client?.nombre || factura.clientId} (${factura.formaPago})`
       });
 
       // 2. Procesar items para INGRESOS (CREDITO)

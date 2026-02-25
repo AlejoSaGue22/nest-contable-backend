@@ -34,6 +34,8 @@ export class ClientesService {
 
     const totalClients = await this.clientesRepository.count();
 
+    console.log(clientes);
+
     const clientesMap = clientes.map((cli, indx) => {
       return {
         ...cli,

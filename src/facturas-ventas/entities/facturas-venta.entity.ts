@@ -10,9 +10,14 @@ import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
 //   PAGADO = 'pagado'
 // }
 
-export enum InvoiceType {
-  SALE = 'sale', // Venta
-  ELECTRONIC = 'electronic' // Electronica
+export enum TipoFactura {
+  ELECTRONICA = 'ELECTRONICA',
+  STANDARD = 'STANDARD',
+}
+
+export enum FormaPago {
+  CONTADO = 'CONTADO',
+  CREDITO = 'CREDITO',
 }
 
 export enum InvoiceStatus {
@@ -21,7 +26,9 @@ export enum InvoiceStatus {
   ACCEPTED = 'accepted',         // Aceptada por DIAN (tiene CUFE)
   REJECTED = 'rejected',         // Rechazada por DIAN (corregir y reenviar)
   PAID = 'paid',                 // Pagada
-  CANCELLED = 'cancelled'        // Anulada (requiere nota crédito)
+  CANCELLED = 'cancelled',        // Anulada (requiere nota crédito)
+  ISSUED = 'issued',             // Emitida (para facturas comunes)
+  ERROR_ASIENTO = 'error_asiento' // Error generado el asiento
 }
 
 export enum DianStatus {
@@ -59,14 +66,17 @@ export class FacturasVenta {
   @Column()
   canalventa: string;
 
-  @Column({ type: 'date' })
-  fecha: Date;
+  @Column({ type: 'enum', enum: TipoFactura, default: TipoFactura.ELECTRONICA })
+  tipoFactura: TipoFactura;
 
-  @Column()
-  formapago: string;
+  @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CONTADO })
+  formaPago: FormaPago;
 
   @Column({ nullable: true })
   metodoPago: string;
+
+  @Column({ type: 'date' })
+  fecha: Date;
 
   @Column({ nullable: true })
   asientoError: string;

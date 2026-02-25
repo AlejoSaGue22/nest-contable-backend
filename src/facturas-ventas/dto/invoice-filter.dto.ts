@@ -1,7 +1,7 @@
 
 import { IsOptional, IsDate, IsEnum, IsString, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
-import { InvoiceStatus, InvoiceType } from '../entities/facturas-venta.entity';
+import { DianStatus, InvoiceStatus, TipoFactura } from '../entities/facturas-venta.entity';
 
 export class InvoiceFilterDto {
   @IsOptional()
@@ -9,8 +9,12 @@ export class InvoiceFilterDto {
   status?: InvoiceStatus;
 
   @IsOptional()
-  @IsEnum(InvoiceType)
-  type?: InvoiceType;
+  @IsEnum(TipoFactura)
+  tipoFactura?: TipoFactura;
+
+  @IsOptional()
+  @IsEnum(DianStatus)
+  dianStatus?: DianStatus;
 
   @IsOptional()
   @IsString()
@@ -33,7 +37,7 @@ export class InvoiceFilterDto {
   @IsOptional()
   @IsNumber()
   @Type(() => Number)
-  offset?: number = 1;
+  page?: number = 1;
 
   @IsOptional()
   @IsNumber()

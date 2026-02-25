@@ -157,8 +157,8 @@ export class FacturasComprasService {
 
     async findAll(options: InvoiceFilterDto): Promise<{ data: FacturaCompra[], meta: any }> {
         try {
-            const { offset = 1, limit = 10, ...where } = options;
-            const skip = (offset < 1 ? 0 : (offset - 1)) * limit;
+            const { page = 1, limit = 10, ...where } = options;
+            const skip = (page < 1 ? 0 : (page - 1)) * limit;
 
             const queryBuilder = this.facturaCompraRepository
                 .createQueryBuilder('invoice')
@@ -172,9 +172,9 @@ export class FacturasComprasService {
                 queryBuilder.andWhere('invoice.estado = :status', { status: where.status });
             }
 
-            if (where.type) {
-                queryBuilder.andWhere('invoice.type = :type', { type: where.type });
-            }
+            // if (where.tipoFactura) {
+            //     queryBuilder.andWhere('invoice.tipoFactura = :tipoFactura', { tipoFactura: where.tipoFactura });
+            // }
 
             if (where.providerName) {
                 queryBuilder.andWhere('proveedor.nombre ILIKE :proveedorName', {
@@ -198,7 +198,7 @@ export class FacturasComprasService {
             const [data, total] = await queryBuilder.getManyAndCount();
 
             const meta = {
-                offset,
+                page,
                 limit,
                 total,
                 totalPages: Math.ceil(total / limit),
