@@ -9,5 +9,8 @@ export class TipoDocumento {
     codigo: string;
 
     @Column()
+    abreviatura: string;
+
+    @Column()
     nombre: string;
 }

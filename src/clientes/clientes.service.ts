@@ -6,12 +6,15 @@ import { Cliente } from './entities/cliente.entity';
 import { Repository } from 'typeorm';
 import { validate as isUUID } from 'uuid';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { TipoDocumento } from 'src/catalogs/entities/tipo-documento.entity';
 
 @Injectable()
 export class ClientesService {
   constructor(
     @InjectRepository(Cliente)
-    private readonly clientesRepository: Repository<Cliente>
+    private readonly clientesRepository: Repository<Cliente>,
+    @InjectRepository(TipoDocumento)
+    private readonly tipoDocumentoRepo: Repository<TipoDocumento>
   ) { }
 
   async create(createClienteDto: CreateClienteDto) {
@@ -33,16 +36,16 @@ export class ClientesService {
     });
 
     const totalClients = await this.clientesRepository.count();
-
-    console.log(clientes);
+    const tiposDocumento = await this.findAllDocumentTypes();
 
     const clientesMap = clientes.map((cli, indx) => {
       return {
-        ...cli,
-        fullName: `${cli.nombre} ${cli.apellido}`,
-        tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
-        estado: cli.isActive == true ? 'Activo' : 'Inactivo',
-        ind: (indx + 1).toString()
+          ...cli,
+          fullName: `${cli.nombre} ${cli.apellido}`,
+          tipoDocumento_nom: tiposDocumento.find((td) => td.codigo === cli.tipoDocumento)?.abreviatura,
+          tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
+          estado: cli.isActive == true ? 'Activo' : 'Inactivo',
+          ind: (indx + 1).toString()
       }
     })
 
@@ -51,6 +54,10 @@ export class ClientesService {
       pages: Math.ceil(totalClients / limit),
       clientes: clientesMap
     };
+  }
+
+  async findAllDocumentTypes() {
+    return this.tipoDocumentoRepo.find();
   }
 
   async findOne(id: string) {

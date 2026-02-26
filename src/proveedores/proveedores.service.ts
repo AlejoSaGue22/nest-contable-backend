@@ -5,12 +5,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proveedor } from './entities/proveedor.entity';
 import { Repository } from 'typeorm';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { TipoDocumento } from 'src/catalogs/entities/tipo-documento.entity';
 
 @Injectable()
 export class ProveedoresService {
     constructor(
         @InjectRepository(Proveedor)
         private readonly proveedorRepository: Repository<Proveedor>,
+        @InjectRepository(TipoDocumento)
+        private readonly tipoDocumentoRepo: Repository<TipoDocumento>
     ) { }
 
     create(createProveedorDto: CreateProveedorDto) {
@@ -35,10 +38,13 @@ export class ProveedoresService {
         });
 
         const totalProveedores = await this.proveedorRepository.count();
+        const tiposDocumento = await this.findAllDocumentTypes();
 
         const proveedoresMap = proveedores.map((prov, indx) => {
             return {
                 ...prov,
+                tipoDocumento_nom: tiposDocumento.find((td) => td.codigo === prov.tipoDocumento)?.abreviatura,
+                estado: prov.isActive == true ? 'Activo' : 'Inactivo',
                 ind: (indx + 1).toString()
             }
         });
@@ -48,6 +54,10 @@ export class ProveedoresService {
             pages: Math.ceil(totalProveedores / limit),
             proveedores: proveedoresMap
         };
+    }
+
+    async findAllDocumentTypes() {
+        return this.tipoDocumentoRepo.find();
     }
 
     async findOne(id: string) {

@@ -24,4 +24,9 @@ export class CatalogsController {
     findAllUnitsMeasure() {
         return this.catalogsService.findAllUnitsMeasure();
     }
+
+    @Get('categories-articles')
+    findAllCategoriesArticles() {
+        return this.catalogsService.findAllCategoriesArticles();
+    }
 }

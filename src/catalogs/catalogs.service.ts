@@ -5,6 +5,8 @@ import { TipoDocumento } from './entities/tipo-documento.entity';
 import { MetodoPago } from './entities/metodo-pago.entity';
 import { CanalVenta } from './entities/canal-venta.entity';
 import { UnidadMedida } from './entities/unidad-medida.entity';
+import { CategoriaArticulo } from './entities/categorias-articulos-entity';
+import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
 
 @Injectable()
 export class CatalogsService {
@@ -19,6 +21,8 @@ export class CatalogsService {
         private canalVentaRepo: Repository<CanalVenta>,
         @InjectRepository(UnidadMedida)
         private unidadMedidaRepo: Repository<UnidadMedida>,
+        @InjectRepository(CategoriaArticulo)
+        private categoriasArticulosRepo: Repository<CategoriaArticulo>,
     ) { }
 
     async findAllDocumentTypes() {
@@ -37,27 +41,42 @@ export class CatalogsService {
         return this.unidadMedidaRepo.find();
     }
 
+    async findAllCategoriesArticles() {
+        const data = await this.categoriasArticulosRepo.find();
+
+        const data2 = data.map((item) => {
+            return {
+                codigo: item.codigo,
+                nombre: item.nombre,
+                tipo: item.tipo,
+                descripcion: item.descripcion,
+            };
+        });
+        return data2;
+    }
+
     async seedAll() {
         await this.seedDocumentTypes();
         await this.seedPaymentMethods();
         await this.seedSalesChannels();
         await this.seedUnitsMeasure();
+        await this.seedCategoriesArticles();
         this.logger.log('✅ Todos los catálogos han sido sincronizados');
     }
 
     private async seedDocumentTypes() {
         const data = [
-            { codigo: '1', nombre: 'Registro civil' },
-            { codigo: '2', nombre: 'Tarjeta de identidad' },
-            { codigo: '3', nombre: 'Cédula de ciudadanía' },
-            { codigo: '4', nombre: 'Tarjeta de extranjería' },
-            { codigo: '5', nombre: 'Cédula de extranjería' },
-            { codigo: '6', nombre: 'NIT' },
-            { codigo: '7', nombre: 'Pasaporte' },
-            { codigo: '8', nombre: 'Documento de identificación extranjero' },
-            { codigo: '9', nombre: 'PEP' },
-            { codigo: '10', nombre: 'NIT otro país' },
-            { codigo: '11', nombre: 'NUIP' },
+            { codigo: '1', abreviatura: 'RC', nombre: 'Registro civil' },
+            { codigo: '2', abreviatura: 'TI', nombre: 'Tarjeta de identidad' },
+            { codigo: '3', abreviatura: 'CC', nombre: 'Cédula de ciudadanía' },
+            { codigo: '4', abreviatura: 'TE', nombre: 'Tarjeta de extranjería' },
+            { codigo: '5', abreviatura: 'CE', nombre: 'Cédula de extranjería' },
+            { codigo: '6', abreviatura: 'NIT', nombre: 'NIT' },
+            { codigo: '7', abreviatura: 'PAS', nombre: 'Pasaporte' },
+            { codigo: '8', abreviatura: 'DIE', nombre: 'Documento de identificación extranjero' },
+            { codigo: '9', abreviatura: 'PEP', nombre: 'PEP' },
+            { codigo: '10', abreviatura: 'NIT', nombre: 'NIT otro país' },
+            { codigo: '11', abreviatura: 'NUIP', nombre: 'NUIP' },
         ];
 
         for (const item of data) {
@@ -127,5 +146,17 @@ export class CatalogsService {
             }
         }
         this.logger.log('✔ Unidades de medida sincronizadas');
+    }
+
+    private async seedCategoriesArticles() {
+        const data = Object.values(CATEGORIAS_ARTICULOS);
+
+        for (const item of data) {
+            const exists = await this.categoriasArticulosRepo.findOne({ where: { codigo: item.codigo } });
+            if (!exists) {
+                await this.categoriasArticulosRepo.save(item);
+            }
+        }
+        this.logger.log('✔ Categorías de artículos sincronizadas');
     }
 }
