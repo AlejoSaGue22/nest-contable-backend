@@ -80,5 +80,4 @@ export class ClientesService {
     return await this.clientesRepository.softDelete({ id });
   }
 
-
 }

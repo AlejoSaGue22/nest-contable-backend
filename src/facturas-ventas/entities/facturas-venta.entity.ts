@@ -22,6 +22,8 @@ export enum FormaPago {
 
 export enum InvoiceStatus {
   DRAFT = 'draft',              // Borrador - editable
+  ISSUED = 'issued',            // Emitida
+  ERROR_ASIENTO = 'error_asiento', // Error en asiento
   PENDING_DIAN = 'pending_dian', // Enviando a DIAN
   ACCEPTED = 'accepted',         // Aceptada por DIAN (tiene CUFE)
   REJECTED = 'rejected',         // Rechazada por DIAN (corregir y reenviar)
@@ -40,10 +42,22 @@ export enum DianStatus {
   CANCELLED = 'cancelled'        // Anulada (nota crédito enviada)
 }
 
+export enum TipoFactura {
+  ELECTRONIC = 'electronic',
+  NORMAL = 'normal'
+}
+
 @Entity('facturas_venta')
 export class FacturasVenta {
   @PrimaryGeneratedColumn("uuid")
   id: string;
+
+  @Column({
+    type: 'enum',
+    enum: TipoFactura,
+    default: TipoFactura.NORMAL
+  })
+  tipoFactura: TipoFactura;
 
   @Column()
   prefijo: string;
