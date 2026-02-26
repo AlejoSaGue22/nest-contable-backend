@@ -22,8 +22,6 @@ export enum FormaPago {
 
 export enum InvoiceStatus {
   DRAFT = 'draft',              // Borrador - editable
-  ISSUED = 'issued',            // Emitida
-  ERROR_ASIENTO = 'error_asiento', // Error en asiento
   PENDING_DIAN = 'pending_dian', // Enviando a DIAN
   ACCEPTED = 'accepted',         // Aceptada por DIAN (tiene CUFE)
   REJECTED = 'rejected',         // Rechazada por DIAN (corregir y reenviar)
@@ -79,9 +77,6 @@ export class FacturasVenta {
 
   @Column()
   canalventa: string;
-
-  @Column({ type: 'enum', enum: TipoFactura, default: TipoFactura.ELECTRONICA })
-  tipoFactura: TipoFactura;
 
   @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CONTADO })
   formaPago: FormaPago;

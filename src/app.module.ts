@@ -21,14 +21,16 @@ import { DataSource } from 'typeorm';
 import { MunicipalitiesModule } from './municipalities/municipalities.module';
 import { MunicipalitiesService } from './municipalities/municipalities.service';
 import { ApiDianModule } from './api-dian/api-dian.module';
+import { CatalogsModule } from './catalogs/catalogs.module';
+import { CatalogsService } from './catalogs/catalogs.service';
 
 @Module({
   imports: [TypeOrmModule.forRoot({
     type: 'mysql',
     host: 'localhost',
-    port: 3306,
+    port: 3307,
     username: 'root',
-    password: '',
+    password: 'root',
     database: 'finance_tejo',
     autoLoadEntities: true,
     synchronize: true // ⚠️ nunca true en producción
@@ -50,7 +52,8 @@ import { ApiDianModule } from './api-dian/api-dian.module';
     ReportesModule,
     DashboardModule,
     ApiDianModule,
-    MunicipalitiesModule
+    MunicipalitiesModule,
+    CatalogsModule
   ],
   controllers: [],
 })
@@ -62,6 +65,7 @@ export class AppModule implements OnModuleInit {
     private readonly menuService: MenuService,
     private readonly cuentasService: CuentasService,
     private readonly municipalitiesService: MunicipalitiesService,
+    private readonly catalogsService: CatalogsService,
     private datasource: DataSource
   ) { }
 
@@ -80,6 +84,9 @@ export class AppModule implements OnModuleInit {
       console.log('Sincronizando municipios por primera vez...');
       await this.municipalitiesService.syncMunicipalities();
     }
+
+    // Seed otros catálogos
+    await this.catalogsService.seedAll();
 
     console.log('Sistema inicializado con datos por defecto');
   }

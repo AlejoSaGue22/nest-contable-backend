@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsNumber, IsString, MaxLength } from "class-validator";
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class CreateClienteDto {
 
@@ -17,6 +17,10 @@ export class CreateClienteDto {
     @IsString()
     @IsNotEmpty()
     numeroDocumento: string;
+
+    @IsString()
+    @IsOptional()
+    dv?: string
 
     @IsString()
     @IsNotEmpty()
