@@ -28,9 +28,9 @@ import { CatalogsService } from './catalogs/catalogs.service';
   imports: [TypeOrmModule.forRoot({
     type: 'mysql',
     host: 'localhost',
-    port: 3306,
+    port: 3307,
     username: 'root',
-    password: '',
+    password: 'root',
     database: 'finance_tejo',
     autoLoadEntities: true,
     synchronize: true // ⚠️ nunca true en producción

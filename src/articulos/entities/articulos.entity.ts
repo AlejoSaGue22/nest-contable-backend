@@ -33,7 +33,7 @@ export class Articulo {
     fullNameTipo: string;
 
     @Column()
-    unidadmedida: string;
+    unidadmedida: number;
 
     @Column()
     impuesto: number;

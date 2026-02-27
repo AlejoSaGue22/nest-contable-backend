@@ -1,4 +1,5 @@
-import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { TipoDocumento } from "src/catalogs/entities/tipo-documento.entity";
 
 @Entity({ name: 'clientes' })
 export class Cliente {
@@ -14,6 +15,11 @@ export class Cliente {
 
     @Column()
     tipoDocumento: string;
+
+    @ManyToOne(() => TipoDocumento)
+    @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'codigo' })
+    tipoDocumentoRel: TipoDocumento;
+
 
     @Column()
     numeroDocumento: string;

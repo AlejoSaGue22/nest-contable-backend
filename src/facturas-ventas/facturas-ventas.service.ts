@@ -172,8 +172,9 @@ export class FacturasVentasService {
     try {
       const invoice = await this.facturaVentaRepository.findOne({
         where: { id },
-        relations: ['client', 'items', 'createdBy'],
+        relations: ['client', 'client.tipoDocumentoRel', 'items', 'items.articulo', 'createdBy'],
       });
+
 
       if (!invoice) {
         throw new NotFoundException(`Factura con ID ${id} no encontrada`);

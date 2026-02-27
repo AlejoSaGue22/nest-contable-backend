@@ -5,8 +5,9 @@ export class TipoDocumento {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
+    @Column({ unique: true })
     codigo: string;
+
 
     @Column()
     abreviatura: string;

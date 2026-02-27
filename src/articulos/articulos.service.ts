@@ -8,12 +8,16 @@ import { UpdateArticuloDto } from './dto/update-articulos.dto';
 import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { UnidadMedida } from 'src/catalogs/entities/unidad-medida.entity';
 
 @Injectable()
 export class ArticulosService {
   constructor(
     @InjectRepository(Articulo)
     private readonly articulosRepository: Repository<Articulo>,
+
+    @InjectRepository(UnidadMedida)
+    private readonly unidadesRepository: Repository<UnidadMedida>,
 
     @InjectRepository(CuentaContable)
     private readonly cuentasRepository: Repository<CuentaContable>
@@ -70,8 +74,8 @@ export class ArticulosService {
     }
 
     const articulos = await queryBuilder.getMany();
-
     const totalArticulos = await this.articulosRepository.count();
+    const unidades = await this.unidadesRepository.find();
 
     const articulosMap = articulos.map((cli, indx) => {
       return {
@@ -79,6 +83,8 @@ export class ArticulosService {
         iva_percent: cli.impuesto + '%',
         rete_percent: cli.retencion + '%',
         estado: cli.isActive == true ? 'Activo' : 'Inactivo',
+        unidadmedida: unidades.find((u) => u.id == cli.unidadmedida)?.codigo,
+        unidadmedidaNombre: unidades.find((u) => u.id == cli.unidadmedida)?.nombre,
         ind: (indx + 1).toString()
       }
     });

@@ -3,16 +3,9 @@ import { User } from "src/users/entities/user.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
 
-// export enum FacturaEstado {
-//   BORRADOR = 'borrador',
-//   EMITIDO = 'emitido',
-//   CANCELADO = 'cancelado',
-//   PAGADO = 'pagado'
-// }
-
 export enum TipoFactura {
   ELECTRONICA = 'ELECTRONICA',
-  STANDARD = 'STANDARD',
+  STANDARD = 'ESTANDAR',
 }
 
 export enum FormaPago {
@@ -40,10 +33,6 @@ export enum DianStatus {
   CANCELLED = 'cancelled'        // Anulada (nota crédito enviada)
 }
 
-export enum TipoFactura {
-  ELECTRONIC = 'electronic',
-  NORMAL = 'normal'
-}
 
 @Entity('facturas_venta')
 export class FacturasVenta {
@@ -53,7 +42,7 @@ export class FacturasVenta {
   @Column({
     type: 'enum',
     enum: TipoFactura,
-    default: TipoFactura.NORMAL
+    default: TipoFactura.STANDARD
   })
   tipoFactura: TipoFactura;
 
