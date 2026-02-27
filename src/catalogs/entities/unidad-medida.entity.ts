@@ -5,7 +5,7 @@ export class UnidadMedida {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
+    @Column({unique: true})
     codigo: string;
 
     @Column()

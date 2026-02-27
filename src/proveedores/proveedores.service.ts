@@ -34,16 +34,17 @@ export class ProveedoresService {
             skip: offset,
             order: {
                 id: 'DESC'
+            },
+            relations: {
+                tipoDocumentoRel: true,
+                ciudadRel: true
             }
         });
 
         const totalProveedores = await this.proveedorRepository.count();
-        const tiposDocumento = await this.findAllDocumentTypes();
-
         const proveedoresMap = proveedores.map((prov, indx) => {
             return {
                 ...prov,
-                tipoDocumento_nom: tiposDocumento.find((td) => td.codigo === prov.tipoDocumento)?.abreviatura,
                 estado: prov.isActive == true ? 'Activo' : 'Inactivo',
                 ind: (indx + 1).toString()
             }
@@ -54,10 +55,6 @@ export class ProveedoresService {
             pages: Math.ceil(totalProveedores / limit),
             proveedores: proveedoresMap
         };
-    }
-
-    async findAllDocumentTypes() {
-        return this.tipoDocumentoRepo.find();
     }
 
     async findOne(id: string) {

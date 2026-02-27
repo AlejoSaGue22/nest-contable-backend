@@ -1,5 +1,6 @@
 import { Column, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { TipoDocumento } from "src/catalogs/entities/tipo-documento.entity";
+import { Municipality } from "src/municipalities/entities/municipality.entity";
 
 @Entity({ name: 'clientes' })
 export class Cliente {
@@ -20,12 +21,11 @@ export class Cliente {
     @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'codigo' })
     tipoDocumentoRel: TipoDocumento;
 
-
     @Column()
     numeroDocumento: string;
 
     @Column({ nullable: true })
-    dv: string;  // Dígito de verificación (solo para NIT)  -- FALTA AGREGARLO EN EL FRONT
+    dv: string;  // Dígito de verificación (solo para NIT)  
 
     @Column()
     tipoPersona: string;
@@ -35,6 +35,10 @@ export class Cliente {
 
     @Column()
     direccion: string;
+
+    @ManyToOne(() => Municipality)
+    @JoinColumn({ name: 'ciudad', referencedColumnName: 'id' })
+    ciudadRel: Municipality;
 
     @Column()
     ciudad: string;

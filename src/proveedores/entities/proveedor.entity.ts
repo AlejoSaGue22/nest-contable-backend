@@ -1,9 +1,15 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { TipoDocumento } from "src/catalogs/entities/tipo-documento.entity";
+import { Municipality } from "src/municipalities/entities/municipality.entity";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity('proveedores')
 export class Proveedor {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => TipoDocumento)
+    @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'codigo' })
+    tipoDocumentoRel: TipoDocumento;
 
     @Column()
     tipoDocumento: string;
@@ -23,7 +29,11 @@ export class Proveedor {
     @Column({ nullable: true })
     direccion: string;
 
-    @Column({ nullable: true })
+    @ManyToOne(() => Municipality)
+    @JoinColumn({ name: 'ciudad', referencedColumnName: 'id' })
+    ciudadRel: Municipality;
+
+    @Column({ nullable: true})
     ciudad: string;
 
     @Column({ nullable: true })

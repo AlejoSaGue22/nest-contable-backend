@@ -75,7 +75,6 @@ export class ArticulosService {
 
     const articulos = await queryBuilder.getMany();
     const totalArticulos = await this.articulosRepository.count();
-    const unidades = await this.unidadesRepository.find();
 
     const articulosMap = articulos.map((cli, indx) => {
       return {
@@ -83,8 +82,6 @@ export class ArticulosService {
         iva_percent: cli.impuesto + '%',
         rete_percent: cli.retencion + '%',
         estado: cli.isActive == true ? 'Activo' : 'Inactivo',
-        unidadmedida: unidades.find((u) => u.id == cli.unidadmedida)?.codigo,
-        unidadmedidaNombre: unidades.find((u) => u.id == cli.unidadmedida)?.nombre,
         ind: (indx + 1).toString()
       }
     });

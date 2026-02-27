@@ -332,6 +332,7 @@ export class FacturasVentasService {
     if (!factura.puedeAnularse()) {
       throw new BadRequestException('No se puede anular esta factura.');
     }
+    
     try {
       if (factura.tipoFactura === TipoFactura.ELECTRONICA) {
         await this.factusService.crearNotaCredito(factura, motivo);
@@ -339,6 +340,9 @@ export class FacturasVentasService {
       factura.status = InvoiceStatus.CANCELLED;
       factura.dianStatus = DianStatus.CANCELLED;
       factura.observaciones = `Anulada: ${motivo}`;
+
+      // Generar asiento contable de anulación (pendiente)
+      // await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
       await this.facturaVentaRepository.save(factura);
       return factura;
     } catch (error) {

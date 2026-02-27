@@ -8,7 +8,6 @@ export class TipoDocumento {
     @Column({ unique: true })
     codigo: string;
 
-
     @Column()
     abreviatura: string;
 

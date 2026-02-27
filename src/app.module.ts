@@ -25,19 +25,19 @@ import { CatalogsModule } from './catalogs/catalogs.module';
 import { CatalogsService } from './catalogs/catalogs.service';
 
 @Module({
-  imports: [TypeOrmModule.forRoot({
-    type: 'mysql',
-    host: 'localhost',
-    port: 3307,
-    username: 'root',
-    password: 'root',
-    database: 'finance_tejo',
-    autoLoadEntities: true,
-    synchronize: true // ⚠️ nunca true en producción
-  }),
-  ConfigModule.forRoot({
-    isGlobal: true,
-  }),
+    imports: [TypeOrmModule.forRoot({
+      type: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: '',
+      database: 'finance_tejo',
+      autoLoadEntities: true,
+      synchronize: true // ⚠️ nunca true en producción
+    }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     ClientesModule,
     UsersModule,
     AuthModule,

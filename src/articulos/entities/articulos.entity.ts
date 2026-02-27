@@ -1,5 +1,6 @@
+import { UnidadMedida } from "src/catalogs/entities/unidad-medida.entity";
 import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export enum ArticuloTipo {
     VENTA = 'venta',
@@ -32,8 +33,12 @@ export class Articulo {
     @Column()
     fullNameTipo: string;
 
+    @ManyToOne(() => UnidadMedida)
+    @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'codigo' })
+    unidadmedidaRel: UnidadMedida;
+
     @Column()
-    unidadmedida: number;
+    unidadmedida: string;
 
     @Column()
     impuesto: number;

@@ -163,10 +163,7 @@ export class AsientosContablesService {
    * DEBITO:  IVA Descontable (2408 o 1355)
    * CREDITO: Caja / Cuentas por Pagar (1105 o 2205)
    */
-  async generarAsientoGasto(
-    gasto: FacturaCompra,
-    userId: string
-  ): Promise<AsientoContable> {
+  async generarAsientoGasto(gasto: FacturaCompra, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -259,10 +256,128 @@ export class AsientosContablesService {
     }
   }
 
+  /**
+   * Genera asiento contable automático para anulación de factura de venta
+   * 
+   * Lógica:
+   * DEBITO:  Caja / Cuentas por Cobrar (1105 o 1305) - REVERSO
+   * CREDITO: Ingresos (cuenta del artículo) - REVERSO
+   * CREDITO: IVA por Pagar (2408) - REVERSO
+   
+    async generarAsientoAnulacionFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        const detalles: DetalleAsiento[] = [];
+
+        // 1. REVERSAR CAJA/BANCOS o Clientes (DEBITO)
+        const isContado = factura.formaPago === FormaPago.CONTADO;
+        const codigoCuenta = isContado ? '1105' : '1305';
+        const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCuenta);
+        const totalFactura = factura.total;
+
+        detalles.push({
+          cuentaId: cuentaDebito.id,
+          debito: totalFactura,
+          credito: 0,
+          descripcion: `ANULACIÓN Factura ${factura.comprobante_completo} - REVERSO`
+        });
+
+        // 2. REVERSAR INGRESOS (CREDITO)
+        const ingresosAgrupados = new Map<string, number>();
+
+        for (const item of factura.items) {
+          const producto = await queryRunner.manager.findOne(Articulo, {
+            where: { id: item.articuloId },
+            relations: ['cuentaContable', 'cuentaIva']
+          });
+
+          if (!producto?.cuentaContable) {
+            throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+          }
+
+          const cuentaId = producto.cuentaContableId;
+          const subtotal = item.subtotal;
+
+          if (ingresosAgrupados.has(cuentaId)) {
+            ingresosAgrupados.set(cuentaId, ingresosAgrupados.get(cuentaId)! + subtotal);
+          } else {
+            ingresosAgrupados.set(cuentaId, subtotal);
+          }
+        }
+
+        // Agregar detalles de ingresos (reverso)
+        for (const [cuentaId, valor] of ingresosAgrupados) {
+          const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+            where: { id: cuentaId }
+          });
+
+          if (!cuenta) {
+            throw new Error(`Cuenta contable ${cuentaId} no encontrada`);
+          }
+
+          detalles.push({
+            cuentaId,
+            debito: 0,
+            credito: valor,
+            descripcion: `ANULACIÓN - Ingreso por ${cuenta.nombre}`
+          });
+        }
+
+        // 3. REVERSAR IVA por Pagar (DEBITO)
+        if (factura.iva > 0) {
+          const cuentaIva = await this.obtenerCuentaPorCodigo('2408'); // IVA por pagar
+
+          detalles.push({
+            cuentaId: cuentaIva.id,
+            debito: factura.iva,
+            credito: 0,
+            descripcion: 'ANULACIÓN - IVA generado en venta'
+          });
+        }
+
+        // 4. REVERSAR Descuentos (si aplica) - CREDITO
+        if (factura.descuento > 0) {
+          const cuentaDescuento = await this.obtenerCuentaPorCodigo('5305'); // Descuentos en ventas
+
+          detalles.push({
+            cuentaId: cuentaDescuento.id,
+            debito: 0,
+            credito: factura.descuento,
+            descripcion: 'ANULACIÓN - Descuento otorgado en venta'
+          });
+        }
+
+        // Crear asiento de anulación
+        const asiento = await this.crearAsiento({
+          tipo: TipoAsiento.ANULACION_FACTURA_VENTA,
+          fecha: new Date(),
+          referencia: factura.comprobante_completo,
+          descripcion: `Asiento automático ANULACIÓN - Factura ${factura.comprobante_completo}`,
+          detalles,
+          userId
+        }, queryRunner);
+
+        await queryRunner.commitTransaction();
+        this.logger.log(`Asiento ANULACIÓN generado para factura ${factura.comprobante_completo}: ${asiento.numero}`);
+
+        return asiento;
+
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`Error generando asiento ANULACIÓN factura: ${error.message}`, error.stack);
+        throw new InternalServerErrorException('Error al generar asiento contable de anulación');
+      } finally {
+        await queryRunner.release();
+      }
+    }
+   */
 
   /**
-   * Crea un asiento contable con sus detalles
-   */
+  * Crea un asiento contable con sus detalles
+  */
   private async crearAsiento(
     data: {
       tipo: TipoAsiento;
@@ -272,59 +387,58 @@ export class AsientosContablesService {
       detalles: DetalleAsiento[];
       userId: string;
     },
-    queryRunner: any
-  ): Promise<AsientoContable> {
-    // Validar que esté cuadrado
-    const totalDebito = data.detalles.reduce((sum, d) => sum + d.debito, 0);
-    const totalCredito = data.detalles.reduce((sum, d) => sum + d.credito, 0);
+    queryRunner: any): Promise<AsientoContable> {
+      // Validar que esté cuadrado
+      const totalDebito = data.detalles.reduce((sum, d) => sum + d.debito, 0);
+      const totalCredito = data.detalles.reduce((sum, d) => sum + d.credito, 0);
 
-    if (Math.abs(totalDebito - totalCredito) > 0.01) {
-      throw new Error(`Asiento descuadrado. Débito: ${totalDebito}, Crédito: ${totalCredito}`);
-    }
+      if (Math.abs(totalDebito - totalCredito) > 0.01) {
+        throw new Error(`Asiento descuadrado. Débito: ${totalDebito}, Crédito: ${totalCredito}`);
+      }
 
-    // Generar número de asiento
-    const numero = await this.generarNumeroAsiento(queryRunner);
+      // Generar número de asiento
+      const numero = await this.generarNumeroAsiento(queryRunner);
 
-    // Crear asiento
-    const asiento = queryRunner.manager.create(AsientoContable, {
-      numero,
-      tipo: data.tipo,
-      fecha: data.fecha,
-      referencia: data.referencia,
-      descripcion: data.descripcion,
-      totalDebito,
-      totalCredito,
-      createdById: data.userId
-    });
-
-    const asientoGuardado = await queryRunner.manager.save(AsientoContable, asiento);
-
-    // Crear detalles
-    for (const detalle of data.detalles) {
-      const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {
-        asientoId: asientoGuardado.id,
-        cuentaId: detalle.cuentaId,
-        debito: detalle.debito,
-        credito: detalle.credito,
-        descripcion: detalle.descripcion
+      // Crear asiento
+      const asiento = queryRunner.manager.create(AsientoContable, {
+        numero,
+        tipo: data.tipo,
+        fecha: data.fecha,
+        referencia: data.referencia,
+        descripcion: data.descripcion,
+        totalDebito,
+        totalCredito,
+        createdById: data.userId
       });
 
-      await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
-    }
+      const asientoGuardado = await queryRunner.manager.save(AsientoContable, asiento);
 
-    return asientoGuardado;
+      // Crear detalles
+      for (const detalle of data.detalles) {
+        const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {
+          asientoId: asientoGuardado.id,
+          cuentaId: detalle.cuentaId,
+          debito: detalle.debito,
+          credito: detalle.credito,
+          descripcion: detalle.descripcion
+        });
+
+        await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
+      }
+
+      return asientoGuardado;
   }
 
   private async obtenerCuentaPorCodigo(codigo: string): Promise<CuentaContable> {
-    const cuenta = await this.cuentaRepository.findOne({
-      where: { codigo, isActive: true }
-    });
+      const cuenta = await this.cuentaRepository.findOne({
+        where: { codigo, isActive: true }
+      });
 
-    if (!cuenta) {
-      throw new Error(`Cuenta contable ${codigo} no encontrada o inactiva`);
-    }
+      if (!cuenta) {
+        throw new Error(`Cuenta contable ${codigo} no encontrada o inactiva`);
+      }
 
-    return cuenta;
+      return cuenta;
   }
 
   private async generarNumeroAsiento(queryRunner: any): Promise<string> {

@@ -15,9 +15,9 @@ export class CreateArticuloDto {
     @IsOptional()
     codigo: string
 
-    @IsNumber()
+    @IsString()
     @IsNotEmpty()
-    unidadmedida: number
+    unidadmedida: string
 
     @IsNumber()
     impuesto: number

@@ -176,22 +176,16 @@ export class FactusService {
 
             // Manejar errores específicos de Factus
             if (error.response?.status === 409) {
-                throw new BadRequestException(
-                    'Ya existe una factura pendiente por enviar a DIAN con ese código de referencia'
-                );
+                throw new BadRequestException('Ya existe una factura pendiente por enviar a DIAN con ese código de referencia');
             }
 
             if (error.response?.status === 422) {
                 const errors = error.response.data?.errors || {};
                 const mensajesError = Object.values(errors).flat();
-                throw new BadRequestException(
-                    `Datos inválidos: ${mensajesError.join(', ')}`
-                );
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
             }
 
-            throw new BadRequestException(
-                error.response?.data?.message || 'Error al enviar factura a Factus/DIAN'
-            );
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar factura a Factus/DIAN');
         }
     }
 

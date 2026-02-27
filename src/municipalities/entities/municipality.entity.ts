@@ -6,7 +6,7 @@ export class Municipality {
     @PrimaryColumn()
     id: number;
 
-    @Column()
+    @Column({ unique: true })
     code: string;
 
     @Column()

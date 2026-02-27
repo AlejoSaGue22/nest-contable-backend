@@ -32,17 +32,19 @@ export class ClientesService {
       skip: offset,
       order: {
         id: 'DESC'
+      },
+      relations: {
+        tipoDocumentoRel: true,
+        ciudadRel: true
       }
     });
 
     const totalClients = await this.clientesRepository.count();
-    const tiposDocumento = await this.findAllDocumentTypes();
 
     const clientesMap = clientes.map((cli, indx) => {
       return {
           ...cli,
           fullName: `${cli.nombre} ${cli.apellido}`,
-          tipoDocumento_nom: tiposDocumento.find((td) => td.codigo === cli.tipoDocumento)?.abreviatura,
           tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
           estado: cli.isActive == true ? 'Activo' : 'Inactivo',
           ind: (indx + 1).toString()
@@ -54,10 +56,6 @@ export class ClientesService {
       pages: Math.ceil(totalClients / limit),
       clientes: clientesMap
     };
-  }
-
-  async findAllDocumentTypes() {
-    return this.tipoDocumentoRepo.find();
   }
 
   async findOne(id: string) {
