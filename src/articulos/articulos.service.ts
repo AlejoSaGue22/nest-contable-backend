@@ -30,6 +30,14 @@ export class ArticulosService {
       throw new BadRequestException('Categoría inválida');
     }
 
+    const unidadmedida = await this.unidadesRepository.findOne({
+      where: { codigo: createArticuloDto.unidadmedida }
+    });
+
+    if (!unidadmedida) {
+      throw new BadRequestException('Unidad de medida no encontrada');
+    }
+
     // Buscar cuentas por código
     const cuentaContable = await this.cuentasRepository.findOne({
       where: { codigo: categoria.cuentaContableCodigo }
@@ -57,6 +65,7 @@ export class ArticulosService {
       tipoCodigo: categoria.codigo,
       fullNameTipo: categoria.nombre,
       cuentaContableId: cuentaContable.id,
+      unidadmedida: unidadmedida.codigo,
       cuentaIvaId: cuentaIva.id,
       createdById: userId
     });
