@@ -3,11 +3,14 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 @Entity('unidades_medida')
 export class UnidadMedida {
     @PrimaryGeneratedColumn()
-    id: number;
+    id: string;
 
-    @Column({unique: true})
+    @Column({ unique: true })
     codigo: string;
 
     @Column()
     nombre: string;
+
+    @Column('bool', { default: true })
+    state: boolean;
 }

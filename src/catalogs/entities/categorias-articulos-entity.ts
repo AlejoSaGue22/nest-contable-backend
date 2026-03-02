@@ -3,7 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 @Entity('categorias_articulos')
 export class CategoriaArticulo {
     @PrimaryGeneratedColumn()
-    id: number;
+    id: string;
 
     @Column()
     codigo: string;
@@ -22,4 +22,7 @@ export class CategoriaArticulo {
 
     @Column()
     descripcion: string;
+
+    @Column('bool', { default: true })
+    state: boolean;
 }

@@ -26,23 +26,23 @@ export class CatalogsService {
     ) { }
 
     async findAllDocumentTypes() {
-        return this.tipoDocumentoRepo.find();
+        return this.tipoDocumentoRepo.find({ where: { state: true } });
     }
 
     async findAllPaymentMethods() {
-        return this.metodoPagoRepo.find();
+        return this.metodoPagoRepo.find({ where: { state: true } });
     }
 
     async findAllSalesChannels() {
-        return this.canalVentaRepo.find();
+        return this.canalVentaRepo.find({ where: { state: true } });
     }
 
     async findAllUnitsMeasure() {
-        return this.unidadMedidaRepo.find();
+        return this.unidadMedidaRepo.find({ where: { state: true } });
     }
 
     async findAllCategoriesArticles() {
-        const data = await this.categoriasArticulosRepo.find();
+        const data = await this.categoriasArticulosRepo.find({ where: { state: true } });
 
         const data2 = data.map((item) => {
             return {
@@ -66,21 +66,21 @@ export class CatalogsService {
 
     private async seedDocumentTypes() {
         const data = [
-            { codigo: '1', abreviatura: 'RC', nombre: 'Registro civil' },
-            { codigo: '2', abreviatura: 'TI', nombre: 'Tarjeta de identidad' },
-            { codigo: '3', abreviatura: 'CC', nombre: 'Cédula de ciudadanía' },
-            { codigo: '4', abreviatura: 'TE', nombre: 'Tarjeta de extranjería' },
-            { codigo: '5', abreviatura: 'CE', nombre: 'Cédula de extranjería' },
-            { codigo: '6', abreviatura: 'NIT', nombre: 'NIT' },
-            { codigo: '7', abreviatura: 'PAS', nombre: 'Pasaporte' },
-            { codigo: '8', abreviatura: 'DIE', nombre: 'Documento de identificación extranjero' },
-            { codigo: '9', abreviatura: 'PEP', nombre: 'PEP' },
-            { codigo: '10', abreviatura: 'NIT', nombre: 'NIT otro país' },
-            { codigo: '11', abreviatura: 'NUIP', nombre: 'NUIP' },
+            { id: '1', abreviatura: 'RC', nombre: 'Registro civil', state: true },
+            { id: '2', abreviatura: 'TI', nombre: 'Tarjeta de identidad', state: true },
+            { id: '3', abreviatura: 'CC', nombre: 'Cédula de ciudadanía', state: true },
+            { id: '4', abreviatura: 'TE', nombre: 'Tarjeta de extranjería', state: true },
+            { id: '5', abreviatura: 'CE', nombre: 'Cédula de extranjería', state: true },
+            { id: '6', abreviatura: 'NIT', nombre: 'NIT', state: true },
+            { id: '7', abreviatura: 'PAS', nombre: 'Pasaporte', state: true },
+            { id: '8', abreviatura: 'DIE', nombre: 'Documento de identificación extranjero', state: true },
+            { id: '9', abreviatura: 'PEP', nombre: 'PEP', state: true },
+            { id: '10', abreviatura: 'NIT', nombre: 'NIT otro país', state: true },
+            { id: '11', abreviatura: 'NUIP', nombre: 'NUIP', state: true },
         ];
 
         for (const item of data) {
-            const exists = await this.tipoDocumentoRepo.findOne({ where: { codigo: item.codigo } });
+            const exists = await this.tipoDocumentoRepo.findOne({ where: { id: item.id } });
             if (!exists) {
                 await this.tipoDocumentoRepo.save(item);
             }
@@ -90,16 +90,16 @@ export class CatalogsService {
 
     private async seedPaymentMethods() {
         const data = [
-            { codigo: '10', nombre: 'Efectivo' },
-            { codigo: '42', nombre: 'Consignación' },
-            { codigo: '20', nombre: 'Cheque' },
-            { codigo: '47', nombre: 'Transferencia' },
-            { codigo: '71', nombre: 'Bonos' },
-            { codigo: '72', nombre: 'Vales' },
-            { codigo: '1', nombre: 'Medio de pago no definido' },
-            { codigo: '49', nombre: 'Tarjeta Débito' },
-            { codigo: '48', nombre: 'Tarjeta Crédito' },
-            { codigo: 'ZZZ', nombre: 'Otro' },
+            { codigo: '10', nombre: 'Efectivo', state: true },
+            { codigo: '42', nombre: 'Consignación', state: true },
+            { codigo: '20', nombre: 'Cheque', state: true },
+            { codigo: '47', nombre: 'Transferencia', state: true },
+            { codigo: '71', nombre: 'Bonos', state: true },
+            { codigo: '72', nombre: 'Vales', state: true },
+            { codigo: '1', nombre: 'Medio de pago no definido', state: true },
+            { codigo: '49', nombre: 'Tarjeta Débito', state: true },
+            { codigo: '48', nombre: 'Tarjeta Crédito', state: true },
+            { codigo: 'ZZZ', nombre: 'Otro', state: true },
         ];
 
         for (const item of data) {
@@ -113,10 +113,10 @@ export class CatalogsService {
 
     private async seedSalesChannels() {
         const data = [
-            { codigo: '1', nombre: 'Directo' },
-            { codigo: '2', nombre: 'Online' },
-            { codigo: '3', nombre: 'Distribuidor' },
-            { codigo: '4', nombre: 'Retail' },
+            { id: '1', codigo: '1', nombre: 'Directo', state: true },
+            { id: '2', codigo: '2', nombre: 'Online', state: true },
+            { id: '3', codigo: '3', nombre: 'Distribuidor', state: true },
+            { id: '4', codigo: '4', nombre: 'Retail', state: true },
         ];
 
         for (const item of data) {
@@ -130,13 +130,13 @@ export class CatalogsService {
 
     private async seedUnitsMeasure() {
         const data = [
-            { codigo: '94', nombre: 'Unidad' },
-            { codigo: '414', nombre: 'Kilogramo' },
-            { codigo: '449', nombre: 'Libra' },
-            { codigo: '512', nombre: 'Metro' },
-            { codigo: '874', nombre: 'Galon' },
-            { codigo: '111', nombre: 'Metro Cubico' },
-            { codigo: '222', nombre: 'Pulgada' },
+            { id: '70', codigo: '94', nombre: 'Unidad', state: true },
+            { id: '414', codigo: 'KGM', nombre: 'Kilogramo', state: true },
+            { id: '449', codigo: 'LBR', nombre: 'Libra', state: true },
+            { id: '512', codigo: 'MTR', nombre: 'Metro', state: true },
+            { id: '874', codigo: 'GLL', nombre: 'Galon', state: true },
+            { id: '111', codigo: 'MTQ', nombre: 'Metro Cubico', state: false },
+            { id: '222', codigo: 'INH', nombre: 'Pulgada', state: false },
         ];
 
         for (const item of data) {
@@ -154,7 +154,10 @@ export class CatalogsService {
         for (const item of data) {
             const exists = await this.categoriasArticulosRepo.findOne({ where: { codigo: item.codigo } });
             if (!exists) {
-                await this.categoriasArticulosRepo.save(item);
+                await this.categoriasArticulosRepo.save({
+                    ...item,
+                    state: true
+                });
             }
         }
         this.logger.log('✔ Categorías de artículos sincronizadas');

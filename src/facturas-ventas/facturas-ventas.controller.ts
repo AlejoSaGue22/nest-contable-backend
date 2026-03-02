@@ -56,13 +56,14 @@ export class FacturasVentasController {
   @Post(':id/emitir')
   async emitir(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const invoice = await this.facturasVentasService.emitir(id, req.user.sub);
-    return toInvoiceResponse(invoice, 'Factura emitida exitosamente');
+    // return toInvoiceResponse(invoice, 'Factura emitida exitosamente');
+    return invoice;
   }
 
   @Post(':id/reintentar')
   async reintentar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
-    const invoice = await this.facturasVentasService.reintentarEnvio(id, req.user.sub);
-    return toInvoiceResponse(invoice, 'Reintento de envío exitoso');
+    // const invoice = await this.facturasVentasService.reintentarEnvio(id, req.user.sub);
+    // return toInvoiceResponse(invoice, 'Reintento de envío exitoso');
   }
 
   @Patch(':id/pago')

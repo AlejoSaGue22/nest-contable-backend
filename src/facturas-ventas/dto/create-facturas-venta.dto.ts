@@ -15,13 +15,14 @@ export class CreateFacturasVentaDto {
 
     @IsOptional()
     @IsString()
-    vendedor: string;
+    vendedor?: string;
 
     @IsString()
-    @IsOptional()
-    canalventa: string;
+    @IsNotEmpty()
+    canalVenta: string;
 
     @IsString()
+    @IsNotEmpty()
     fecha: string;
 
     @IsEnum(TipoFactura)

@@ -77,6 +77,9 @@ export class ArticulosService {
     const { limit = 10, offset = 0, venta_compra } = options;
 
     const queryBuilder = this.articulosRepository.createQueryBuilder('articulo');
+    queryBuilder.leftJoinAndSelect('articulo.unidadmedidaRel', 'unidadmedidaRel');
+    queryBuilder.leftJoinAndSelect('articulo.cuentaContable', 'cuentaContable');
+    queryBuilder.leftJoinAndSelect('articulo.cuentaIva', 'cuentaIva');
 
     if (venta_compra) {
       queryBuilder.andWhere('articulo.tipo = :tipo', { tipo: venta_compra });

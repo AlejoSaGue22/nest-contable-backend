@@ -27,7 +27,7 @@ export class CreateClienteDto {
     tipoPersona: string;
 
     @IsString()
-    // @IsNotEmpty()
+    // @IsNotEmpty() 
     razonSocial: string;
 
     @IsString()

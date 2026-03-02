@@ -34,8 +34,8 @@ export class Articulo {
     fullNameTipo: string;
 
     @ManyToOne(() => UnidadMedida)
-    @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'codigo' })
-    unidadmedidaRel: UnidadMedida;
+    @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'id' })
+    unidadmedidaRel: UnidadMedida; 
 
     @Column()
     unidadmedida: string;
@@ -43,7 +43,7 @@ export class Articulo {
     @Column()
     impuesto: number;
 
-    @Column({ default: 0 }) // 0% por defecto -- RETENCION PENDIENTE SI SE AGREGA AL SISTEMA
+    @Column({ default: 0 }) // 0% por defecto -- RETENCION PENDIENTE SI SE AGREGA AL SISTEMA 
     retencion: number;
 
     @Column({ default: 0 })

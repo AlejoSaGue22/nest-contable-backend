@@ -141,7 +141,7 @@ export class FactusService {
      */
     async crearYValidarFactura(factura: FacturasVenta): Promise<FacturaDianResponse> {
         try {
-            const token = await this.obtenerToken();
+            // const token = await this.obtenerToken();
 
             // Validar datos requeridos
             this.validarDatosFactura(factura);
@@ -151,25 +151,26 @@ export class FactusService {
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
-            const response = await firstValueFrom(
-                this.httpService.post(
-                    `${this.apiUrl}/v1/bills/validate`,
-                    payload,
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json'
-                        },
-                        timeout: 60000 // 60 segundos
-                    }
-                )
-            );
+            // const response = await firstValueFrom(
+            //     this.httpService.post(
+            //         `${this.apiUrl}/v1/bills/validate`,
+            //         payload,
+            //         {
+            //             headers: {
+            //                 'Authorization': `Bearer ${token}`,
+            //                 'Accept': 'application/json',
+            //                 'Content-Type': 'application/json'
+            //             },
+            //             timeout: 60000 // 60 segundos
+            //         }
+            //     )
+            // );
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
             // Procesar respuesta de Factus
-            return this.procesarRespuestaFactus(response.data);
+            // return this.procesarRespuestaFactus(response.data);
+            return payload;
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -210,7 +211,7 @@ export class FactusService {
             //   observation: factura?.observaciones || "",
 
             // Método de pago: "10" = Efectivo
-            payment_method_code: this.mapearMetodoPago(factura.formaPago),
+            payment_method_code: factura.metodoPago,
 
             // Datos del establecimiento/sucursal
             establishment: {
@@ -231,16 +232,16 @@ export class FactusService {
                 address: factura.client.direccion,
                 email: factura.client.email,
                 phone: factura.client.telefono,
-                legal_organization_id: factura.client.tipoPersona || "2", // 2 = Persona Natural
+                legal_organization_id: factura.client.tipoPersona == 'PN' ? 2 : 1,   // 2 = Persona Natural, 1 = Persona Juridica
                 tribute_id: factura.client.tributo || "21", // 21 = No aplica
-                identification_document_id: this.mapearTipoDocumento(factura.client.tipoDocumento),
+                identification_document_id: factura.client.tipoDocumento, // this.mapearTipoDocumento(factura.client.tipoDocumento),
                 municipality_id: factura.client.ciudad || "980" // ID del municipio en Factus
             },
 
             // Items de la factura
             items: factura.items.map(item => ({
                 code_reference: item.articuloId || item.description.substring(0, 10),
-                name: item.description,
+                name: item.articulo.nombre,
                 quantity: item.quantity,
                 discount_rate: item.discount || 0,
                 price: item.unitPrice,
@@ -486,9 +487,9 @@ export class FactusService {
         const mapeo: Record<string, string> = {
             'contado': '10',      // Efectivo
             'credito': '1',       // Instrumento no definido
-            'tarjeta': '48',      // Tarjeta de crédito
-            'transferencia': '42', // Consignación bancaria
-            'cheque': '20'        // Cheque
+            // 'tarjeta': '48',      // Tarjeta de crédito
+            // 'transferencia': '42', // Consignación bancaria
+            // 'cheque': '20'        // Cheque
         };
         return mapeo[formaPago.toLowerCase()] || '10';
     }
