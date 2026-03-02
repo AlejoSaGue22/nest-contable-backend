@@ -210,6 +210,12 @@ export class FactusService {
             // Observaciones (opcional)
             //   observation: factura?.observaciones || "",
 
+            // Forma de pago: "1" = Contado, "2" = Crédito
+            payment_form: factura.formaPago,
+
+            // Fecha de vencimiento - Requerido solo cuando la forma de pago (payment_form) contiene el valor de 2 (pago a crédito).
+            payment_due_date: factura.fechaVencimiento,
+
             // Método de pago: "10" = Efectivo
             payment_method_code: factura.metodoPago,
 
@@ -246,7 +252,7 @@ export class FactusService {
                 discount_rate: item.discount || 0,
                 price: item.unitPrice,
                 tax_rate: item.iva.toString(),
-                unit_measure_id: 70, // 70 = "unidad" (código 94)
+                unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
                 standard_code_id: 1, // 1 = Estándar del contribuyente (999)
                 is_excluded: 0, // 0 = No excluido de IVA
                 tribute_id: 1, // 1 = IVA (código 01)

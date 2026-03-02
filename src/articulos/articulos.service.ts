@@ -31,7 +31,7 @@ export class ArticulosService {
     }
 
     const unidadmedida = await this.unidadesRepository.findOne({
-      where: { codigo: createArticuloDto.unidadmedida }
+      where: { id: createArticuloDto.unidadmedida }
     });
 
     if (!unidadmedida) {
@@ -65,7 +65,7 @@ export class ArticulosService {
       tipoCodigo: categoria.codigo,
       fullNameTipo: categoria.nombre,
       cuentaContableId: cuentaContable.id,
-      unidadmedida: unidadmedida.codigo,
+      unidadmedida: unidadmedida.id,
       cuentaIvaId: cuentaIva.id,
       createdById: userId
     });
@@ -93,6 +93,7 @@ export class ArticulosService {
         ...cli,
         iva_percent: cli.impuesto + '%',
         rete_percent: cli.retencion + '%',
+        unidadmedida: cli.unidadmedidaRel.id.toString(),
         estado: cli.isActive == true ? 'Activo' : 'Inactivo',
         ind: (indx + 1).toString()
       }
@@ -139,7 +140,12 @@ export class ArticulosService {
       throw new BadRequestException('Articulo no encontrado');
     }
 
-    return articulo;
+    const articuloMap = {
+      ...articulo,
+      unidadmedida: articulo.unidadmedida.toString(),
+    }
+
+    return articuloMap;
   }
 
   async update(id: string, updateArticuloDto: UpdateArticuloDto) {
@@ -177,8 +183,6 @@ export class ArticulosService {
     return await this.articulosRepository.save(updatedArticulo);
   }
 
-
-
   async remove(id: string) {
     await this.findOne(id);
 
@@ -186,14 +190,18 @@ export class ArticulosService {
   }
 
   async generateCodigo(tipo: 'venta' | 'compra' | 'gasto'): Promise<string> {
-    const lastArticulo = await this.articulosRepository.find({
-      order: { id: 'DESC' } as any,
-      take: 1,
-    });
+      const lastArticulo = await this.articulosRepository.find({
+        order: { createdAt: 'DESC' },
+        take: 1,  
+      });
 
-    const lastNumber = lastArticulo.length > 0 ? parseInt((lastArticulo[0] as any).codigo || '0') : 0;
-    const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'compra' ? 'C' : 'G';
-    return `${tipoArticulo}-${(lastNumber + 1).toString().padStart(6, '0')}`;
+      console.log(lastArticulo);
+
+      const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
+      const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
+      const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'compra' ? 'C' : 'G';
+      
+      return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
   }
 
 }

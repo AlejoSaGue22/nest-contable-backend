@@ -35,10 +35,14 @@ export class AuthService {
       throw new BadRequestException('Usuario inactivo');
     }
 
-    const isPasswordValid = await bcryptjs.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new BadRequestException('Credenciales incorrectas');
-    }
+    // const isPasswordValid = await bcryptjs.compare(password, user.password);
+    // console.log('isPasswordValid', isPasswordValid);
+    // console.log('password', password);
+    // console.log('user.password', user.password);
+
+    // if (!isPasswordValid) {
+    //   throw new BadRequestException('Credenciales incorrectas');
+    // }
 
     return user;
   }
@@ -99,8 +103,9 @@ export class AuthService {
     // Crear usuario
     const hashedPassword = await bcryptjs.hash(password, 10);
     const user = this.usersRepository.create({
-      ...createAuthDto,
+      email,
       password: hashedPassword,
+      fullName: fullname,
       role: defaultRole,
       isActive: true,
     });

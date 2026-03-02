@@ -35,7 +35,7 @@ export class Articulo {
 
     @ManyToOne(() => UnidadMedida)
     @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'id' })
-    unidadmedidaRel: UnidadMedida; 
+    unidadmedidaRel: UnidadMedida;
 
     @Column()
     unidadmedida: string;
