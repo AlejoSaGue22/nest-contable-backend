@@ -66,6 +66,7 @@ export class ArticulosService {
       fullNameTipo: categoria.nombre,
       cuentaContableId: cuentaContable.id,
       unidadmedida: unidadmedida.id,
+      unidadmedidaRel: unidadmedida,
       cuentaIvaId: cuentaIva.id,
       createdById: userId
     });

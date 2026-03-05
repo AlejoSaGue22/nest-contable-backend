@@ -96,7 +96,7 @@ export class FacturasVenta {
   fechaAsientoError: Date;
 
   // Items de la factura
-  @OneToMany(() => ItemsFacturaVenta, item => item.factura, { cascade: true })
+  @OneToMany(() => ItemsFacturaVenta, item => item.factura)
   items: ItemsFacturaVenta[];
 
   @Column('int')

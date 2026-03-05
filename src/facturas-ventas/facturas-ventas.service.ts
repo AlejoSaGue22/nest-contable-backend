@@ -171,6 +171,151 @@ export class FacturasVentasService {
     }
   }
 
+  async update(id: string, updateDto: UpdateFacturasVentaDto): Promise<FacturasVenta> {
+
+    if (updateDto.items && updateDto.items.length === 0) {
+      throw new BadRequestException('La factura debe tener al menos un item');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+  try {
+
+    const invoice = await queryRunner.manager.findOne(FacturasVenta, {
+      where: { id }
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`Factura con ID ${id} no encontrada`);
+    }
+
+    if (!invoice.puedeEditarse()) {
+      throw new BadRequestException(
+        `No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`
+      );
+    }
+
+    let subtotal = invoice.subtotal;
+    let iva = invoice.iva;
+    let descuento = invoice.descuento;
+    let total = invoice.total;
+
+    // =========================
+    // Recalcular items si vienen
+    // =========================
+
+    if (updateDto.items && updateDto.items.length > 0) {
+
+      const calc = await this.calcularTotales(queryRunner, updateDto.items);
+
+      subtotal = calc.subtotal;
+      iva = calc.iva;
+      descuento = calc.descuento;
+      total = (subtotal - descuento) + iva;
+
+      // eliminar items actuales
+      await queryRunner.manager.delete(ItemsFacturaVenta, { facturaId: id });
+
+      // crear nuevos
+      const newItems = calc.itemsCalculados.map(item =>
+        queryRunner.manager.create(ItemsFacturaVenta, {
+          ...item,
+          facturaId: id
+        })
+      );
+
+      await queryRunner.manager.save(ItemsFacturaVenta, newItems);
+
+    }
+
+    // =========================
+    // Campos actualizables
+    // =========================
+
+
+    const updatePayload: Partial<UpdateFacturasVentaDto> = {
+      ...updateDto,
+      subtotal,
+      iva,
+      descuento,
+      total
+    };
+
+    delete updatePayload.items;
+
+    // update directo (más rápido que save)
+    await queryRunner.manager.update(
+      FacturasVenta,
+      { id },
+      updatePayload
+    );
+
+    // =========================
+    // Asiento contable
+    // =========================
+
+    // if (invoice.tipoFactura === TipoFactura.STANDARD) {
+
+    //   try {
+
+    //     const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
+    //       where: { id },
+    //       relations: ['items']
+    //     });
+
+    //     await this.asientosContablesService.generarAsientoFacturaVenta(
+    //       updatedInvoice,
+    //       updatedInvoice.createdById
+    //     );
+
+    //   } catch (asientoError) {
+
+    //     this.logger.error(`Error generando asiento contable: ${asientoError.message}`);
+
+    //     await queryRunner.manager.update(
+    //       FacturasVenta,
+    //       { id },
+    //       {
+    //         status: InvoiceStatus.ERROR_ASIENTO,
+    //         asientoError: asientoError.message,
+    //         fechaAsientoError: new Date()
+    //       }
+    //     );
+
+    //   }
+
+    // }
+
+    await queryRunner.commitTransaction();
+
+    return await this.findOne(id);
+
+  } catch (error) {
+
+    await queryRunner.rollbackTransaction();
+
+    this.logger.error(
+      `Error actualizando factura ${id}: ${error.message}`,
+      error.stack
+    );
+
+    if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      throw error;
+    }
+
+    throw new InternalServerErrorException('Error al actualizar la factura');
+
+  } finally {
+
+    await queryRunner.release();
+
+  }
+
+  }
+
   async findOne(id: string): Promise<FacturasVenta> {
     try {
       const invoice = await this.facturaVentaRepository.findOne({
@@ -193,28 +338,7 @@ export class FacturasVentasService {
     }
   }
 
-  async update(id: string, updateDto: UpdateFacturasVentaDto): Promise<FacturasVenta> {
-    const invoice = await this.findOne(id);
-
-    if (!invoice.puedeEditarse()) {
-      throw new BadRequestException(
-        `No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`
-      );
-    }
-
-    try {
-      const updatedInvoice = await this.facturaVentaRepository.preload({
-        id,
-        ...updateDto,
-      });
-
-      return await this.facturaVentaRepository.save(updatedInvoice!);
-
-    } catch (error) {
-      this.logger.error(`Error actualizando factura ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al actualizar la factura');
-    }
-  }
+  
 
   async remove(id: string): Promise<void> {
     const invoice = await this.findOne(id);

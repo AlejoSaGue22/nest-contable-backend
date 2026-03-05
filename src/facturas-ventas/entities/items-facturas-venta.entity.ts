@@ -6,7 +6,7 @@ import { Articulo } from "src/articulos/entities/articulos.entity";
 export class ItemsFacturaVenta {
 
     @PrimaryGeneratedColumn()
-    id: string;
+    id: number;
 
     @ManyToOne(() => Articulo)
     // @JoinColumn({ name: 'productoId' })
@@ -47,6 +47,7 @@ export class ItemsFacturaVenta {
 
     // Relaciones
     @ManyToOne(() => FacturasVenta, invoice => invoice.items)
+    @JoinColumn({ name: 'facturaId' })
     factura: FacturasVenta;
 
     @Column()

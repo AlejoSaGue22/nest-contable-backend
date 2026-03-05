@@ -210,12 +210,6 @@ export class FactusService {
             // Observaciones (opcional)
             //   observation: factura?.observaciones || "",
 
-            // Forma de pago: "1" = Contado, "2" = Crédito
-            payment_form: factura.formaPago,
-
-            // Fecha de vencimiento - Requerido solo cuando la forma de pago (payment_form) contiene el valor de 2 (pago a crédito).
-            payment_due_date: factura.fechaVencimiento,
-
             // Método de pago: "10" = Efectivo
             payment_method_code: factura.metodoPago,
 
@@ -232,16 +226,16 @@ export class FactusService {
             customer: {
                 identification: factura.client.numeroDocumento,
                 dv: factura.client.dv || null,
-                company: factura.client.razonSocial || factura.client.nombre + " " + factura.client.apellido,
-                trade_name: factura.client.nombre + " " + factura.client.apellido || factura.client.razonSocial,
-                names: factura.client.nombre,
+                company: factura.client.razonSocial, // (Opcional) Razón social. Obligatorio si el cliente es persona jurídica.
+                trade_name: factura.client.nombre + " " + factura.client.apellido, // (Opcional) Nombre comercial
+                names: factura.client.nombre + " " + factura.client.apellido, // (Opcional) Nombre del cliente. Solo aplica para los clientes que son personas naturales.
                 address: factura.client.direccion,
                 email: factura.client.email,
                 phone: factura.client.telefono,
                 legal_organization_id: factura.client.tipoPersona == 'PN' ? 2 : 1,   // 2 = Persona Natural, 1 = Persona Juridica
                 tribute_id: factura.client.tributo || "21", // 21 = No aplica
                 identification_document_id: factura.client.tipoDocumento, // this.mapearTipoDocumento(factura.client.tipoDocumento),
-                municipality_id: factura.client.ciudad || "980" // ID del municipio en Factus
+                municipality_id: factura.client.ciudad // ID del municipio en Factus
             },
 
             // Items de la factura
