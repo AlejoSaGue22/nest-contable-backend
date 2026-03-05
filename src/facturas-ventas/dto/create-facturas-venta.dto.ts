@@ -17,9 +17,9 @@ export class CreateFacturasVentaDto {
     @IsString()
     vendedor?: string;
 
-    @IsString()
+    @IsNumber()
     @IsNotEmpty()
-    canalVenta: string;
+    canalVenta: number;
 
     @IsString()
     @IsNotEmpty()

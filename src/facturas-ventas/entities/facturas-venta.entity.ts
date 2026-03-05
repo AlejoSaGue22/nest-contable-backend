@@ -71,7 +71,7 @@ export class FacturasVenta {
   canalVentaRel: CanalVenta;
  
   @Column()
-  canalVenta: string;
+  canalVenta: number;
 
   @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CONTADO })
   formaPago: FormaPago;

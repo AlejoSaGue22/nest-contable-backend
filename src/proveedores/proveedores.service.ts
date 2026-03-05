@@ -17,11 +17,12 @@ export class ProveedoresService {
     ) { }
 
     create(createProveedorDto: CreateProveedorDto) {
-        const { isActive, ...rest } = createProveedorDto;
+        const { nombre, apellido, ...rest } = createProveedorDto;
 
         const proveedor = this.proveedorRepository.create({
             ...rest,
-            isActive: isActive ? true : false
+            nombre: `${nombre} ${apellido}`,
+            isActive: true
         });
 
         return this.proveedorRepository.save(proveedor);
@@ -45,6 +46,7 @@ export class ProveedoresService {
         const proveedoresMap = proveedores.map((prov, indx) => {
             return {
                 ...prov,
+                fullName: prov.tipoPersona === 'PN' ? `${prov.nombre}` : prov.razonSocial,
                 estado: prov.isActive == true ? 'Activo' : 'Inactivo',
                 ind: (indx + 1).toString()
             }

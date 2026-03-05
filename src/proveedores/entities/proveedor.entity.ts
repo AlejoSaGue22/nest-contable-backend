@@ -7,12 +7,21 @@ export class Proveedor {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Column({ nullable: true })
+    dv?: string;
+
+    @Column()
+    tipoPersona: string;
+
+    @Column({ nullable: true })
+    razonSocial?: string;
+
     @ManyToOne(() => TipoDocumento)
     @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'id' })
     tipoDocumentoRel: TipoDocumento;
 
     @Column()
-    tipoDocumento: string;
+    tipoDocumento: number;
 
     @Column()
     identificacion: string;
@@ -34,7 +43,7 @@ export class Proveedor {
     ciudadRel: Municipality;
 
     @Column({ nullable: true})
-    ciudad: string;
+    ciudad: number;
 
     @Column({ nullable: true })
     nombreContacto: string;

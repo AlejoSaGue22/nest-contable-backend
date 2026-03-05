@@ -7,7 +7,7 @@ export class CreateFacturaCompraDto {
     @IsNotEmpty()
     proveedorId: string;
 
-    @IsDateString()
+    @IsString()
     @IsNotEmpty()
     fecha: string;
 
@@ -19,7 +19,7 @@ export class CreateFacturaCompraDto {
     @IsNotEmpty()
     numero: string;
 
-    @IsDateString()
+    @IsString()
     @IsOptional()
     fechaVencimiento?: string;
 

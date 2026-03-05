@@ -28,11 +28,11 @@ import { CatalogsService } from './catalogs/catalogs.service';
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3307,
+      port: 3306,
       username: 'root',
-      password: 'root',
+      password: '',
       database: 'finance_tejo',
-      logging: true,
+      // logging: true,
       autoLoadEntities: true,
       synchronize: true // ⚠️ nunca true en producción
     }),

@@ -57,8 +57,10 @@ export class FacturasVentasService {
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = createFacturasVentaDto.prefijo || (createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FAC');
 
+      const { items, ...createDtoRest } = createFacturasVentaDto;
+
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
-        ...createFacturasVentaDto,
+        ...createDtoRest,
         metodoPago: createFacturasVentaDto.metodoPago || null,
         vendedor: createFacturasVentaDto.vendedor || null,
         comprobante: numberFactura,
@@ -71,10 +73,18 @@ export class FacturasVentasService {
         total,
         status: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT : InvoiceStatus.ISSUED,
         dianStatus: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED,
-        items: itemsCalculados
       });
 
       const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
+
+      // Guardar items explícitamente para asegurar persistencia
+      const itemsToSave = itemsCalculados.map(item => 
+        queryRunner.manager.create(ItemsFacturaVenta, {
+          ...item,
+          facturaId: savedInvoice.id
+        })
+      );
+      await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
 
       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD) {
@@ -185,7 +195,8 @@ export class FacturasVentasService {
   try {
 
     const invoice = await queryRunner.manager.findOne(FacturasVenta, {
-      where: { id }
+      where: { id },
+      relations: ['items']
     });
 
     if (!invoice) {
@@ -236,22 +247,29 @@ export class FacturasVentasService {
     // =========================
 
 
-    const updatePayload: Partial<UpdateFacturasVentaDto> = {
-      ...updateDto,
-      subtotal,
-      iva,
-      descuento,
-      total
-    };
+      const updatePayload = {
+        clientId: updateDto.clientId,
+        canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
+        vendedor: updateDto.vendedor || null,
+        fecha: updateDto.fecha,
+        formaPago: updateDto.formaPago,
+        metodoPago: updateDto.metodoPago || null,
+        fechaVencimiento: updateDto.fechaVencimiento || null,
+        tipoFactura: updateDto.tipoFactura,
+        subtotal: Math.round(subtotal),
+        iva: Math.round(iva),
+        descuento: Math.round(descuento),
+        total: Math.round(total)
+      };
 
-    delete updatePayload.items;
+      this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
 
-    // update directo (más rápido que save)
-    await queryRunner.manager.update(
-      FacturasVenta,
-      { id },
-      updatePayload
-    );
+      // update directo (más rápido que save)
+      await queryRunner.manager.update(
+        FacturasVenta,
+        { id },
+        updatePayload
+      );
 
     // =========================
     // Asiento contable
@@ -336,9 +354,7 @@ export class FacturasVentasService {
       this.logger.error(`Error obteniendo factura ${id}: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al obtener la factura');
     }
-  }
-
-  
+  }  
 
   async remove(id: string): Promise<void> {
     const invoice = await this.findOne(id);
@@ -522,22 +538,28 @@ export class FacturasVentasService {
       if (!product) throw new NotFoundException(`Producto no encontrado: ${itemDto.articuloId}`);
       if (!product.isActive) throw new BadRequestException(`El producto ${product.nombre} no está activo`);
 
-      const unitPrice = itemDto.unitPrice || product.precio;
-      const itemSubtotal = unitPrice * itemDto.quantity;
-      const itemIva = itemSubtotal * (product.impuesto / 100);
-      const itemDiscount = itemDto.discount ? (itemSubtotal * (itemDto.discount / 100)) : 0;
-      const itemTotal = itemSubtotal + itemIva - itemDiscount;
+      const unitPrice = Math.round(Number(itemDto.unitPrice) || product.precio || 0);
+      const quantity = Number(itemDto.quantity) || 0;
+      const itemSubtotal = Math.round(unitPrice * quantity);
+      
+      const taxRate = Number(itemDto.iva) || 0;
+      const itemIva = Math.round(itemSubtotal * (taxRate / 100));
+      
+      const discountRate = Number(itemDto.discount) || 0;
+      const itemDiscount = Math.round(itemSubtotal * (discountRate / 100));
+      
+      const itemTotal = Math.round(itemSubtotal + itemIva - itemDiscount);
 
       itemsCalculados.push({
         articuloId: product.id,
         description: itemDto.description || product.observacion,
         unitPrice,
-        iva: product.impuesto,
-        quantity: itemDto.quantity,
+        iva: taxRate,
+        quantity,
         subtotal: itemSubtotal,
         valor_iva: itemIva,
-        importe: itemSubtotal - itemDiscount,
-        discount: itemDto.discount || 0,
+        importe: Math.round(itemSubtotal - itemDiscount),
+        discount: discountRate,
         valor_discount: itemDiscount,
         total: itemTotal,
       });
@@ -547,7 +569,12 @@ export class FacturasVentasService {
       descuento += itemDiscount;
     }
 
-    return { subtotal, iva, descuento, itemsCalculados };
+    return { 
+      subtotal: Math.round(subtotal), 
+      iva: Math.round(iva), 
+      descuento: Math.round(descuento), 
+      itemsCalculados 
+    };
   }
 
   private async generateInvoiceNumber(): Promise<string> {

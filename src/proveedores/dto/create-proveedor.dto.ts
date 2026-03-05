@@ -1,33 +1,49 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateProveedorDto {
     @IsString()
+    @IsOptional()
+    dv?: string
+
+    @IsString()
     @IsNotEmpty()
-    tipoDocumento: string;
+    tipoPersona: string;
+
+    @IsString()
+    @IsOptional() 
+    razonSocial?: string;
+    
+    @IsNumber()
+    @IsNotEmpty()
+    tipoDocumento: number;
 
     @IsString()
     @IsNotEmpty()
     identificacion: string;
 
     @IsString()
-    @IsNotEmpty()
-    nombre: string;
-
-    @IsEmail()
-    @IsNotEmpty()
-    email: string;
+    @IsOptional()
+    nombre?: string;
 
     @IsString()
-    @IsNotEmpty()
-    telefono: string;
+    @IsOptional()
+    apellido?: string;
+
+    @IsEmail()
+    @IsOptional()
+    email?: string;
+
+    @IsString()
+    @IsOptional()
+    telefono?: string;
 
     @IsString()
     @IsOptional()
     direccion?: string;
 
-    @IsString()
+    @IsNumber()
     @IsOptional()
-    ciudad?: string;
+    ciudad?: number;
 
     @IsString()
     @IsOptional()
@@ -41,7 +57,7 @@ export class CreateProveedorDto {
     @IsOptional()
     observaciones?: string;
 
-    @IsBoolean()
-    @IsOptional()
-    isActive?: boolean;
+    // @IsBoolean()
+    // @IsOptional()
+    // isActive?: boolean;
 }
