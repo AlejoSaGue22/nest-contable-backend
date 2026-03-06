@@ -146,8 +146,12 @@ export class FacturasVentasService {
         queryBuilder.andWhere('invoice.tipoFactura = :tipoFactura', { tipoFactura: where.tipoFactura });
       }
 
+      if (where.numeroFactura) {
+        queryBuilder.andWhere('invoice.comprobante = :numeroFactura', { numeroFactura: where.numeroFactura });
+      }
+
       if (where.clientName) {
-        queryBuilder.andWhere('client.nombre ILIKE :clientName', { 
+        queryBuilder.andWhere('client.nombre LIKE :clientName', { 
           clientName: `%${where.clientName}%` 
         });
       }

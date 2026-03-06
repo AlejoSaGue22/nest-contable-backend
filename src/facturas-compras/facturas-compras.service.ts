@@ -177,9 +177,13 @@ export class FacturasComprasService {
             // }
 
             if (where.providerName) {
-                queryBuilder.andWhere('proveedor.nombre ILIKE :proveedorName', {
-                    proveedorName: `%${where.clientName}%`
+                queryBuilder.andWhere('proveedor.nombre LIKE :proveedorName', {
+                    proveedorName: `%${where.providerName}%`
                 });
+            }
+
+            if (where.numeroFactura) {
+                queryBuilder.andWhere('invoice.numero = :numeroFactura', { numeroFactura: where.numeroFactura });
             }
 
             if (where.startDate && where.endDate) {
