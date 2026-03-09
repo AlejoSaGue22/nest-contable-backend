@@ -141,7 +141,7 @@ export class FactusService {
      */
     async crearYValidarFactura(factura: FacturasVenta): Promise<FacturaDianResponse> {
         try {
-            // const token = await this.obtenerToken();
+            const token = await this.obtenerToken();
 
             // Validar datos requeridos
             this.validarDatosFactura(factura);
@@ -151,26 +151,26 @@ export class FactusService {
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
-            // const response = await firstValueFrom(
-            //     this.httpService.post(
-            //         `${this.apiUrl}/v1/bills/validate`,
-            //         payload,
-            //         {
-            //             headers: {
-            //                 'Authorization': `Bearer ${token}`,
-            //                 'Accept': 'application/json',
-            //                 'Content-Type': 'application/json'
-            //             },
-            //             timeout: 60000 // 60 segundos
-            //         }
-            //     )
-            // );
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v1/bills/validate`,
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 60000 // 60 segundos
+                    }
+                )
+            );
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
             // Procesar respuesta de Factus
-            // return this.procesarRespuestaFactus(response.data);
-            return payload;
+            return this.procesarRespuestaFactus(response.data);
+            // return payload;
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -197,7 +197,7 @@ export class FactusService {
         // Generar código de referencia único (tu sistema)
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
 
-        return {
+        const payload = {
             // Código de documento: "01" = Factura de Venta
             document: "01",
 
@@ -207,12 +207,15 @@ export class FactusService {
             // Código de referencia único (tu sistema)
             reference_code: referenceCode,
 
+            payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
+
+            payment_due_date: factura.fechaVencimiento,
+
             // Observaciones (opcional)
             //   observation: factura?.observaciones || "",
 
             // Método de pago: "10" = Efectivo
-            payment_method_code: factura.metodoPago,
-
+            payment_method_code: factura.metodoPago || '10',
             // Datos del establecimiento/sucursal
             establishment: {
                 name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
@@ -254,8 +257,14 @@ export class FactusService {
             })),
 
             // Cargos adicionales (descuentos globales, recargos)
-            allowance_charges: this.construirCargosAdicionales(factura)
+            // allowance_charges: this.construirCargosAdicionales(factura)
         };
+
+        // if (payload.allowance_charges.length === 0) {
+        //     delete payload.allowance_charges;
+        // }
+
+        return payload;
     }
 
     /**
@@ -423,26 +432,29 @@ export class FactusService {
     }
 
     /**
-     * Descargar PDF de factura usando CUFE
+     * Descargar PDF de factura usando el numero del documento (en Factus ej. 'fv09008257590002400000241')
      */
-    async descargarPDF(cufe: string): Promise<Buffer> {
+    async descargarPDF(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
         try {
             const token = await this.obtenerToken();
 
             const response = await firstValueFrom(
                 this.httpService.get(
-                    `${this.apiUrl}/v1/bills/${cufe}/pdf`, // TODO: Verificar endpoint correcto
+                    `${this.apiUrl}/v1/bills/download-pdf/${numeroCompleto}`, // TODO: Verificar endpoint correcto
                     {
                         headers: {
+                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/pdf'
-                        },
-                        responseType: 'arraybuffer'
+                            'Accept': 'application/json'
+                        }
                     }
                 )
             );
 
-            return Buffer.from(response.data);
+            return {
+                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name
+            };
 
         } catch (error) {
             this.logger.error('Error descargando PDF:', error);

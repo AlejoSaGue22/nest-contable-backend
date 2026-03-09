@@ -342,7 +342,7 @@ export class FacturasVentasService {
     try {
       const invoice = await this.facturaVentaRepository.findOne({
         where: { id },
-        relations: ['client', 'client.tipoDocumentoRel', 'items', 'items.articulo', 'metodoPagoRel','createdBy'],
+        relations: ['client', 'client.tipoDocumentoRel', 'items', 'items.articulo', 'metodoPagoRel','createdBy', 'canalVentaRel'],
       });
 
 
@@ -395,54 +395,54 @@ export class FacturasVentasService {
 
     try {
       // 1. Cambiar estado a "enviando a DIAN"
-      // factura.status = InvoiceStatus.PENDING_DIAN;
-      // factura.dianStatus = DianStatus.SENT;
-      // factura.fechaEnvioDIAN = new Date();
-      // factura.intentosEnvio += 1;
-      // await this.facturaVentaRepository.save(factura);
+      factura.status = InvoiceStatus.PENDING_DIAN;
+      factura.dianStatus = DianStatus.SENT;
+      factura.fechaEnvioDIAN = new Date();
+      factura.intentosEnvio += 1;
+      await this.facturaVentaRepository.save(factura);
 
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
       const respuesta = await this.factusService.crearYValidarFactura(factura);
 
       // 3. Procesar respuesta
-      // if (respuesta.estado === 'aceptada') {
-      //   factura.status = InvoiceStatus.ACCEPTED;
-      //   factura.dianStatus = DianStatus.ACCEPTED;
-      //   factura.fechaAceptacionDIAN = new Date();
-      //   factura.cufe = respuesta.cufe;
-      //   factura.xmlUrl = respuesta.xmlUrl;
-      //   factura.pdfUrl = respuesta.pdfUrl;
-      //   factura.qrCode = respuesta.qrImageBase64;
-      //   factura.proveedorResponse = respuesta.respuestaCompleta;
+      if (respuesta.estado === 'aceptada') {
+        factura.status = InvoiceStatus.ACCEPTED;
+        factura.dianStatus = DianStatus.ACCEPTED;
+        factura.fechaAceptacionDIAN = new Date();
+        factura.cufe = respuesta.cufe;
+        factura.xmlUrl = respuesta.xmlUrl;
+        factura.pdfUrl = respuesta.pdfUrl;
+        factura.qrCode = respuesta.qrImageBase64;
+        factura.proveedorResponse = respuesta.respuestaCompleta;
 
-      //   if (respuesta.numeroCompleto) {
-      //     factura.comprobante_completo = respuesta.numeroCompleto;
-      //   }
+        if (respuesta.numeroCompleto) {
+          factura.comprobante_completo = respuesta.numeroCompleto;
+        }
 
-      //   // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
-      //   try {
-      //     await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
-      //     this.logger.log(`Asiento contable generado para factura electrónica ${factura.comprobante_completo}`);
-      //   } catch (asientoError) {
-      //     factura.status = InvoiceStatus.ERROR_ASIENTO;
-      //     factura.asientoError = asientoError.message;
-      //     factura.fechaAsientoError = new Date();
-      //     this.logger.error(`Error generando asiento contable para FE: ${asientoError.message}`);
-      //   }
+        // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
+        try {
+          await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
+          this.logger.log(`Asiento contable generado para factura electrónica ${factura.comprobante_completo}`);
+        } catch (asientoError) {
+          factura.status = InvoiceStatus.ERROR_ASIENTO;
+          factura.asientoError = asientoError.message;
+          factura.fechaAsientoError = new Date();
+          this.logger.error(`Error generando asiento contable para FE: ${asientoError.message}`);
+        }
 
-      //   this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
-      // } else {
-      //   factura.status = InvoiceStatus.REJECTED;
-      //   factura.dianStatus = DianStatus.REJECTED;
-      //   factura.mensajeError = respuesta.mensaje || '';
-      //   factura.dianResponse = respuesta.respuestaCompleta;
-      //   this.logger.error(`❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`);
-      // }
+        this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
+      } else {
+        factura.status = InvoiceStatus.REJECTED;
+        factura.dianStatus = DianStatus.REJECTED;
+        factura.mensajeError = respuesta.mensaje || '';
+        factura.dianResponse = respuesta.respuestaCompleta;
+        this.logger.error(`❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`);
+      }
 
-      // await this.facturaVentaRepository.save(factura);
-      // return factura;
-      return respuesta;
+      await this.facturaVentaRepository.save(factura);
+      return factura;
+      // return respuesta;
 
     } catch (error) {
       factura.status = InvoiceStatus.DRAFT;
@@ -501,12 +501,12 @@ export class FacturasVentasService {
     }
   }
 
-  async descargarPDF(id: string): Promise<Buffer> {
+  async descargarPDF(id: string): Promise<{ buffer: Buffer, fileName: string }> {
     const factura = await this.findOne(id);
-    if (!factura.cufe) {
-      throw new BadRequestException('Esta factura no tiene CUFE.');
+    if (!factura.comprobante_completo) {
+      throw new BadRequestException('Esta factura no tiene Número de Comprobante Completo.');
     }
-    return await this.factusService.descargarPDF(factura.cufe);
+    return await this.factusService.descargarPDF(factura.comprobante_completo);
   }
 
   async descargarXML(id: string): Promise<Buffer> {
