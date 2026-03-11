@@ -13,6 +13,10 @@ export class InvoiceFilterDto {
   tipoFactura?: TipoFactura;
 
   @IsOptional()
+  @IsString()
+  numeroFactura?: string;
+
+  @IsOptional()
   @IsEnum(DianStatus)
   dianStatus?: DianStatus;
 

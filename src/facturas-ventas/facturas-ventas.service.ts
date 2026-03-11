@@ -150,8 +150,12 @@ export class FacturasVentasService {
         queryBuilder.andWhere('invoice.tipoFactura = :tipoFactura', { tipoFactura: where.tipoFactura });
       }
 
+      if (where.numeroFactura) {
+        queryBuilder.andWhere('invoice.comprobante = :numeroFactura', { numeroFactura: where.numeroFactura });
+      }
+
       if (where.clientName) {
-        queryBuilder.andWhere('client.nombre ILIKE :clientName', { 
+        queryBuilder.andWhere('client.nombre LIKE :clientName', { 
           clientName: `%${where.clientName}%` 
         });
       }
@@ -345,7 +349,6 @@ export class FacturasVentasService {
         relations: ['client', 'client.tipoDocumentoRel',
                    'items', 'items.articulo', 'metodoPagoRel', 'canalVentaRel', 'createdBy'],
       });
-
 
       if (!invoice) {
         throw new NotFoundException(`Factura con ID ${id} no encontrada`);

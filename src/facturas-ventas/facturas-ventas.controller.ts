@@ -12,7 +12,7 @@ import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Response } from 'express';
 
 @Controller('facturas-ventas')
-@UseGuards(AuthGuard, RolesGuard)
+// @UseGuards(AuthGuard, RolesGuard)
 export class FacturasVentasController {
   constructor(private readonly facturasVentasService: FacturasVentasService) { }
 

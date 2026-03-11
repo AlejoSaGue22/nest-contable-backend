@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -213,14 +213,14 @@ export class FactusService {
             // Fecha de vencimiento
             payment_due_date: factura.fechaVencimiento,
             
-            // Observaciones (opcional)
+          // Observaciones (opcional)
             //   observation: factura?.observaciones || "",
 
 
             // Método de pago: "10" = Efectivo
             payment_method_code: factura.metodoPago || '10',
 
-            // Datos del establecimiento/sucursal
+          // Datos del establecimiento/sucursal
             establishment: {
                 name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
                 address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
@@ -264,7 +264,7 @@ export class FactusService {
             ...(this.construirCargosAdicionales(factura).length > 0 ? { allowance_charges: this.construirCargosAdicionales(factura) } : ''),
         };
 
-        return payload;
+      return payload;
     }
 
     /**
@@ -432,7 +432,7 @@ export class FactusService {
     }
 
     /**
-     * Descargar PDF de factura usando CUFE
+     * Descargar PDF de factura usando el numero del documento (en Factus ej. 'fv09008257590002400000241')
      */
     async descargarPDF(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
         try {
