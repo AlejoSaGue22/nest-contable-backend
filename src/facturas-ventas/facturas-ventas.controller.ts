@@ -56,34 +56,33 @@ export class FacturasVentasController {
   @Post(':id/emitir')
   async emitir(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const invoice = await this.facturasVentasService.emitir(id, req.user.sub);
-    // return toInvoiceResponse(invoice, 'Factura emitida exitosamente');
-    return invoice;
+    return toInvoiceResponse(invoice, 'Factura emitida exitosamente');
   }
 
   @Post(':id/reintentar')
   async reintentar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
-    // const invoice = await this.facturasVentasService.reintentarEnvio(id, req.user.sub);
-    // return toInvoiceResponse(invoice, 'Reintento de envío exitoso');
+    const invoice = await this.facturasVentasService.reintentarEnvio(id, req.user.sub);
+    return toInvoiceResponse(invoice, 'Reintento de envío exitoso');
   }
 
   @Patch(':id/pago')
-  async registrarPago(@Param('id') id: string, @Body('metodoPago') metodoPago: string) {
-    const invoice = await this.facturasVentasService.registrarPago(id, metodoPago);
+  async registrarPago(@Param('id') id: string, @Body('metodoPago') metodoPago: string, @Req() req: AuthenticatedRequest) {
+    const invoice = await this.facturasVentasService.registrarPago(id, metodoPago, req.user.sub);
     return toInvoiceResponse(invoice, 'Pago registrado exitosamente');
   }
 
   @Post(':id/anular')
-  async anular(@Param('id') id: string, @Body('motivo') motivo: string) {
-    const invoice = await this.facturasVentasService.anular(id, motivo);
+  async anular(@Param('id') id: string, @Body('motivo') motivo: string, @Req() req: AuthenticatedRequest) {
+    const invoice = await this.facturasVentasService.anular(id, motivo, req.user.sub);
     return toInvoiceResponse(invoice, 'Factura anulada exitosamente');
   }
 
   @Get(':id/pdf')
   async descargarPDF(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.facturasVentasService.descargarPDF(id);
+    const { buffer, fileName } = await this.facturasVentasService.descargarPDF(id);
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename=factura-${id}.pdf`,
+      'Content-Disposition': `attachment; filename=${fileName}.pdf`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);
@@ -91,10 +90,10 @@ export class FacturasVentasController {
 
   @Get(':id/xml')
   async descargarXML(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.facturasVentasService.descargarXML(id);
+    const { buffer, fileName } = await this.facturasVentasService.descargarXML(id);
     res.set({
       'Content-Type': 'application/xml',
-      'Content-Disposition': `attachment; filename=factura-${id}.xml`,
+      'Content-Disposition': `attachment; filename=${fileName}.xml`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);

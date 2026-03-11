@@ -168,6 +168,9 @@ export class FacturasVenta {
   @CreateDateColumn()
   createdAt: Date;
 
+  @DeleteDateColumn()
+  deletedAt: Date;
+
 
   // ========== MÉTODOS HELPER ==========
 

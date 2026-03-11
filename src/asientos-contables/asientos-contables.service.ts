@@ -263,13 +263,13 @@ export class AsientosContablesService {
    * DEBITO:  Caja / Cuentas por Cobrar (1105 o 1305) - REVERSO
    * CREDITO: Ingresos (cuenta del artículo) - REVERSO
    * CREDITO: IVA por Pagar (2408) - REVERSO
-   
-    async generarAsientoAnulacionFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+   */
+  async generarAsientoAnulacionFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-      try {
+    try {
         const detalles: DetalleAsiento[] = [];
 
         // 1. REVERSAR CAJA/BANCOS o Clientes (DEBITO)
@@ -372,9 +372,66 @@ export class AsientosContablesService {
       } finally {
         await queryRunner.release();
       }
-    }
-   */
+  }
 
+  /**
+   * Genera asiento contable automático para pago de factura de venta (Cartera)
+   * 
+   * Lógica:
+   * DEBITO:  Bancos / Caja (1110 o 1105)
+   * CREDITO: Clientes (1305)
+   */
+  async generarAsientoPagoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const detalles: DetalleAsiento[] = [];
+
+      // 1. Cuenta de Entrada de Dinero (DEBITO)
+      // Siguiendo el requerimiento: DEBITO Bancos 1110
+      const codigoCuentaDebito = '1110'; 
+      const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCuentaDebito);
+
+      detalles.push({
+        cuentaId: cuentaDebito.id,
+        debito: factura.total,
+        credito: 0,
+        descripcion: `Pago Recibido - Factura ${factura.comprobante_completo}`
+      });
+
+      // 2. Cuenta de CLIENTES (CREDITO) - REVERSAR CUENTAS POR COBRAR
+      const cuentaCredito = await this.obtenerCuentaPorCodigo('1305');
+      detalles.push({
+        cuentaId: cuentaCredito.id,
+        debito: 0,
+        credito: factura.total,
+        descripcion: `Cancelación Saldo Clientes - Factura ${factura.comprobante_completo}`
+      });
+
+      // Crear asiento
+      const asiento = await this.crearAsiento({
+        tipo: TipoAsiento.PAGO_FACTURA_VENTA,
+        fecha: new Date(),
+        referencia: factura.comprobante_completo,
+        descripcion: `Asiento automático PAGO - Factura ${factura.comprobante_completo}`,
+        detalles,
+        userId
+      }, queryRunner);
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento PAGO generado para factura ${factura.comprobante_completo}: ${asiento.numero}`);
+
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error generando asiento PAGO factura: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al generar asiento contable de pago');
+    } finally {
+      await queryRunner.release();
+    }
+  }
   /**
   * Crea un asiento contable con sus detalles
   */

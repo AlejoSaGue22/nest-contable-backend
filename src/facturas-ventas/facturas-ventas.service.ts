@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateFacturasVentaDto } from './dto/create-facturas-venta.dto';
 import { UpdateFacturasVentaDto } from './dto/update-facturas-venta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DianStatus, FacturasVenta, InvoiceStatus, TipoFactura } from './entities/facturas-venta.entity';
+import { DianStatus, FacturasVenta, FormaPago, InvoiceStatus, TipoFactura } from './entities/facturas-venta.entity';
 import { DataSource, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
@@ -59,6 +59,10 @@ export class FacturasVentasService {
 
       const { items, ...createDtoRest } = createFacturasVentaDto;
 
+      const statusInvoice = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT 
+                            : createFacturasVentaDto.formaPago === FormaPago.CONTADO ? InvoiceStatus.PAID 
+                            : InvoiceStatus.ISSUED;
+
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
         ...createDtoRest,
         metodoPago: createFacturasVentaDto.metodoPago || null,
@@ -71,7 +75,7 @@ export class FacturasVentasService {
         descuento,
         iva,
         total,
-        status: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT : InvoiceStatus.ISSUED,
+        status: statusInvoice,
         dianStatus: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED,
       });
 
@@ -338,7 +342,8 @@ export class FacturasVentasService {
     try {
       const invoice = await this.facturaVentaRepository.findOne({
         where: { id },
-        relations: ['client', 'client.tipoDocumentoRel', 'items', 'items.articulo', 'metodoPagoRel','createdBy'],
+        relations: ['client', 'client.tipoDocumentoRel',
+                   'items', 'items.articulo', 'metodoPagoRel', 'canalVentaRel', 'createdBy'],
       });
 
 
@@ -359,8 +364,8 @@ export class FacturasVentasService {
   async remove(id: string): Promise<void> {
     const invoice = await this.findOne(id);
 
-    if (invoice.status === InvoiceStatus.ISSUED || invoice.status === InvoiceStatus.ACCEPTED) {
-      throw new BadRequestException('No se puede eliminar una factura ya emitida o aceptada');
+    if (invoice.status != InvoiceStatus.DRAFT) {
+      throw new BadRequestException('No se puede eliminar una factura que no está en estado borrador');
     }
 
     try {
@@ -375,8 +380,7 @@ export class FacturasVentasService {
   /**
    * Emitir factura electrónica (enviar a DIAN vía Factus)
    */
-  async emitir(id: string, userId: string)
-  // : Promise<FacturasVenta> 
+  async emitir(id: string, userId: string): Promise<FacturasVenta> 
   {
     const factura = await this.findOne(id);
 
@@ -391,54 +395,54 @@ export class FacturasVentasService {
 
     try {
       // 1. Cambiar estado a "enviando a DIAN"
-      // factura.status = InvoiceStatus.PENDING_DIAN;
-      // factura.dianStatus = DianStatus.SENT;
-      // factura.fechaEnvioDIAN = new Date();
-      // factura.intentosEnvio += 1;
-      // await this.facturaVentaRepository.save(factura);
+      factura.status = InvoiceStatus.PENDING_DIAN;
+      factura.dianStatus = DianStatus.SENT;
+      factura.fechaEnvioDIAN = new Date();
+      factura.intentosEnvio += 1;
+      await this.facturaVentaRepository.save(factura);
 
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
       const respuesta = await this.factusService.crearYValidarFactura(factura);
 
       // 3. Procesar respuesta
-      // if (respuesta.estado === 'aceptada') {
-      //   factura.status = InvoiceStatus.ACCEPTED;
-      //   factura.dianStatus = DianStatus.ACCEPTED;
-      //   factura.fechaAceptacionDIAN = new Date();
-      //   factura.cufe = respuesta.cufe;
-      //   factura.xmlUrl = respuesta.xmlUrl;
-      //   factura.pdfUrl = respuesta.pdfUrl;
-      //   factura.qrCode = respuesta.qrImageBase64;
-      //   factura.proveedorResponse = respuesta.respuestaCompleta;
+      if (respuesta.estado === 'aceptada') {
+        factura.status = InvoiceStatus.ACCEPTED;
+        factura.dianStatus = DianStatus.ACCEPTED;
+        factura.fechaAceptacionDIAN = new Date();
+        factura.cufe = respuesta.cufe;
+        factura.xmlUrl = respuesta.xmlUrl;
+        factura.pdfUrl = respuesta.pdfUrl;
+        factura.qrCode = respuesta.qrImageBase64;
+        factura.proveedorResponse = respuesta.respuestaCompleta;
 
-      //   if (respuesta.numeroCompleto) {
-      //     factura.comprobante_completo = respuesta.numeroCompleto;
-      //   }
+        if (respuesta.numeroCompleto) {
+          factura.comprobante_completo = respuesta.numeroCompleto;
+        }
 
-      //   // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
-      //   try {
-      //     await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
-      //     this.logger.log(`Asiento contable generado para factura electrónica ${factura.comprobante_completo}`);
-      //   } catch (asientoError) {
-      //     factura.status = InvoiceStatus.ERROR_ASIENTO;
-      //     factura.asientoError = asientoError.message;
-      //     factura.fechaAsientoError = new Date();
-      //     this.logger.error(`Error generando asiento contable para FE: ${asientoError.message}`);
-      //   }
+        // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
+        try {
+          await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
+          this.logger.log(`Asiento contable generado para factura electrónica ${factura.comprobante_completo}`);
+        } catch (asientoError) {
+          factura.status = InvoiceStatus.ERROR_ASIENTO;
+          factura.asientoError = asientoError.message;
+          factura.fechaAsientoError = new Date();
+          this.logger.error(`Error generando asiento contable para FE: ${asientoError.message}`);
+        }
 
-      //   this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
-      // } else {
-      //   factura.status = InvoiceStatus.REJECTED;
-      //   factura.dianStatus = DianStatus.REJECTED;
-      //   factura.mensajeError = respuesta.mensaje || '';
-      //   factura.dianResponse = respuesta.respuestaCompleta;
-      //   this.logger.error(`❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`);
-      // }
+        this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
+      } else {
+        factura.status = InvoiceStatus.REJECTED;
+        factura.dianStatus = DianStatus.REJECTED;
+        factura.mensajeError = respuesta.mensaje || '';
+        factura.dianResponse = respuesta.respuestaCompleta;
+        this.logger.error(`❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`);
+      }
 
-      // await this.facturaVentaRepository.save(factura);
-      // return factura;
-      return respuesta;
+      await this.facturaVentaRepository.save(factura);
+      return factura;
+      //return respuesta;
 
     } catch (error) {
       factura.status = InvoiceStatus.DRAFT;
@@ -450,30 +454,42 @@ export class FacturasVentasService {
     }
   } 
 
-  // async reintentarEnvio(id: string, userId: string): Promise<FacturasVenta> {
-  //   const factura = await this.findOne(id);
-  //   if (!factura.puedeReintentarse()) {
-  //     throw new BadRequestException('No se puede reintentar el envío.');
-  //   }
-  //   factura.status = InvoiceStatus.DRAFT;
-  //   factura.dianStatus = DianStatus.PENDING;
-  //   factura.mensajeError = '';
-  //   await this.facturaVentaRepository.save(factura);
-  //   return await this.emitir(id, userId);
-  // }
+  async reintentarEnvio(id: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    if (!factura.puedeReintentarse()) {
+      throw new BadRequestException('No se puede reintentar el envío.');
+    }
+    factura.status = InvoiceStatus.DRAFT;
+    factura.dianStatus = DianStatus.PENDING;
+    factura.mensajeError = '';
+    await this.facturaVentaRepository.save(factura);
+    return await this.emitir(id, userId);
+  }
 
-  async registrarPago(id: string, metodoPago: string): Promise<FacturasVenta> {
+  async registrarPago(id: string, metodoPago: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
     if (!factura.estaAceptada() && factura.tipoFactura === TipoFactura.ELECTRONICA) {
       throw new BadRequestException('Solo se puede registrar pago de facturas aceptadas por DIAN');
     }
     factura.status = InvoiceStatus.PAID;
     factura.metodoPago = metodoPago;
-    await this.facturaVentaRepository.save(factura);
-    return factura;
+    
+    const savedInvoice = await this.facturaVentaRepository.save(factura);
+
+    // Generar asiento contable de pago (Cartera)
+    try {
+      await this.asientosContablesService.generarAsientoPagoFacturaVenta(savedInvoice, userId);
+      this.logger.log(`Asiento de pago generado para factura ${savedInvoice.comprobante_completo}`);
+    } catch (error) {
+      this.logger.error(`Error generando asiento de pago: ${error.message}`);
+      // No lanzamos excepción para no revertir el estado del pago, 
+      // pero el usuario debería ser notificado de alguna forma (asientoError en factura si aplica)
+    }
+
+    return savedInvoice;
   }
 
-  async anular(id: string, motivo: string): Promise<FacturasVenta> {
+  async anular(id: string, motivo: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
     if (!factura.puedeAnularse()) {
       throw new BadRequestException('No se puede anular esta factura.');
@@ -487,30 +503,37 @@ export class FacturasVentasService {
       factura.dianStatus = DianStatus.CANCELLED;
       factura.observaciones = `Anulada: ${motivo}`;
 
-      // Generar asiento contable de anulación (pendiente)
-      // await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
-      await this.facturaVentaRepository.save(factura);
-      return factura;
+      const savedInvoice = await this.facturaVentaRepository.save(factura);
+
+      // Generar asiento contable de anulación
+      try {
+        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(savedInvoice, userId);
+        this.logger.log(`Asiento de anulación generado para factura ${savedInvoice.comprobante_completo}`);
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento de anulación: ${asientoError.message}`);
+      }
+
+      return savedInvoice;
     } catch (error) {
       this.logger.error(`Error anulando factura: ${error.message}`);
       throw new InternalServerErrorException('Error al anular factura');
     }
   }
 
-  async descargarPDF(id: string): Promise<Buffer> {
+  async descargarPDF(id: string): Promise<{ buffer: Buffer, fileName: string }> {
     const factura = await this.findOne(id);
-    if (!factura.cufe) {
-      throw new BadRequestException('Esta factura no tiene CUFE.');
+    if (!factura.comprobante_completo) {
+      throw new BadRequestException('Esta factura no tiene Número de Comprobante Completo.');
     }
-    return await this.factusService.descargarPDF(factura.cufe);
+    return await this.factusService.descargarPDF(factura.comprobante_completo);
   }
 
-  async descargarXML(id: string): Promise<Buffer> {
+  async descargarXML(id: string): Promise<{ buffer: Buffer, fileName: string }> {
     const factura = await this.findOne(id);
-    if (!factura.cufe) {
-      throw new BadRequestException('Esta factura no tiene CUFE.');
+    if (!factura.comprobante_completo) {
+      throw new BadRequestException('Esta factura no tiene Número de Comprobante Completo.');
     }
-    return await this.factusService.descargarXML(factura.cufe);
+    return await this.factusService.descargarXML(factura.comprobante_completo);
   }
 
   async getEstadisticas(): Promise<any> {

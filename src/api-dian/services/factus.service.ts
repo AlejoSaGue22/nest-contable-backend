@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as qs from 'qs';
-import { FacturaDianResponse, FactusTokenResponse, filtroMunicipios } from '../interfaces/api-dian-interface';
+import { AllowanceChargesFactus, FacturaDianResponse, FactusPayload, FactusTokenResponse, filtroMunicipios } from '../interfaces/api-dian-interface';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 
 /**
@@ -141,7 +141,7 @@ export class FactusService {
      */
     async crearYValidarFactura(factura: FacturasVenta): Promise<FacturaDianResponse> {
         try {
-            // const token = await this.obtenerToken();
+            const token = await this.obtenerToken();
 
             // Validar datos requeridos
             this.validarDatosFactura(factura);
@@ -151,26 +151,26 @@ export class FactusService {
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
-            // const response = await firstValueFrom(
-            //     this.httpService.post(
-            //         `${this.apiUrl}/v1/bills/validate`,
-            //         payload,
-            //         {
-            //             headers: {
-            //                 'Authorization': `Bearer ${token}`,
-            //                 'Accept': 'application/json',
-            //                 'Content-Type': 'application/json'
-            //             },
-            //             timeout: 60000 // 60 segundos
-            //         }
-            //     )
-            // );
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v1/bills/validate`,
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 60000 // 60 segundos
+                    }
+                )
+            );
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
             // Procesar respuesta de Factus
-            // return this.procesarRespuestaFactus(response.data);
-            return payload;
+            return this.procesarRespuestaFactus(response.data);
+            // return payload;
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -193,33 +193,40 @@ export class FactusService {
     /**
      * Construir payload para Factus según su estructura exacta
      */
-    private construirPayloadFactus(factura: FacturasVenta): any {
+    private construirPayloadFactus(factura: FacturasVenta) {
         // Generar código de referencia único (tu sistema)
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
 
-        return {
+        const payload = {
             // Código de documento: "01" = Factura de Venta
             document: "01",
 
             // ID del rango de numeración (obtener de Factus)
-            numbering_range_id: this.configService.get<number>('FACTUS_NUMBERING_RANGE_ID'),
+            numbering_range_id: this.configService.get<number>('FACTUS_NUMBERING_RANGE_ID')!,
 
             // Código de referencia único (tu sistema)
             reference_code: referenceCode,
 
+            // Forma de pago: Contado, Crédito
+            payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
+
+            // Fecha de vencimiento
+            payment_due_date: factura.fechaVencimiento,
+            
             // Observaciones (opcional)
             //   observation: factura?.observaciones || "",
 
+
             // Método de pago: "10" = Efectivo
-            payment_method_code: factura.metodoPago,
+            payment_method_code: factura.metodoPago || '10',
 
             // Datos del establecimiento/sucursal
             establishment: {
                 name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
-                address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS'),
-                phone_number: this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE'),
-                email: this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL'),
-                municipality_id: this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID')
+                address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
+                phone_number: this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE')!,
+                email: this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL')!,
+                municipality_id: this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID')!
             },
 
             // Datos del cliente
@@ -233,20 +240,20 @@ export class FactusService {
                 email: factura.client.email,
                 phone: factura.client.telefono,
                 legal_organization_id: factura.client.tipoPersona == 'PN' ? 2 : 1,   // 2 = Persona Natural, 1 = Persona Juridica
-                tribute_id: factura.client.tributo || "21", // 21 = No aplica
+                tribute_id: factura.client.tributo || 21, // 21 = No aplica
                 identification_document_id: factura.client.tipoDocumento, // this.mapearTipoDocumento(factura.client.tipoDocumento),
                 municipality_id: factura.client.ciudad // ID del municipio en Factus
             },
 
             // Items de la factura
             items: factura.items.map(item => ({
-                code_reference: item.articuloId || item.description.substring(0, 10),
+                code_reference: item.articulo.codigo,
                 name: item.articulo.nombre,
                 quantity: item.quantity,
                 discount_rate: item.discount || 0,
                 price: item.unitPrice,
                 tax_rate: item.iva.toString(),
-                unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
+                unit_measure_id: 70, // 70 = "unidad" (código 94)
                 standard_code_id: 1, // 1 = Estándar del contribuyente (999)
                 is_excluded: 0, // 0 = No excluido de IVA
                 tribute_id: 1, // 1 = IVA (código 01)
@@ -254,15 +261,17 @@ export class FactusService {
             })),
 
             // Cargos adicionales (descuentos globales, recargos)
-            allowance_charges: this.construirCargosAdicionales(factura)
+            ...(this.construirCargosAdicionales(factura).length > 0 ? { allowance_charges: this.construirCargosAdicionales(factura) } : ''),
         };
+
+        return payload;
     }
 
     /**
      * Construir cargos adicionales (propinas, recargos, descuentos)
      */
-    private construirCargosAdicionales(factura: FacturasVenta): any[] {
-        const cargos: any[] = [];
+    private construirCargosAdicionales(factura: FacturasVenta): AllowanceChargesFactus[] {
+        const cargos: AllowanceChargesFactus[] = [];
 
         // Si hay descuento global
         if (factura.descuento > 0) {
@@ -425,24 +434,27 @@ export class FactusService {
     /**
      * Descargar PDF de factura usando CUFE
      */
-    async descargarPDF(cufe: string): Promise<Buffer> {
+    async descargarPDF(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
         try {
             const token = await this.obtenerToken();
 
             const response = await firstValueFrom(
                 this.httpService.get(
-                    `${this.apiUrl}/v1/bills/${cufe}/pdf`, // TODO: Verificar endpoint correcto
+                    `${this.apiUrl}/v1/bills/download-pdf/${numeroCompleto}`, // TODO: Verificar endpoint correcto
                     {
                         headers: {
+                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/pdf'
-                        },
-                        responseType: 'arraybuffer'
+                            'Accept': 'application/json'
+                        }
                     }
                 )
             );
 
-            return Buffer.from(response.data);
+            return {
+                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name
+            };
 
         } catch (error) {
             this.logger.error('Error descargando PDF:', error);
@@ -453,24 +465,27 @@ export class FactusService {
     /**
      * Descargar XML de factura usando CUFE
      */
-    async descargarXML(cufe: string): Promise<Buffer> {
+    async descargarXML(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
         try {
             const token = await this.obtenerToken();
 
             const response = await firstValueFrom(
                 this.httpService.get(
-                    `${this.apiUrl}/v1/bills/${cufe}/xml`, // TODO: Verificar endpoint correcto
+                    `${this.apiUrl}/v1/bills/download-xml/${numeroCompleto}`,
                     {
                         headers: {
+                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/xml'
-                        },
-                        responseType: 'arraybuffer'
+                            'Accept': 'application/json'
+                        }
                     }
                 )
             );
 
-            return Buffer.from(response.data);
+            return {
+                buffer: Buffer.from(response.data.data.xml_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name
+            };
 
         } catch (error) {
             this.logger.error('Error descargando XML:', error);
