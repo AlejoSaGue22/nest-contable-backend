@@ -8,7 +8,9 @@ export enum TipoAsiento {
     GASTO = 'gasto',
     MANUAL = 'manual',
     ANULACION_FACTURA_VENTA = 'anulacion_factura_venta',
-    PAGO_FACTURA_VENTA = 'pago_factura_venta'
+    PAGO_FACTURA_VENTA = 'pago_factura_venta',
+    ANULACION_FACTURA_COMPRA = 'anulacion_factura_compra',
+    PAGO_FACTURA_COMPRA = 'pago_factura_compra'
 }
 
 @Entity('asientos_contables')

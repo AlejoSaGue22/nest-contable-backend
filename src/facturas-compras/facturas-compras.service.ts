@@ -250,15 +250,31 @@ export class FacturasComprasService {
         return `FC-${(ultimoNumero + 1).toString().padStart(6, '0')}`;
     }
 
-    async anular(id: string): Promise<FacturaCompra> {
+    async anular(id: string, userId: string): Promise<FacturaCompra> {
         const factura = await this.findOne(id);
 
-        if (factura.estado === GastoEstado.ANULADO) {
+        if (factura.puedeAnularse()) {
             throw new BadRequestException('La factura de compra ya está anulada');
         }
 
         factura.estado = GastoEstado.ANULADO;
-        return await this.facturaCompraRepository.save(factura);
+
+        const savedInvoice = await this.facturaCompraRepository.save(factura);
+
+        // Generar asiento contable de anulación
+        try {
+            await this.asientosContablesService.generarAsientoAnulacionFacturaCompra(savedInvoice, userId);
+            this.logger.log(`Asiento de anulación generado para factura ${savedInvoice.numero}`);
+        } catch (asientoError) {
+            await this.facturaCompraRepository.update(id, {
+                estado: GastoEstado.ERROR_ASIENTO,
+                asientoError: asientoError.message,
+                fechaAsientoError: new Date()
+            }); 
+            this.logger.error(`Error generando asiento de anulación: ${asientoError.message}`);
+        }
+
+        return savedInvoice;
     }
 
     async update(id: string, updateFacturaCompraDto: UpdateFacturaCompraDto): Promise<FacturaCompra> {

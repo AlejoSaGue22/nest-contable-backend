@@ -375,6 +375,108 @@ export class AsientosContablesService {
   }
 
   /**
+   * Genera asiento contable automático para anulación de factura de compra
+   * 
+   * Lógica:
+   * DEBITO:  Caja / Cuentas por Pagar (1105 o 2205) - REVERSO
+   * CREDITO: Gastos (cuenta del artículo) - REVERSO
+   * CREDITO: IVA Descontable (1355) - REVERSO
+   */
+  async generarAsientoAnulacionFacturaCompra(factura: FacturaCompra, userId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const detalles: DetalleAsiento[] = [];
+
+      // 1. REVERSAR GASTOS (CREDITO)
+      const gastosAgrupados = new Map<string, number>();
+
+      for (const item of factura.items) {
+        const articulo = await queryRunner.manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: ['cuentaContable']
+        });
+
+        if (!articulo?.cuentaContable) {
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        }
+
+        const cuentaId = articulo.cuentaContableId;
+        const valor = item.valorSubtotal;
+
+        if (gastosAgrupados.has(cuentaId)) {
+          gastosAgrupados.set(cuentaId, gastosAgrupados.get(cuentaId)! + valor);
+        } else {
+          gastosAgrupados.set(cuentaId, valor);
+        }
+      }
+
+      // Agregar detalles de gastos (reverso)
+      for (const [cuentaId, valor] of gastosAgrupados) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId }
+        });
+
+        detalles.push({
+          cuentaId,
+          debito: 0,
+          credito: valor,
+          descripcion: `ANULACIÓN - Gasto ${cuenta?.nombre}`
+        });
+      }
+
+      // 2. REVERSAR IVA Descontable (CREDITO)
+      if (factura.iva > 0) {
+        const cuentaIva = await this.obtenerCuentaPorCodigo('1355'); // IVA descontable
+
+        detalles.push({
+          cuentaId: cuentaIva.id,
+          debito: 0,
+          credito: factura.iva,
+          descripcion: 'ANULACIÓN - IVA descontable'
+        });
+      }
+
+      // 3. REVERSAR Caja o Cuentas por Pagar (DEBITO)
+      const isContado = factura.formaPago === FormaPago.CONTADO;
+      const codigoCuenta = isContado ? '1105' : '2205';
+      const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCuenta);
+      const totalFactura = factura.total;
+
+      detalles.push({
+        cuentaId: cuentaDebito.id,
+        debito: totalFactura,
+        credito: 0,
+        descripcion: `ANULACIÓN - Pago de gasto - Proveedor: ${factura.proveedorId}`
+      });
+
+      // Crear asiento de anulación
+      const asiento = await this.crearAsiento({
+        tipo: TipoAsiento.ANULACION_FACTURA_COMPRA,
+        fecha: new Date(),
+        referencia: factura.numero,
+        descripcion: `Asiento automático ANULACIÓN - Gasto ${factura.numero}`,
+        detalles,
+        userId
+      }, queryRunner);
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento ANULACIÓN generado para gasto ${factura.numero}: ${asiento.numero}`);
+
+      return asiento;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error generando asiento ANULACIÓN gasto: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al generar asiento contable de anulación');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
    * Genera asiento contable automático para pago de factura de venta (Cartera)
    * 
    * Lógica:
