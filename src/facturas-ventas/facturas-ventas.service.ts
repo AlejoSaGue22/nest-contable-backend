@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DianStatus, FacturasVenta, FormaPago, InvoiceStatus, TipoFactura } from './entities/facturas-venta.entity';
 import { DataSource, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
+import { Pago, PaymentStatus } from 'src/pagos/entities/pago.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { User } from 'src/users/entities/user.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
@@ -76,6 +77,9 @@ export class FacturasVentasService {
         iva,
         total,
         status: statusInvoice,
+        paymentStatus: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
+        saldoPendiente: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0,
+        totalPagado: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total,
         dianStatus: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED,
       });
 

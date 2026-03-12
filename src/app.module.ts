@@ -23,6 +23,8 @@ import { MunicipalitiesService } from './municipalities/municipalities.service';
 import { ApiDianModule } from './api-dian/api-dian.module';
 import { CatalogsModule } from './catalogs/catalogs.module';
 import { CatalogsService } from './catalogs/catalogs.service';
+import { PagosModule } from './pagos/pagos.module';
+import { CuentasBancariasModule } from './cuentas-bancarias/cuentas-bancarias.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
@@ -54,7 +56,9 @@ import { CatalogsService } from './catalogs/catalogs.service';
     DashboardModule,
     ApiDianModule,
     MunicipalitiesModule,
-    CatalogsModule
+    CatalogsModule,
+    PagosModule,
+    CuentasBancariasModule
   ],
   controllers: [],
 })

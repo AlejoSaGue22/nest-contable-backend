@@ -44,8 +44,8 @@ export class FacturasComprasController {
 
     @Patch(':id/anular')
     @Permissions(Permission.INVOICE_DELETE)
-    async anular(@Param('id') id: string) {
-        const invoice = await this.facturasComprasService.anular(id);
+    async anular(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+        const invoice = await this.facturasComprasService.anular(id, req.user.sub);
         return toInvoiceResponse(invoice, 'Factura de compra anulada exitosamente');
     }
 }
