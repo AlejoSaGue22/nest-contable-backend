@@ -4,6 +4,7 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToO
 import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
 import { MetodoPago } from "src/catalogs/entities/metodo-pago.entity";
 import { CanalVenta } from "src/catalogs/entities/canal-venta.entity";
+import { Pago, PaymentStatus } from "src/pagos/entities/pago.entity";
 
 export enum TipoFactura {
   ELECTRONICA = 'ELECTRONICA',
@@ -118,6 +119,47 @@ export class FacturasVenta {
   @Column('int')
   total: number;
 
+   // ══════════════════════════════════════════════════════
+  // ✅ NUEVOS CAMPOS: SEGUIMIENTO DE PAGOS (CxC)
+  // Completamente independientes del status de la factura
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * Estado del pago — INDEPENDIENTE de InvoiceStatus.
+   *
+   * InvoiceStatus → flujo contable/DIAN
+   * PaymentStatus → flujo de cobro (quién debe, cuánto, si venció)
+   *
+   * Solo aplica cuando formaPago = CREDITO.
+   * Cuando formaPago = CONTADO, se puede dejar null o PAID directamente.
+   */
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    nullable: true,
+    default: null,
+  })
+  paymentStatus: PaymentStatus | null;
+
+  /**
+   * Suma de todos los abonos registrados en la tabla `pagos`.
+   * Se actualiza cada vez que se registra un cobro.
+   */
+  @Column('int', { default: 0 })
+  totalPagado: number;
+
+  /**
+   * Saldo pendiente = total - totalPagado.
+   * Se calcula y guarda cada vez que se registra un cobro.
+   */
+  @Column('int', { default: 0 })
+  saldoPendiente: number;
+
+  /** Relación para acceder al historial de cobros de esta factura */
+  @OneToMany(() => Pago, pago => pago.facturaVenta)
+  pagos: Pago[];
+
+
   // ========== FACTURACIÓN ELECTRÓNICA DIAN ==========
 
   @Column({ nullable: true })
@@ -229,6 +271,23 @@ export class FacturasVenta {
     // Solo se pueden anular facturas aceptadas por DIAN
     // mediante nota crédito electrónica
     return this.status === InvoiceStatus.ACCEPTED;
+  }
+
+
+  /**
+   * ¿Se puede registrar un cobro en esta factura?
+   * La factura debe estar emitida/aceptada Y a crédito Y tener saldo pendiente.
+   */
+  puedeRegistrarCobro(): boolean {
+    const estadosValidos: InvoiceStatus[] = [
+      InvoiceStatus.ISSUED,
+      InvoiceStatus.ACCEPTED,
+    ];
+    return (
+      estadosValidos.includes(this.status) &&
+      this.formaPago === FormaPago.CREDITO &&
+      this.saldoPendiente > 0
+    );
   }
 
 }

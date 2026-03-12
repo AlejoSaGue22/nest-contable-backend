@@ -3,12 +3,12 @@ import { User } from "src/users/entities/user.entity";
 import { AsientoDetalle } from "./asientos-detalles.entity";
 
 export enum TipoAsiento {
-    FACTURA_VENTA = 'factura_venta',
-    FACTURA_ELECTRONICA = 'factura_electronica',
-    GASTO = 'gasto',
-    MANUAL = 'manual',
-    ANULACION_FACTURA_VENTA = 'anulacion_factura_venta',
-    PAGO_FACTURA_VENTA = 'pago_factura_venta'
+  FACTURA_VENTA           = 'FACTURA_VENTA',
+  GASTO                   = 'GASTO',
+  ANULACION_FACTURA_VENTA = 'ANULACION_FACTURA_VENTA',
+  PAGO_FACTURA_VENTA      = 'PAGO_FACTURA_VENTA',  // legacy
+  COBRO                   = 'COBRO',               // ← NUEVO
+  PAGO_PROVEEDOR          = 'PAGO_PROVEEDOR',      // ← NUEVO
 }
 
 @Entity('asientos_contables')

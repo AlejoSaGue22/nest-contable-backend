@@ -3,6 +3,7 @@ import { CreateFacturaCompraDto } from './dto/create-factura-compra.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturaCompra, GastoEstado } from './entities/factura-compra.entity';
 import { DataSource, QueryRunner, Repository } from 'typeorm';
+import { Pago, PaymentStatus } from 'src/pagos/entities/pago.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -112,6 +113,9 @@ export class FacturasComprasService {
                 descuento,
                 total,
                 estado: GastoEstado.REGISTRADO,
+                paymentStatus: createFacturaCompraDto.formaPago === 'CREDITO' ? PaymentStatus.PENDING : PaymentStatus.PAID,
+                saldoPendiente: createFacturaCompraDto.formaPago === 'CREDITO' ? total : 0,
+                totalPagado: createFacturaCompraDto.formaPago === 'CREDITO' ? 0 : total,
                 createdById: userId,
                 items: detalles
             });
