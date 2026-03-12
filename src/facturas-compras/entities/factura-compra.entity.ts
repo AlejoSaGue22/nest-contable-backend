@@ -78,4 +78,38 @@ export class FacturaCompra {
 
     @UpdateDateColumn()
     updatedAt: Date;
+    
+    
+    
+    // ========== MÉTODOS HELPER ==========
+    
+      /**
+       * Verifica si el documento puede ser editado
+       */
+      puedeEditarse(): boolean {
+          return this.estado === GastoEstado.BORRADOR;
+      }
+    
+      /**
+       * Verifica si puede ser anulado
+       */
+      puedeAnularse(): boolean {
+          return this.estado === GastoEstado.REGISTRADO;
+      }
+    
+      /**
+       * Verifica si puede ser pagado
+       */
+      puedePagarse(): boolean {
+          return this.estado === GastoEstado.REGISTRADO;
+      }
+    
+      /**
+       * Verifica si puede ser registrado
+       */
+      puedeRegistrarse(): boolean {
+          return this.estado === GastoEstado.BORRADOR;
+      }
 }
+
+

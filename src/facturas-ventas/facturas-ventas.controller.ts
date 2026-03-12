@@ -12,7 +12,7 @@ import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Response } from 'express';
 
 @Controller('facturas-ventas')
-// @UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class FacturasVentasController {
   constructor(private readonly facturasVentasService: FacturasVentasService) { }
 
@@ -41,13 +41,14 @@ export class FacturasVentasController {
   }
 
   @Patch(':id')
-  // @Permissions(Permission.INVOICE_UPDATE)
+  @Permissions(Permission.INVOICE_UPDATE)
   async update(@Param('id') id: string, @Body() updateFacturasVentaDto: UpdateFacturasVentaDto) {
     const invoice = await this.facturasVentasService.update(id, updateFacturasVentaDto);
     return toInvoiceResponse(invoice, 'Factura actualizada exitosamente');
   }
 
   @Delete(':id')
+  @Permissions(Permission.INVOICE_DELETE)
   async remove(@Param('id') id: string) {
     await this.facturasVentasService.remove(id);
     return toInvoiceResponse([], 'Factura eliminada exitosamente');

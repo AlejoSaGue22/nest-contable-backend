@@ -250,94 +250,47 @@ export class FacturasVentasService {
 
     }
 
-    // =========================
-    // Campos actualizables
-    // =========================
+    const updatePayload = {
+          clientId: updateDto.clientId,
+          canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
+          vendedor: updateDto.vendedor || null,
+          fecha: updateDto.fecha,
+          formaPago: updateDto.formaPago,
+          metodoPago: updateDto.metodoPago || null,
+          fechaVencimiento: updateDto.fechaVencimiento || null,
+          tipoFactura: updateDto.tipoFactura,
+          subtotal: Math.round(subtotal),
+          iva: Math.round(iva),
+          descuento: Math.round(descuento),
+          total: Math.round(total)
+    };
 
+    this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
 
-      const updatePayload = {
-        clientId: updateDto.clientId,
-        canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
-        vendedor: updateDto.vendedor || null,
-        fecha: updateDto.fecha,
-        formaPago: updateDto.formaPago,
-        metodoPago: updateDto.metodoPago || null,
-        fechaVencimiento: updateDto.fechaVencimiento || null,
-        tipoFactura: updateDto.tipoFactura,
-        subtotal: Math.round(subtotal),
-        iva: Math.round(iva),
-        descuento: Math.round(descuento),
-        total: Math.round(total)
-      };
-
-      this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
-
-      // update directo (más rápido que save)
-      await queryRunner.manager.update(
-        FacturasVenta,
-        { id },
-        updatePayload
-      );
-
-    // =========================
-    // Asiento contable
-    // =========================
-
-    // if (invoice.tipoFactura === TipoFactura.STANDARD) {
-
-    //   try {
-
-    //     const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
-    //       where: { id },
-    //       relations: ['items']
-    //     });
-
-    //     await this.asientosContablesService.generarAsientoFacturaVenta(
-    //       updatedInvoice,
-    //       updatedInvoice.createdById
-    //     );
-
-    //   } catch (asientoError) {
-
-    //     this.logger.error(`Error generando asiento contable: ${asientoError.message}`);
-
-    //     await queryRunner.manager.update(
-    //       FacturasVenta,
-    //       { id },
-    //       {
-    //         status: InvoiceStatus.ERROR_ASIENTO,
-    //         asientoError: asientoError.message,
-    //         fechaAsientoError: new Date()
-    //       }
-    //     );
-
-    //   }
-
-    // }
+    // update directo (más rápido que save)
+    await queryRunner.manager.update(
+      FacturasVenta,
+      { id },
+      updatePayload
+    );
 
     await queryRunner.commitTransaction();
 
     return await this.findOne(id);
 
   } catch (error) {
-
     await queryRunner.rollbackTransaction();
-
     this.logger.error(
       `Error actualizando factura ${id}: ${error.message}`,
       error.stack
     );
-
     if (error instanceof NotFoundException || error instanceof BadRequestException) {
       throw error;
     }
-
     throw new InternalServerErrorException('Error al actualizar la factura');
 
   } finally {
-
     await queryRunner.release();
-
   }
 
   }

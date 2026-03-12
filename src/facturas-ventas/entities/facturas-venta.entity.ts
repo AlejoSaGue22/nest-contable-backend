@@ -191,7 +191,7 @@ export class FacturasVenta {
 
   /**
    * Verifica si está aceptada por DIAN
-   */
+  */
   estaAceptada(): boolean {
     return this.status === InvoiceStatus.ACCEPTED &&
       this.dianStatus === DianStatus.ACCEPTED &&

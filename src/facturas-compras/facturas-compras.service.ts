@@ -2,12 +2,15 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateFacturaCompraDto } from './dto/create-factura-compra.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturaCompra, GastoEstado } from './entities/factura-compra.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
 import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
+import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
+import { CreateFacturaCompraItemDto } from './dto/create-items-factura-compra.dto';
+import { InvoiceStatus } from 'src/facturas-ventas/entities/facturas-venta.entity';
 
 @Injectable()
 export class FacturasComprasService {
@@ -256,5 +259,139 @@ export class FacturasComprasService {
 
         factura.estado = GastoEstado.ANULADO;
         return await this.facturaCompraRepository.save(factura);
+    }
+
+    async update(id: string, updateFacturaCompraDto: UpdateFacturaCompraDto): Promise<FacturaCompra> {
+        if (updateFacturaCompraDto.items && updateFacturaCompraDto.items.length === 0) {
+            throw new BadRequestException('La factura debe tener al menos un item');
+        }
+
+        const queryRunner = this.dataSource.createQueryRunner();
+
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            const factura = await queryRunner.manager.findOne(FacturaCompra, {
+                where: { id },
+                relations: ['items', 'items.articulo']
+            });
+
+            if (!factura) {
+                throw new NotFoundException(`Factura de compra ${id} no encontrada`);
+            }
+
+            if (!factura.puedeEditarse()) {
+                throw new BadRequestException('La factura de compra no se puede editar');
+            }
+
+            let subtotal = 0;
+            let totalIva = 0;
+            let descuento = 0;
+            let total = 0;
+
+            if (updateFacturaCompraDto.items && updateFacturaCompraDto.items.length > 0) {
+                const calc = await this.calcularTotales(queryRunner, updateFacturaCompraDto.items);
+
+                subtotal = calc.subtotal;
+                totalIva = calc.totalIva;
+                descuento = calc.descuento;
+                total = (subtotal - descuento) + totalIva;
+
+                // eliminar items actuales
+                await queryRunner.manager.delete(FacturaCompraDetalle, { facturaId: id });
+
+                // guardar items
+                const itemsToSave = calc.detalles.map(item =>
+                    queryRunner.manager.create(FacturaCompraDetalle, {
+                        ...item,
+                        facturaId: factura.id
+                    })
+                );
+
+                await queryRunner.manager.save(FacturaCompraDetalle, itemsToSave);
+            }
+
+            const updatePayload = {
+                proveedorId: updateFacturaCompraDto.proveedorId,
+                fecha: updateFacturaCompraDto.fecha,
+                formaPago: updateFacturaCompraDto.formaPago,
+                metodoPago: updateFacturaCompraDto.metodoPago,
+                fechaVencimiento: updateFacturaCompraDto.fechaVencimiento,
+                subtotal: Math.round(subtotal),
+                iva: Math.round(totalIva),
+                descuento: Math.round(descuento),
+                total: Math.round(total)
+            };
+
+            this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
+
+            // update directo (más rápido que save)
+            await queryRunner.manager.update(
+                FacturaCompra,
+                { id },
+                updatePayload
+            );
+
+            await queryRunner.commitTransaction();
+            this.logger.log(`Factura ${id} actualizada exitosamente`);
+
+            return await this.findOne(id);
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error(`Error actualizando factura ${id}: ${error.message}`, error.stack);
+            throw new InternalServerErrorException('Error al actualizar la factura');
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
+    private async calcularTotales(queryRunner: QueryRunner, items: CreateFacturaCompraItemDto[]): 
+                    Promise<{ subtotal: number; totalIva: number; descuento: number, detalles: Partial<FacturaCompraDetalle>[] }> {
+
+        let subtotal = 0;
+        let totalIva = 0;
+        let descuento = 0;
+        const detalles: Partial<FacturaCompraDetalle>[] = [];
+
+        for (const item of items) {
+            const articulo = await queryRunner.manager.findOne(Articulo, {
+                where: { id: item.articuloId },
+                relations: ['cuentaContable', 'cuentaIva']
+            });
+
+            if (!articulo) throw new NotFoundException(`Producto no encontrado: ${item.articuloId}`);
+            if (!articulo.isActive) throw new BadRequestException(`El producto ${articulo.nombre} no está activo`);
+
+            const precioUnitario = Number(item.unitPrice);
+            const cantidad = Number(item.quantity);
+            const porcentajeIva = Number(item.iva);
+            const porcentajeDescuento = Number(item.discount);
+
+            const itemSubtotal = precioUnitario * cantidad;
+            const valorIva = itemSubtotal * (porcentajeIva / 100);
+            const descuentoValor = itemSubtotal * (porcentajeDescuento / 100);
+            const itemTotal = itemSubtotal + valorIva - descuentoValor;
+
+            detalles.push({
+                articuloId: articulo.id,
+                descripcion: item.descripcion || '',
+                quantity: cantidad,
+                unitPrice: precioUnitario,  
+                porcentajeIva: porcentajeIva,
+                descuento: porcentajeDescuento,
+                valorSubtotal: itemSubtotal,
+                valorIva: valorIva,
+                valorDescuento: descuentoValor,
+                itemTotal: itemTotal
+            });
+
+            subtotal += itemSubtotal;
+            totalIva += valorIva;
+            descuento += descuentoValor;
+        }
+
+        return { subtotal, totalIva, descuento, detalles };
     }
 }

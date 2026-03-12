@@ -35,6 +35,13 @@ export class FacturasComprasController {
         return toInvoiceResponse([invoice], 'Factura de compra obtenida exitosamente');
     }
 
+    @Patch(':id')
+    @Permissions(Permission.INVOICE_UPDATE)
+    async update(@Param('id') id: string, @Body() updateFacturasCompraDto: UpdateFacturaCompraDto) {
+        const invoice = await this.facturasComprasService.update(id, updateFacturasCompraDto);
+        return toInvoiceResponse(invoice, 'Factura actualizada exitosamente');
+    }
+
     @Patch(':id/anular')
     @Permissions(Permission.INVOICE_DELETE)
     async anular(@Param('id') id: string) {
