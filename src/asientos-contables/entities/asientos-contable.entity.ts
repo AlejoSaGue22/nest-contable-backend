@@ -2,11 +2,11 @@ import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDat
 import { User } from "src/users/entities/user.entity";
 import { AsientoDetalle } from "./asientos-detalles.entity";
 
-export enum TipoAsiento {
-
+export enum TipoAsiento { 
   FACTURA_VENTA           = 'FACTURA_VENTA',
   GASTO                   = 'GASTO',
   ANULACION_FACTURA_VENTA = 'ANULACION_FACTURA_VENTA',
+  ANULACION_FACTURA_COMPRA = 'ANULACION_FACTURA_COMPRA',
   PAGO_FACTURA_VENTA      = 'PAGO_FACTURA_VENTA',  // legacy
   COBRO                   = 'COBRO',               // ← NUEVO
   PAGO_PROVEEDOR          = 'PAGO_PROVEEDOR',      // ← NUEVO

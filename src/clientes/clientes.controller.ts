@@ -4,9 +4,10 @@ import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 
 @Controller('clientes')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class ClientesController {
     constructor(private readonly clientesService: ClientesService) { }
 

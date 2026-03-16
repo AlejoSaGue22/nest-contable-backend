@@ -1,4 +1,4 @@
-import { PaymentStatus } from "src/pagos/entities/pago.entity";
+import { PaymentStatus } from "src/pagos/enums/pago.enum";
 
 export interface AgingCxp {
     porProveedor: Array<{

@@ -68,6 +68,13 @@ export enum Permission {
   PROVIDER_DELETE = 'provider:delete',
   PROVIDER_EXPORT = 'provider:export',
 
+  // Payments
+  PAGO_READ = 'pago:read',
+  PAGO_CREATE = 'pago:create',
+  PAGO_UPDATE = 'pago:update',
+  PAGO_DELETE = 'pago:delete',
+  PAGO_EXPORT = 'pago:export',
+
   // Users
   USER_CREATE = 'user:create',
   USER_READ = 'user:read',

@@ -2,13 +2,15 @@ import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGenerate
 import { Proveedor } from "../../proveedores/entities/proveedor.entity";
 import { FacturaCompraDetalle } from "./factura-compra-detalle.entity";
 import { User } from "src/users/entities/user.entity";
-import { Pago, PaymentStatus } from "src/pagos/entities/pago.entity";
+import { Pago } from "src/pagos/entities/pago.entity";
+import { PaymentStatus } from "src/pagos/enums/pago.enum";
+import { FormaPago } from "../../facturas-ventas/enums/factura-venta.enum";
+
 
 export enum GastoEstado {
     BORRADOR = 'borrador',
     ERROR_ASIENTO = 'error_asiento',
     REGISTRADO = 'registrado',
-    PAGADO = 'pagado',
     ANULADO = 'anulado'
 }
 
@@ -32,8 +34,8 @@ export class FacturaCompra {
     @Column({ nullable: true })
     observaciones: string;
 
-    @Column()
-    formaPago: string;
+    @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CREDITO })
+    formaPago: FormaPago;
 
     @Column({ nullable: true })
     metodoPago: string;
@@ -84,10 +86,9 @@ export class FacturaCompra {
     @Column({
         type: 'enum',
         enum: PaymentStatus,
-        nullable: true,
-        default: null,
+        default: PaymentStatus.PENDING,
     })
-    paymentStatus: PaymentStatus | null;
+    paymentStatus: PaymentStatus;
 
     /**
      * Suma de todos los pagos registrados en la tabla `pagos`.

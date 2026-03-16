@@ -2,8 +2,9 @@ import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
 
-import { FacturasVenta, FormaPago, InvoiceStatus } from 'src/facturas-ventas/entities/facturas-venta.entity';
-import { PaymentStatus } from 'src/pagos/entities/pago.entity';
+import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
+import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { AgingBucket, CxcItem, CxcResumen } from '../dtos/cxc_cxp.dto';
 
 
@@ -58,11 +59,13 @@ export class CxcService {
 
       const items: CxcItem[] = facturas.map(f => {
         const diasVencida = this.calcularDiasVencida(f.fechaVencimiento, hoy);
+
+        console.log(f.client);
         return {
             facturaId:        f.id,
             numeroFactura:    f.comprobante_completo,
             clienteId:        f.clientId,
-            clienteNombre:    (f.client as any)?.nombre || 'N/A',
+            clienteNombre:    f.client?.nombre + ' ' + f.client?.apellido || f.client.razonSocial,
             fechaEmision:     f.fecha,
             fechaVencimiento: f.fechaVencimiento,
             diasVencida,

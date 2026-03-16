@@ -5,26 +5,26 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { FacturasVentasModule } from './facturas-ventas/facturas-ventas.module';
-import { RolesModule } from './roles/roles.module';
-import { MenuModule } from './menu/menu.module';
-import { RolesService } from './roles/roles.service';
-import { MenuService } from './menu/menu.service';
+import { RolesModule } from './core/roles/roles.module';
+import { RolesService } from './core/roles/roles.service';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { FacturasComprasModule } from './facturas-compras/facturas-compras.module';
 import { CuentasModule } from './cuentas/cuentas.module';
 import { AsientosContablesModule } from './asientos-contables/asientos-contables.module';
-import { ReportesModule } from './reportes/reportes.module';
 import { ArticulosModule } from './articulos/articulos.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CuentasService } from './cuentas/cuentas.service';
 import { DataSource } from 'typeorm';
-import { MunicipalitiesModule } from './municipalities/municipalities.module';
-import { MunicipalitiesService } from './municipalities/municipalities.service';
 import { ApiDianModule } from './api-dian/api-dian.module';
-import { CatalogsModule } from './catalogs/catalogs.module';
-import { CatalogsService } from './catalogs/catalogs.service';
+import { CatalogsModule } from './core/catalogs/catalogs.module';
+import { CatalogsService } from './core/catalogs/catalogs.service';
 import { PagosModule } from './pagos/pagos.module';
 import { CuentasBancariasModule } from './cuentas-bancarias/cuentas-bancarias.module';
+import { MenuModule } from './core/menu/menu.module';
+import { MunicipalitiesModule } from './core/municipalities/municipalities.module';
+import { MenuService } from './core/menu/menu.service';
+import { MunicipalitiesService } from './core/municipalities/municipalities.service';
+import { ReportesModule } from './reportes/reportes-general/reportes.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({

@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { AsientosContablesService } from './asientos-contables.service';
 import { CreateAsientosContableDto } from './dto/create-asientos-contable.dto';
 import { UpdateAsientosContableDto } from './dto/update-asientos-contable.dto';
+import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 
 @Controller('asientos-contables')
+@UseGuards(AuthGuard, RolesGuard)
 export class AsientosContablesController {
   constructor(private readonly asientosContablesService: AsientosContablesService) { }
 
@@ -13,27 +16,9 @@ export class AsientosContablesController {
     // TODO: Implementar create
   }
 
-  @Get()
-  findAll() {
-    // return this.asientosContablesService.findAll();
-    // TODO: Implementar findAll
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    // return this.asientosContablesService.findOne(+id);
-    // TODO: Implementar findOne
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAsientosContableDto: UpdateAsientosContableDto) {
-    // return this.asientosContablesService.update(+id, updateAsientosContableDto);
-    // TODO: Implementar update
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    // return this.asientosContablesService.remove(+id);
-    // TODO: Implementar remove
+  @Get('por-referencia/:referencia')
+  @UseGuards(AuthGuard)
+  async porReferencia(@Param('referencia') referencia: string) {
+    return this.asientosContablesService.findByReferencia(referencia);
   }
 }

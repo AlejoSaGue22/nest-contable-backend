@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface'
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { toInvoiceResponse } from 'src/facturas-ventas/dto/invoice-response.dto';
 import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
+import { ComprasFilterDto } from './dto/compras-filter.dto';
 
 @Controller('facturas-compras')
 @UseGuards(AuthGuard)
@@ -23,7 +24,7 @@ export class FacturasComprasController {
 
     @Get()
     @Permissions(Permission.INVOICE_READ)
-    async findAll(@Query() pagination: InvoiceFilterDto) {
+    async findAll(@Query() pagination: ComprasFilterDto) {
         const result = await this.facturasComprasService.findAll(pagination);
         return toInvoiceResponse(result.data, 'Facturas de compra obtenidas exitosamente', result.meta);
     }

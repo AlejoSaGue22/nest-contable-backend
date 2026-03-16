@@ -1,5 +1,6 @@
-import { IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
 import { CreateFacturaCompraItemDto } from "./create-items-factura-compra.dto";
+import { FormaPago } from "src/facturas-ventas/enums/factura-venta.enum";
 
 export class CreateFacturaCompraDto {
 
@@ -23,9 +24,9 @@ export class CreateFacturaCompraDto {
     @IsOptional()
     fechaVencimiento?: string;
 
-    @IsString()
+    @IsEnum(FormaPago)
     @IsNotEmpty()
-    formaPago: string;
+    formaPago: FormaPago;
 
     @IsString()
     @IsOptional()

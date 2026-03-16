@@ -6,7 +6,7 @@ import { Cliente } from './entities/cliente.entity';
 import { Repository } from 'typeorm';
 import { validate as isUUID } from 'uuid';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
-import { TipoDocumento } from 'src/catalogs/entities/tipo-documento.entity';
+import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 
 @Injectable()
 export class ClientesService {

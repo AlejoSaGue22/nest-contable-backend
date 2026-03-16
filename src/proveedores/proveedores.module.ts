@@ -3,7 +3,7 @@ import { ProveedoresService } from './proveedores.service';
 import { ProveedoresController } from './proveedores.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Proveedor } from './entities/proveedor.entity';
-import { TipoDocumento } from 'src/catalogs/entities/tipo-documento.entity';
+import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 
 @Module({
     imports: [TypeOrmModule.forFeature([Proveedor, TipoDocumento])],

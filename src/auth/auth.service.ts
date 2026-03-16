@@ -6,7 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from 'src/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Role } from 'src/roles/entities/role.entity';
+import { Role } from 'src/core/roles/entities/role.entity';
 import { Repository } from 'typeorm';
 import { SystemRole } from 'src/common/constants/roles.constants';
 

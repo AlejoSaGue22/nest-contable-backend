@@ -4,9 +4,10 @@ import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entit
 import { DataSource, Repository } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
-import { FacturasVenta, FormaPago } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
+import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 
 interface DetalleAsiento {
   cuentaId: string;
@@ -32,11 +33,21 @@ export class AsientosContablesService {
     private dataSource: DataSource,
   ) {}
 
+  async findByReferencia(referencia: string) {
+    return this.asientoRepository.find({
+      where: { referencia },
+      relations: ['detalles', 'detalles.cuenta'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // 1. FACTURA DE VENTA
   //
-  // CONTADO:  DÉBITO Caja 1105       | CRÉDITO Ingresos (x artículo) + IVA 2408
-  // CRÉDITO:  DÉBITO Clientes 1305   | CRÉDITO Ingresos (x artículo) + IVA 2408
+  // EFECTIVO:      DÉBITO Caja 1105     | CRÉDITO Ingresos (x artículo) + IVA 2408
+  // TRANSFERENCIA: DÉBITO Bancos 1110   | CRÉDITO Ingresos (x artículo) + IVA 2408
+  // TARJETA/OTROS: DÉBITO Bancos 1110   | CRÉDITO Ingresos (x artículo) + IVA 2408
+  // CRÉDITO:       DÉBITO Clientes 1305 | CRÉDITO Ingresos (x artículo) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
   async generarAsientoFacturaVenta(
     factura: FacturasVenta,
@@ -49,16 +60,18 @@ export class AsientosContablesService {
     try {
       const detalles: DetalleAsiento[] = [];
 
-      // ── Débito: Caja (contado) o Clientes (crédito) ──────────────────
+      // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
       const isContado  = factura.formaPago === FormaPago.CONTADO;
-      const codigoDebito = isContado ? '1105' : '1305';
+      const codigoDebito = isContado
+        ? this.resolverCuentaContado(factura.metodoPagoRel?.codigo)
+        : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
         cuentaId:    cuentaDebito.id,
         debito:      factura.total,
         credito:     0,
-        descripcion: `Factura venta ${factura.comprobante_completo} - ${factura.formaPago}`,
+        descripcion: `Factura venta ${factura.comprobante_completo} - ${factura.metodoPagoRel?.nombre ?? factura.formaPago}`,
       });
 
       // ── Crédito: Ingresos agrupados por cuenta del artículo ──────────
@@ -145,13 +158,12 @@ export class AsientosContablesService {
   // ══════════════════════════════════════════════════════════════════════════
   // 2. GASTO / FACTURA DE COMPRA
   //
-  // CONTADO: DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Caja 1105
-  // CRÉDITO: DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Proveedores 2205
+  // EFECTIVO:      DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Caja 1105
+  // TRANSFERENCIA: DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Bancos 1110
+  // TARJETA/OTROS: DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Bancos 1110
+  // CRÉDITO:       DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Proveedores 2205
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoGasto(
-    gasto: FacturaCompra,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoGasto(gasto: FacturaCompra, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -202,11 +214,13 @@ export class AsientosContablesService {
         });
       }
 
-      // ── Crédito: Caja (contado) o Proveedores (crédito) ─────────────
-      const isContado      = gasto.formaPago === 'CONTADO';
-      const codigoCredito  = isContado ? '1105' : '2205';
-      const descCredito    = isContado
-        ? `Pago contado - Proveedor: ${gasto.proveedorId}`
+      // ── Crédito: Caja/Bancos (contado) o Proveedores (crédito) ──────
+      const isContado     = gasto.formaPago === FormaPago.CONTADO;
+      const codigoCredito = isContado
+        ? this.resolverCuentaContado(gasto.metodoPago ?? undefined)
+        : '2205';
+      const descCredito   = isContado
+        ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedorId}`
         : `Deuda con proveedor - Compra: ${gasto.numero}`;
 
       const cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCredito);
@@ -246,10 +260,7 @@ export class AsientosContablesService {
   // ══════════════════════════════════════════════════════════════════════════
   // 3. ANULACIÓN FACTURA DE VENTA  (reversa exacta del asiento original)
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoAnulacionFacturaVenta(
-    factura: FacturasVenta,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoAnulacionFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -257,9 +268,11 @@ export class AsientosContablesService {
     try {
       const detalles: DetalleAsiento[] = [];
 
-      // ── Crédito: reversa de Caja / Clientes ──────────────────────────
+      // ── Crédito: reversa de Caja/Bancos / Clientes ──────────────────
       const isContado    = factura.formaPago === FormaPago.CONTADO;
-      const codigoDebito = isContado ? '1105' : '1305';
+      const codigoDebito = isContado
+        ? this.resolverCuentaContado(factura.metodoPagoRel?.codigo)
+        : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
@@ -343,6 +356,117 @@ export class AsientosContablesService {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento anulación: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al generar asiento de anulación');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // 6. ANULACIÓN FACTURA DE COMPRA  (reversa exacta del asiento original)
+  //
+  // El asiento original de una compra a CRÉDITO fue:
+  //   DÉBITO:  Gastos (xArt) + IVA 1355
+  //   CRÉDITO: Proveedores 2205
+  //
+  // El asiento original de una compra CONTADO fue:
+  //   DÉBITO:  Gastos (xArt) + IVA 1355
+  //   CRÉDITO: Caja 1105
+  //
+  // La reversa INVIERTE cada línea:
+  //   DÉBITO:  Proveedores 2205 / Caja 1105   (lo que era crédito)
+  //   CRÉDITO: Gastos (xArt) + IVA 1355       (lo que era débito)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async generarAsientoAnulacionFacturaCompra(gasto: FacturaCompra, userId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const detalles: DetalleAsiento[] = [];
+
+      // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
+      const isContado     = gasto.formaPago === FormaPago.CONTADO;
+      const codigoDebito  = isContado
+        ? this.resolverCuentaContado(gasto.metodoPago)
+        : '2205';
+      const descDebito    = isContado
+        ? `ANULACIÓN contado - Proveedor: ${gasto.proveedorId}`
+        : `ANULACIÓN deuda con proveedor - Compra: ${gasto.numero}`;
+
+      const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
+      detalles.push({
+        cuentaId:    cuentaDebito.id,
+        debito:      gasto.total,
+        credito:     0,
+        descripcion: descDebito,
+      });
+
+      // ── Crédito: reversa de Gastos agrupados por artículo ────────────
+      // Lo que originalmente fue DÉBITO ahora es CRÉDITO
+      const gastosAgrupados = new Map<string, number>();
+
+      for (const item of gasto.items) {
+        const articulo = await queryRunner.manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: ['cuentaContable'],
+        });
+
+        if (!articulo?.cuentaContable) {
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        }
+
+        const cuentaId = articulo.cuentaContableId;
+        gastosAgrupados.set(
+          cuentaId,
+          (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
+        );
+      }
+
+      for (const [cuentaId, valor] of gastosAgrupados) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
+        detalles.push({
+          cuentaId,
+          debito:      0,
+          credito:     valor,
+          descripcion: `ANULACIÓN - Gasto ${cuenta?.nombre}`,
+        });
+      }
+
+      // ── Crédito: reversa de IVA Descontable ──────────────────────────
+      if (gasto.iva > 0) {
+        const cuentaIva = await this.obtenerCuentaPorCodigo('1355');
+        detalles.push({
+          cuentaId:    cuentaIva.id,
+          debito:      0,
+          credito:     gasto.iva,
+          descripcion: 'ANULACIÓN - IVA descontable en compra',
+        });
+      }
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo:        TipoAsiento.ANULACION_FACTURA_COMPRA,
+          fecha:       new Date(),
+          referencia:  gasto.numero,
+          descripcion: `Asiento ANULACIÓN - Compra ${gasto.numero}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento ANULACION_COMPRA generado: ${asiento.numero}`);
+      return asiento;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento anulación compra: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al generar asiento de anulación de compra');
     } finally {
       await queryRunner.release();
     }
@@ -516,6 +640,38 @@ export class AsientosContablesService {
   // ══════════════════════════════════════════════════════════════════════════
   // HELPERS PRIVADOS
   // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Dado el `codigo` del catálogo MetodoPago, retorna el código de cuenta PUC:
+   *   - '1105' Caja     → si el pago es en efectivo
+   *   - '1110' Bancos   → si el pago es por transferencia, consignación, tarjeta, cheque, etc.
+   *
+   * Si el código no está definido (contado sin método especificado) se asume efectivo (1105).
+   */
+  private resolverCuentaContado(codigoMetodoPago?: string): string {
+    if (!codigoMetodoPago) return '1105'; // fallback: efectivo
+
+    const metodoUpper = codigoMetodoPago.toUpperCase();
+
+    // Métodos que van por cuenta bancaria
+    const METODOS_BANCO = [
+      'TRANSFERENCIA',
+      'CONSIGNACION',
+      'TARJETA_DEBITO',
+      'TARJETA_CREDITO',
+      'TARJETA',
+      'CHEQUE',
+      'DAVIPLATA',
+      'NEQUI',
+      'PSE',
+    ];
+
+    if (METODOS_BANCO.some(m => metodoUpper.includes(m))) {
+      return '1110'; // Bancos
+    }
+
+    return '1105'; // Caja (efectivo u otros no identificados)
+  }
 
   private async crearAsiento(
     data: {

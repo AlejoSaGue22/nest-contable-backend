@@ -1,5 +1,5 @@
 import { SystemRole } from "src/common/constants/roles.constants";
-import { Role } from "src/roles/entities/role.entity";
+import { Role } from "src/core/roles/entities/role.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity({ name: 'users' })

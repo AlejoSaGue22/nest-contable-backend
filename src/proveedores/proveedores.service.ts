@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proveedor } from './entities/proveedor.entity';
 import { Repository } from 'typeorm';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
-import { TipoDocumento } from 'src/catalogs/entities/tipo-documento.entity';
+import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 
 @Injectable()
 export class ProveedoresService {

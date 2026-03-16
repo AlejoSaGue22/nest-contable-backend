@@ -1,6 +1,6 @@
 import { Column, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { TipoDocumento } from "src/catalogs/entities/tipo-documento.entity";
-import { Municipality } from "src/municipalities/entities/municipality.entity";
+import { TipoDocumento } from "src/core/catalogs/entities/tipo-documento.entity";
+import { Municipality } from "src/core/municipalities/entities/municipality.entity";
 
 @Entity({ name: 'clientes' })
 export class Cliente {

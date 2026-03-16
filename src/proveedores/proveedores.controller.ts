@@ -1,19 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { ProveedoresService } from './proveedores.service';
 import { CreateProveedorDto } from './dto/create-proveedor.dto';
 import { UpdateProveedorDto } from './dto/update-proveedor.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
+import { Permissions } from 'src/auth/decorators/roles.decorator';
+import { Permission } from 'src/common/constants/roles.constants';
 
 @Controller('proveedores')
+@UseGuards(AuthGuard, RolesGuard)
 export class ProveedoresController {
     constructor(private readonly proveedoresService: ProveedoresService) { }
 
     @Post()
+    @Permissions(Permission.PROVIDER_CREATE)
     create(@Body() createProveedorDto: CreateProveedorDto) {
         return this.proveedoresService.create(createProveedorDto);
     }
 
     @Get()
+    @Permissions(Permission.PROVIDER_READ)
     findAll(@Query() pagination: PaginatioDto) {
         return this.proveedoresService.findAll(pagination);
     }

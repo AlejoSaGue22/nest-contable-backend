@@ -4,7 +4,7 @@ import { DashboardController } from './dashboard.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
-import { ReportesModule } from 'src/reportes/reportes.module';
+import { ReportesModule } from 'src/reportes/reportes-general/reportes.module';
 
 @Module({
     imports: [

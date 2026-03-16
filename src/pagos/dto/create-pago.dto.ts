@@ -1,5 +1,5 @@
 import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsDateString, Min } from 'class-validator';
-import { MedioPago } from '../entities/pago.entity';
+import { MedioPago } from '../enums/pago.enum';
 
 /**
  * DTO para registrar un PAGO sobre una factura de compra a crédito.

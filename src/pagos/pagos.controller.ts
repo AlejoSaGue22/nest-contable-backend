@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, ParseUUIDPipe, Request, UseGuards } from '@nestjs/common';
 import { PagosService } from './pagos.service';
-import { UpdatePagoDto } from './dto/update-pago.dto';
-import { PaymentStatus } from './entities/pago.entity';
+import { PaymentStatus } from './enums/pago.enum';
 import { CxcService } from 'src/common/services/cxc.service';
 import { CxpService } from 'src/common/services/cxp.service';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
-
-// Sustituye por tu guard real de autenticación
-// import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
+import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
+import { PagoResponseDto, toPagoResponse } from './dto/pago-response.dto';
 
 /**
  * ══════════════════════════════════════════════════════════════
@@ -35,6 +35,7 @@ import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
  */
 
 @Controller('pagos')
+@UseGuards(AuthGuard, RolesGuard)
 export class PagosController {
   constructor(
     private readonly pagosService: PagosService,
@@ -59,12 +60,13 @@ export class PagosController {
     @Query('clienteId')     clienteId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
     @Query('soloVencidas')  soloVencidas?: string,
-  ) {
-    return this.cxcService.findAll({
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.cxcService.findAll({
       clienteId,
       paymentStatus,
       soloVencidas: soloVencidas === 'true',
     });
+    return toPagoResponse(data, 'Cuentas por cobrar obtenidas exitosamente');
   }
 
   /**
@@ -72,8 +74,9 @@ export class PagosController {
    * Reporte de antigüedad de cartera (aging) por cliente.
    */
   @Get('cxc/aging')
-  async agingCxC() {
-    return this.cxcService.aging();
+  async agingCxC(): Promise<PagoResponseDto<any>> {
+    const data = await this.cxcService.aging();
+    return toPagoResponse(data, 'Reporte de antigüedad de cartera generado');
   }
 
   /**
@@ -81,8 +84,11 @@ export class PagosController {
    * Estado de cuenta completo de un cliente: deuda total + aging + facturas.
    */
   @Get('cxc/cliente/:clienteId')
-  async estadoCuentaCliente(@Param('clienteId') clienteId: string) {
-    return this.cxcService.estadoCuentaCliente(clienteId);
+  async estadoCuentaCliente(
+    @Param('clienteId') clienteId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.cxcService.estadoCuentaCliente(clienteId);
+    return toPagoResponse(data, 'Estado de cuenta del cliente obtenido');
   }
 
   /**
@@ -92,8 +98,9 @@ export class PagosController {
   @Get('cxc/:facturaVentaId/historial')
   async historialCobros(
     @Param('facturaVentaId', ParseUUIDPipe) facturaVentaId: string,
-  ) {
-    return this.pagosService.historialCobros(facturaVentaId);
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.historialCobros(facturaVentaId);
+    return toPagoResponse(data, 'Historial de cobros obtenido');
   }
 
   /**
@@ -111,11 +118,11 @@ export class PagosController {
   async registrarCobro(
     @Param('facturaVentaId', ParseUUIDPipe) facturaVentaId: string,
     @Body() dto: RegistrarCobroDto,
-    @Request() req: any,
-  ) {
-    // req.user.id → del JWT guard
-    const userId = req.user?.id ?? 'system';
-    return this.pagosService.registrarCobro(facturaVentaId, dto, userId);
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user.sub;
+    const data = await this.pagosService.registrarCobro(facturaVentaId, dto, userId);
+    return toPagoResponse(data, 'Cobro registrado exitosamente');
   }
 
   // ════════════════════════════════════════════════════════════
@@ -135,12 +142,13 @@ export class PagosController {
     @Query('proveedorId')   proveedorId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
     @Query('soloVencidas')  soloVencidas?: string,
-  ) {
-    return this.cxpService.findAll({
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.cxpService.findAll({
       proveedorId,
       paymentStatus,
       soloVencidas: soloVencidas === 'true',
     });
+    return toPagoResponse(data, 'Cuentas por pagar obtenidas exitosamente');
   }
 
   /**
@@ -148,8 +156,9 @@ export class PagosController {
    * Reporte de antigüedad de deuda (aging) por proveedor.
    */
   @Get('cxp/aging')
-  async agingCxP() {
-    return this.cxpService.aging();
+  async agingCxP(): Promise<PagoResponseDto<any>> {
+    const data = await this.cxpService.aging();
+    return toPagoResponse(data, 'Reporte de antigüedad de deuda generado');
   }
 
   /**
@@ -157,8 +166,11 @@ export class PagosController {
    * Estado de cuenta completo de un proveedor: deuda total + aging + facturas.
    */
   @Get('cxp/proveedor/:proveedorId')
-  async estadoCuentaProveedor(@Param('proveedorId') proveedorId: string) {
-    return this.cxpService.estadoCuentaProveedor(proveedorId);
+  async estadoCuentaProveedor(
+    @Param('proveedorId') proveedorId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.cxpService.estadoCuentaProveedor(proveedorId);
+    return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido');
   }
 
   /**
@@ -168,8 +180,9 @@ export class PagosController {
   @Get('cxp/:facturaCompraId/historial')
   async historialPagos(
     @Param('facturaCompraId', ParseUUIDPipe) facturaCompraId: string,
-  ) {
-    return this.pagosService.historialPagos(facturaCompraId);
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.historialPagos(facturaCompraId);
+    return toPagoResponse(data, 'Historial de pagos obtenido');
   }
 
   /**
@@ -187,10 +200,11 @@ export class PagosController {
   async registrarPago(
     @Param('facturaCompraId', ParseUUIDPipe) facturaCompraId: string,
     @Body() dto: RegistrarPagoDto,
-    @Request() req: any,
-  ) {
-    const userId = req.user?.id ?? 'system';
-    return this.pagosService.registrarPago(facturaCompraId, dto, userId);
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user?.sub;
+    const data = await this.pagosService.registrarPago(facturaCompraId, dto, userId);
+    return toPagoResponse(data, 'Pago registrado exitosamente');
   }
 
   // ════════════════════════════════════════════════════════════
@@ -202,7 +216,8 @@ export class PagosController {
    * Lista las cuentas bancarias activas (para el select del modal de pago).
    */
   @Get('cuentas-bancarias')
-  async listarCuentasBancarias() {
-    return this.pagosService.findCuentasBancarias();
+  async listarCuentasBancarias(): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.findCuentasBancarias();
+    return toPagoResponse(data, 'Cuentas bancarias obtenidas exitosamente');
   }
 }

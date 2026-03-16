@@ -11,30 +11,7 @@ import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.enti
 import { User } from 'src/users/entities/user.entity';
 import { CuentaBancaria } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 
-/**
- * Estado de pago INDEPENDIENTE del estado de la factura.
- *
- * InvoiceStatus → controla flujo DIAN / contable (DRAFT, ISSUED, ACCEPTED, CANCELLED...)
- * PaymentStatus → controla flujo de COBRO/PAGO (quién debe, cuánto, si venció)
- */
-export enum PaymentStatus {
-  PENDING  = 'pending',   // Sin pagos registrados (solo aplica a crédito)
-  PARTIAL  = 'partial',   // Abonos parciales, aún hay saldo
-  PAID     = 'paid',      // Pagado en su totalidad
-  OVERDUE  = 'overdue',   // Venció sin pagar (cron job lo marca)
-}
-
-export enum TipoPago {
-  COBRO = 'cobro', // Recibimos dinero (venta)
-  PAGO  = 'pago',  // Pagamos dinero   (compra)
-}
-
-export enum MedioPago {
-  CAJA          = 'caja',
-  BANCO         = 'banco',
-  TRANSFERENCIA = 'transferencia',
-  CHEQUE        = 'cheque',
-}
+import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
 
 /**
  * Tabla central de pagos/cobros.
@@ -97,7 +74,7 @@ export class Pago {
   cuentaBancariaId: string | null;
 
   /** Número de transferencia, cheque, comprobante, etc. */
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   referencia: string | null;
 
   @Column({ type: 'text', nullable: true })
@@ -108,8 +85,8 @@ export class Pago {
    * ID del asiento contable generado automáticamente por este pago.
    * Guardamos el ID (string) del asiento para trazabilidad.
    */
-  @Column({ nullable: true })
-  asientoId: string | null;
+  @Column({  nullable: true })
+  asientoId: string;
 
   // ── Auditoría ────────────────────────────────────────────────────────────
   @ManyToOne(() => User)

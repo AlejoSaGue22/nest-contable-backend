@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { CuentasBancariasService } from './cuentas-bancarias.service';
 import { CreateCuentasBancariaDto } from './dto/create-cuentas-bancaria.dto';
 import { UpdateCuentasBancariaDto } from './dto/update-cuentas-bancaria.dto';
+import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 
 @Controller('cuentas-bancarias')
+@UseGuards(AuthGuard, RolesGuard)
 export class CuentasBancariasController {
-  constructor(private readonly cuentasBancariasService: CuentasBancariasService) {}
+  constructor(private readonly cuentasBancariasService: CuentasBancariasService) { }
 
   @Post()
   create(@Body() createCuentasBancariaDto: CreateCuentasBancariaDto) {

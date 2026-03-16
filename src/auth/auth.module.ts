@@ -5,7 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { jwtConstants } from './constants/jwt.constants';
 import { UsersModule } from 'src/users/users.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Role } from 'src/roles/entities/role.entity';
+import { Role } from 'src/core/roles/entities/role.entity';
 import { User } from 'src/users/entities/user.entity';
 
 @Module({

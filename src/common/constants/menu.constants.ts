@@ -105,6 +105,49 @@ export const DEFAULT_MENU_ITEMS = [
     ],
   },
   {
+      title: 'Pagos',
+      icon: '<i class="fa-solid fa-money-bill-transfer"></i>',
+      route: '/panel/pagos',
+      requiredPermission: Permission.PAGO_READ,
+      order: 6,
+      isActive: true,
+      isVisible: true,
+      other: 'NO',
+      metadata: { badge: null },
+      children: [
+          {
+            title: 'Cuentas por Cobrar',
+            icon: 'arrow_downward',
+            route: '/panel/pagos/cxc',
+            requiredPermission: Permission.PAGO_READ,
+            order: 0,
+            isActive: true,
+            isVisible: true,
+            metadata: { badge: null }
+          },
+          {
+            title: 'Cuentas por Pagar',
+            icon: 'arrow_upward',
+            route: '/panel/pagos/cxp',
+            requiredPermission: Permission.PAGO_READ,
+            order: 1,
+            isActive: true,
+            isVisible: true,
+            metadata: { badge: null }
+          },
+          {
+            title: 'Antigüedad Cartera',
+            icon: 'bar_chart',
+            route: '/panel/pagos/aging',
+            requiredPermission: Permission.PAGO_READ,
+            order: 2,
+            isActive: true,
+            isVisible: true,
+            metadata: { badge: null }
+          }
+        ]
+  },
+  {
     title: 'Reportes',
     icon: '<i class="fa-solid fa-chart-line"></i>',
     route: '/panel/reports',

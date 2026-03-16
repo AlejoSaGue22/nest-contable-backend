@@ -3,16 +3,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, LessThan, Not, Repository } from 'typeorm';
 
-import {
-  FacturasVenta,
-  FormaPago,
-  InvoiceStatus,
-} from 'src/facturas-ventas/entities/facturas-venta.entity';
-import {
-  FacturaCompra,
-  GastoEstado,
-} from 'src/facturas-compras/entities/factura-compra.entity';
-import { PaymentStatus } from 'src/pagos/entities/pago.entity';
+import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
+import { PaymentStatus } from 'src/pagos/enums/pago.enum';
+import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 
 /**
  * Scheduler de pagos.
@@ -135,15 +129,6 @@ export class PagosSchedulerService {
       }
 
       // Facturas de compra a crédito sin paymentStatus
-      await this.facturaCompraRepository
-        .createQueryBuilder()
-        .update(FacturaCompra)
-        .set({ paymentStatus: PaymentStatus.PAID, totalPagado: () => 'total', saldoPendiente: 0 })
-        .where('formaPago = :fp', { fp: 'CREDITO' })
-        .andWhere('paymentStatus IS NULL')
-        .andWhere('estado = :pagado', { pagado: GastoEstado.PAGADO })
-        .execute();
-
       await this.facturaCompraRepository
         .createQueryBuilder()
         .update(FacturaCompra)

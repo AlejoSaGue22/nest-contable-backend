@@ -3,7 +3,8 @@ import { CreateFacturaCompraDto } from './dto/create-factura-compra.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturaCompra, GastoEstado } from './entities/factura-compra.entity';
 import { DataSource, QueryRunner, Repository } from 'typeorm';
-import { Pago, PaymentStatus } from 'src/pagos/entities/pago.entity';
+import { Pago } from 'src/pagos/entities/pago.entity';
+import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -11,7 +12,9 @@ import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
 import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
 import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
 import { CreateFacturaCompraItemDto } from './dto/create-items-factura-compra.dto';
-import { InvoiceStatus } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
+import { ComprasFilterDto } from './dto/compras-filter.dto';
+
 
 @Injectable()
 export class FacturasComprasService {
@@ -113,9 +116,9 @@ export class FacturasComprasService {
                 descuento,
                 total,
                 estado: GastoEstado.REGISTRADO,
-                paymentStatus: createFacturaCompraDto.formaPago === 'CREDITO' ? PaymentStatus.PENDING : PaymentStatus.PAID,
-                saldoPendiente: createFacturaCompraDto.formaPago === 'CREDITO' ? total : 0,
-                totalPagado: createFacturaCompraDto.formaPago === 'CREDITO' ? 0 : total,
+                paymentStatus: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
+                saldoPendiente: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0,
+                totalPagado: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total,
                 createdById: userId,
                 items: detalles
             });
@@ -162,7 +165,7 @@ export class FacturasComprasService {
         }
     }
 
-    async findAll(options: InvoiceFilterDto): Promise<{ data: FacturaCompra[], meta: any }> {
+    async findAll(options: ComprasFilterDto): Promise<{ data: FacturaCompra[], meta: any }> {
         try {
             const { page = 1, limit = 10, ...where } = options;
             const skip = (page < 1 ? 0 : (page - 1)) * limit;
@@ -175,19 +178,19 @@ export class FacturasComprasService {
                 .where('1=1');
 
             // Aplicar filtros
-            if (where.status) {
-                queryBuilder.andWhere('invoice.estado = :status', { status: where.status });
+            if (where.estado) {
+                queryBuilder.andWhere('invoice.estado = :estado', { estado: where.estado });
             }
 
-            // if (where.tipoFactura) {
-            //     queryBuilder.andWhere('invoice.tipoFactura = :tipoFactura', { tipoFactura: where.tipoFactura });
+            if (where.paymentStatus) {
+                queryBuilder.andWhere('invoice.paymentStatus = :paymentStatus', { paymentStatus: where.paymentStatus });
+            }
+
+            // if (where.providerName) {
+            //     queryBuilder.andWhere('proveedor.nombre LIKE :proveedorName', {
+            //         proveedorName: `%${where.providerName}%`
+            //     });
             // }
-
-            if (where.providerName) {
-                queryBuilder.andWhere('proveedor.nombre LIKE :proveedorName', {
-                    proveedorName: `%${where.providerName}%`
-                });
-            }
 
             if (where.numeroFactura) {
                 queryBuilder.andWhere('invoice.numero = :numeroFactura', { numeroFactura: where.numeroFactura });
@@ -256,29 +259,40 @@ export class FacturasComprasService {
 
     async anular(id: string, userId: string): Promise<FacturaCompra> {
         const factura = await this.findOne(id);
-
-        if (factura.puedeAnularse()) {
+        
+        if (factura.estado === GastoEstado.ANULADO) {
             throw new BadRequestException('La factura de compra ya está anulada');
         }
-
-        factura.estado = GastoEstado.ANULADO;
-
-        const savedInvoice = await this.facturaCompraRepository.save(factura);
-
-        // Generar asiento contable de anulación
-        try {
-            await this.asientosContablesService.generarAsientoAnulacionFacturaCompra(savedInvoice, userId);
-            this.logger.log(`Asiento de anulación generado para factura ${savedInvoice.numero}`);
-        } catch (asientoError) {
-            await this.facturaCompraRepository.update(id, {
-                estado: GastoEstado.ERROR_ASIENTO,
-                asientoError: asientoError.message,
-                fechaAsientoError: new Date()
-            }); 
-            this.logger.error(`Error generando asiento de anulación: ${asientoError.message}`);
+        
+        // ✅ Validar: no anular si tiene pagos parciales registrados
+        if (factura.paymentStatus === PaymentStatus.PARTIAL || factura.paymentStatus === PaymentStatus.PAID) {
+            throw new BadRequestException(
+                'No se puede anular una factura de compra con pagos registrados. ' +
+                'Primero anule los pagos correspondientes.',
+            );
         }
-
-        return savedInvoice;
+        
+        factura.estado = GastoEstado.ANULADO;
+        factura.paymentStatus = PaymentStatus.CANCELLED;
+        const facturaAnulada = await this.facturaCompraRepository.save(factura);
+        
+        // ✅ Generar asiento de anulación
+        try {
+            await this.asientosContablesService.generarAsientoAnulacionFacturaCompra(facturaAnulada, userId);
+        } catch (asientoError) {
+            await this.facturaCompraRepository.update(
+                { id: facturaAnulada.id },
+                {
+                    estado: GastoEstado.ERROR_ASIENTO,
+                    asientoError: asientoError.message,
+                    fechaAsientoError: new Date()
+                }
+            );
+            this.logger.error(`Error generando asiento anulación compra ${facturaAnulada.numero}: ${asientoError.message}`);
+            // No revertimos: la factura queda anulada pero el asiento falla silencioso
+            // El contador puede crear el asiento manual si es necesario
+        }
+        return facturaAnulada;
     }
 
     async update(id: string, updateFacturaCompraDto: UpdateFacturaCompraDto): Promise<FacturaCompra> {

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { Repository, Between } from 'typeorm';
-import { ReportesService } from 'src/reportes/reportes.service';
+import { ReportesService } from 'src/reportes/reportes-general/reportes.service';
 
 // export interface DashboardSummary {
 //     estadoResultados: any;

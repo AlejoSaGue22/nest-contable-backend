@@ -1,4 +1,4 @@
-import { UnidadMedida } from "src/catalogs/entities/unidad-medida.entity";
+import { UnidadMedida } from "src/core/catalogs/entities/unidad-medida.entity";
 import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
-import { PaymentStatus } from 'src/pagos/entities/pago.entity';
+import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { AgingBucket, AgingCxp } from '../dtos/cxc_cxp.dto';
 
 export interface CxpItem {
@@ -91,7 +91,7 @@ export class CxpService {
           total:            f.total,
           totalPagado:      f.totalPagado,
           saldoPendiente:   f.saldoPendiente,
-          paymentStatus:    f.paymentStatus || PaymentStatus.PENDING,
+          paymentStatus:    f.paymentStatus,
           agingBucket:      this.calcularAgingBucket(diasVencida),
         };
       });

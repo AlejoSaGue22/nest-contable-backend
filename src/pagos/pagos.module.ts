@@ -8,10 +8,12 @@ import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entit
 import { Pago } from './entities/pago.entity';
 import { CuentaBancaria } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { PagosSchedulerService } from './pagos-scheduler.service';
+import { CxcService } from 'src/common/services/cxc.service';
+import { CxpService } from 'src/common/services/cxp.service';
 
 @Module({
   imports: [AsientosContablesModule, TypeOrmModule.forFeature([FacturaCompra, FacturasVenta, Pago, CuentaBancaria])],
   controllers: [PagosController],
-  providers: [PagosService, PagosSchedulerService],
+  providers: [PagosService, PagosSchedulerService, CxcService, CxpService],
 })
 export class PagosModule { }

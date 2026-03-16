@@ -8,7 +8,7 @@ import { UpdateArticuloDto } from './dto/update-articulos.dto';
 import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
-import { UnidadMedida } from 'src/catalogs/entities/unidad-medida.entity';
+import { UnidadMedida } from 'src/core/catalogs/entities/unidad-medida.entity';
 
 @Injectable()
 export class ArticulosService {

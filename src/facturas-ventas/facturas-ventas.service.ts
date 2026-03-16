@@ -2,15 +2,15 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateFacturasVentaDto } from './dto/create-facturas-venta.dto';
 import { UpdateFacturasVentaDto } from './dto/update-facturas-venta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DianStatus, FacturasVenta, FormaPago, InvoiceStatus, TipoFactura } from './entities/facturas-venta.entity';
+import { FacturasVenta} from './entities/facturas-venta.entity';
+import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from './enums/factura-venta.enum';
 import { DataSource, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
-import { Pago, PaymentStatus } from 'src/pagos/entities/pago.entity';
+import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
-import { User } from 'src/users/entities/user.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
-import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
+import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { FactusService } from 'src/api-dian/services/factus.service';
 
 @Injectable()
@@ -61,7 +61,6 @@ export class FacturasVentasService {
       const { items, ...createDtoRest } = createFacturasVentaDto;
 
       const statusInvoice = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT 
-                            : createFacturasVentaDto.formaPago === FormaPago.CONTADO ? InvoiceStatus.PAID 
                             : InvoiceStatus.ISSUED;
 
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
@@ -461,6 +460,7 @@ export class FacturasVentasService {
       }
       factura.status = InvoiceStatus.CANCELLED;
       factura.dianStatus = DianStatus.CANCELLED;
+      factura.paymentStatus = PaymentStatus.CANCELLED;
       factura.observaciones = `Anulada: ${motivo}`;
 
       const savedInvoice = await this.facturaVentaRepository.save(factura);
@@ -470,6 +470,14 @@ export class FacturasVentasService {
         await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(savedInvoice, userId);
         this.logger.log(`Asiento de anulación generado para factura ${savedInvoice.comprobante_completo}`);
       } catch (asientoError) {
+        await this.facturaVentaRepository.update(
+          { id: savedInvoice.id },
+          {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date()
+          }
+        );
         this.logger.error(`Error generando asiento de anulación: ${asientoError.message}`);
       }
 

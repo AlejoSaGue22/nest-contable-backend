@@ -5,12 +5,12 @@ import { Permissions } from 'src/auth/decorators/roles.decorator';
 import { Permission } from 'src/common/constants/roles.constants';
 
 @Controller('dashboard')
-// @UseGuards(AuthGuard)
+@UseGuards(AuthGuard)
 export class DashboardController {
     constructor(private readonly dashboardService: DashboardService) { }
 
     @Get('summary')
-    // @Permissions(Permission.DASHBOARD_VIEW)
+    @Permissions(Permission.DASHBOARD_VIEW)
     async getSummary() {
         return await this.dashboardService.getSummary();
     }

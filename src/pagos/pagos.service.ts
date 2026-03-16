@@ -2,14 +2,16 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
-import { Pago, TipoPago, MedioPago, PaymentStatus } from './entities/pago.entity';
+import { Pago } from './entities/pago.entity';
+import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
 
-import { FacturasVenta, FormaPago, InvoiceStatus } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 
 import { CuentaBancaria } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
+import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 
 @Injectable()
 export class PagosService {
@@ -125,7 +127,7 @@ export class PagosService {
       // ── 5. Generar asiento contable ──────────────────────────────────
       const cuentaDebitoCode = dto.medioPago === MedioPago.CAJA ? '1105' : '1110';
 
-      let asientoId: string | null = null;
+      let asientoId: string = '';
       try {
         const asiento = await this.asientosContablesService.generarAsientoCobro({
           facturaVenta: factura,
@@ -139,7 +141,7 @@ export class PagosService {
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de cobro: ${asientoError.message}`);
         // No se revierte la transacción por error de asiento — el pago se registra,
-        // pero el asientoId quedará null para revisión manual.
+        // pero el asientoId quedará '' para revisión manual.
       }
 
       // ── 6. Crear registro de pago ────────────────────────────────────
@@ -281,7 +283,7 @@ export class PagosService {
       // ── 5. Generar asiento contable ──────────────────────────────────
       const cuentaCreditoCodigo = dto.medioPago === MedioPago.CAJA ? '1105' : '1110';
 
-      let asientoId: string | null = null;
+      let asientoId: string = '';
       try {
         const asiento = await this.asientosContablesService.generarAsientoPagoCompra({
           facturaCompra: factura,
@@ -321,9 +323,9 @@ export class PagosService {
       };
 
       // Si quedó saldo 0, también actualizar el estado general de la compra
-      if (nuevoPaymentStatus === PaymentStatus.PAID) {
-        updatePayload.estado = GastoEstado.PAGADO;
-      }
+      // if (nuevoPaymentStatus === PaymentStatus.PAID) {
+      //   updatePayload.estado = GastoEstado.PAGADO;
+      // }
 
       await queryRunner.manager.update(FacturaCompra, { id: factura.id }, updatePayload);
 

@@ -2,40 +2,11 @@ import { Cliente } from "src/clientes/entities/cliente.entity";
 import { User } from "src/users/entities/user.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
-import { MetodoPago } from "src/catalogs/entities/metodo-pago.entity";
-import { CanalVenta } from "src/catalogs/entities/canal-venta.entity";
-import { Pago, PaymentStatus } from "src/pagos/entities/pago.entity";
-
-export enum TipoFactura {
-  ELECTRONICA = 'ELECTRONICA',
-  STANDARD = 'ESTANDAR',
-}
-
-export enum FormaPago {
-  CONTADO = 'CONTADO', // 1
-  CREDITO = 'CREDITO', // 2
-}
-
-export enum InvoiceStatus {
-  DRAFT = 'draft',              // Borrador - editable
-  PENDING_DIAN = 'pending_dian', // Enviando a DIAN
-  ACCEPTED = 'accepted',         // Aceptada por DIAN (tiene CUFE)
-  REJECTED = 'rejected',         // Rechazada por DIAN (corregir y reenviar)
-  PAID = 'paid',                 // Pagada
-  CANCELLED = 'cancelled',        // Anulada (requiere nota crédito)
-  ISSUED = 'issued',             // Emitida (para facturas comunes)
-  ERROR_ASIENTO = 'error_asiento' // Error generado el asiento
-}
-
-export enum DianStatus {
-  PENDING = 'pending',           // Esperando envío
-  SENT = 'sent',                 // Enviada a proveedor tecnológico
-  PROCESSING = 'processing',     // Proveedor validando
-  ACCEPTED = 'accepted',         // DIAN aprobó (tiene CUFE)
-  REJECTED = 'rejected',         // DIAN rechazó
-  CANCELLED = 'cancelled'        // Anulada (nota crédito enviada)
-}
-
+import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
+import { CanalVenta } from "src/core/catalogs/entities/canal-venta.entity";
+import { Pago } from "src/pagos/entities/pago.entity";
+import { PaymentStatus } from "src/pagos/enums/pago.enum";
+import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from "../enums/factura-venta.enum";
 
 @Entity('facturas_venta')
 export class FacturasVenta {
@@ -136,10 +107,9 @@ export class FacturasVenta {
   @Column({
     type: 'enum',
     enum: PaymentStatus,
-    nullable: true,
-    default: null,
+    default: PaymentStatus.PENDING,
   })
-  paymentStatus: PaymentStatus | null;
+  paymentStatus: PaymentStatus;
 
   /**
    * Suma de todos los abonos registrados en la tabla `pagos`.

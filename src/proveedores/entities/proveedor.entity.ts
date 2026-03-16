@@ -1,5 +1,5 @@
-import { TipoDocumento } from "src/catalogs/entities/tipo-documento.entity";
-import { Municipality } from "src/municipalities/entities/municipality.entity";
+import { TipoDocumento } from "src/core/catalogs/entities/tipo-documento.entity";
+import { Municipality } from "src/core/municipalities/entities/municipality.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity('proveedores')

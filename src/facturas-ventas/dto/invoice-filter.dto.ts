@@ -1,7 +1,7 @@
 
 import { IsOptional, IsDate, IsEnum, IsString, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DianStatus, InvoiceStatus, TipoFactura } from '../entities/facturas-venta.entity';
+import { DianStatus, InvoiceStatus, TipoFactura } from '../enums/factura-venta.enum';
 
 export class InvoiceFilterDto {
   @IsOptional()
