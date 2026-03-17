@@ -30,9 +30,9 @@ import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cart
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3307,
+      port: 3306,
       username: 'root',
-      password: 'root',
+      password: '',
       database: 'finance_tejo',
       // logging: true,
       autoLoadEntities: true,

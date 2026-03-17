@@ -72,6 +72,8 @@ export class MenuService {
     // Asegurar que permissions sea un arreglo para evitar error en .includes
     const authPermissions = Array.isArray(permissions) ? permissions : [];
 
+    console.log(authPermissions);
+
     return items
       .filter(item => item && item.isActive && item.isVisible)
       .filter(item => !item.requiredPermission || authPermissions.includes(item.requiredPermission))
@@ -208,10 +210,7 @@ export class MenuService {
     }
   }
 
-  private async createMenuTree(
-    items: Partial<MenuSeedItem>[],
-    parent?: MenuItem,
-  ): Promise<void> {
+  private async createMenuTree(items: Partial<MenuSeedItem>[],parent?: MenuItem): Promise<void> {
     for (const itemData of items) {
       const menuItem = this.menuItemRepository.create({ ...itemData, parent });
       const savedItem = await this.menuItemRepository.save(menuItem);

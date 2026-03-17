@@ -111,9 +111,9 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE, Permission.PURCHASE_EXPORT,
     Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
-    Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
-    Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
+    Permission.REPORT_VIEW, Permission.REPORT_EXPORT,Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE,
+    Permission.PAGO_DELETE, Permission.PAGO_EXPORT,Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
   ],
   [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
@@ -124,7 +124,8 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
-    Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
+    Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE, Permission.PAGO_READ, 
+    Permission.PAGO_CREATE, Permission.PAGO_UPDATE, Permission.PAGO_DELETE, Permission.PAGO_EXPORT
   ],
   [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,
@@ -132,6 +133,8 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.CLIENT_READ,
     Permission.PRODUCT_READ,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
+    Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE, Permission.PAGO_DELETE, 
+    Permission.PAGO_EXPORT
   ],
   [SystemRole.SALES]: [
     Permission.DASHBOARD_VIEW,
