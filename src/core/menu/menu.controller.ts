@@ -1,29 +1,44 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe } from '@nestjs/common';
-import { MenuService } from './menu.service';
-import { CreateMenuDto } from './dto/create-menu.dto';
-import { UpdateMenuDto } from './dto/update-menu.dto';
-import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
-import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
-import { Permission } from 'src/common/constants/roles.constants';
-import { Permissions } from 'src/auth/decorators/roles.decorator';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
+// menu.controller.ts (BACKEND — NestJS)
+// ✅ FIX: GET /menu ahora llama a getMenuForUser(user) en vez de
+//         getMenuForRole(user.role) para respetar los permisos exactos del JWT.
+
+import {
+  Controller, Get, Post, Body, Patch, Param,
+  Delete, UseGuards, ParseUUIDPipe,
+} from '@nestjs/common';
+import { MenuService }    from './menu.service';
+import { CreateMenuDto }  from './dto/create-menu.dto';
+import { UpdateMenuDto }  from './dto/update-menu.dto';
+import { AuthGuard }      from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard }     from 'src/auth/guard/auth/roles.guard';
+import { Permission }     from 'src/common/constants/roles.constants';
+import { Permissions }    from 'src/auth/decorators/roles.decorator';
+import { CurrentUser }    from 'src/auth/decorators/current-user.decorator';
+import { JwtPayload }     from 'src/auth/interfaces/jwt-payload.interface';
 
 @Controller('menu')
 @UseGuards(AuthGuard)
 export class MenuController {
   constructor(private readonly menuService: MenuService) {}
 
+  // ── Menú del usuario autenticado ─────────────────────────────────
+  /**
+   * ✅ FIX: antes usaba getMenuForRole(user.role) que solo considera
+   * el rol genérico. Ahora usa getMenuForUser(user) que usa los
+   * permisos exactos del JWT (útil cuando los permisos se personalizan
+   * por usuario más allá del rol base).
+   */
   @Get()
   async getMenu(@CurrentUser() user: JwtPayload) {
-    const menu = await this.menuService.getMenuForRole(user.role);
+    const menu = await this.menuService.getMenuForUser(user);
     return {
       success: true,
-      data: menu,
+      data:    menu,
       message: 'Menú obtenido exitosamente',
     };
   }
 
+  // ── Previsualización por rol (admin) ──────────────────────────────
   @Get('role/:roleName')
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
@@ -31,11 +46,12 @@ export class MenuController {
     const menu = await this.menuService.getMenuForRole(roleName);
     return {
       success: true,
-      data: menu,
+      data:    menu,
       message: `Menú para rol ${roleName} obtenido exitosamente`,
     };
   }
 
+  // ── Todos los ítems (admin — gestor de menú) ──────────────────────
   @Get('all')
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
@@ -43,8 +59,8 @@ export class MenuController {
     const menuItems = await this.menuService.getAllMenuItems();
     return {
       success: true,
-      data: menuItems,
-      message: 'Todos los items del menú obtenidos exitosamente',
+      data:    menuItems,
+      message: 'Todos los ítems del menú obtenidos exitosamente',
     };
   }
 
@@ -53,23 +69,16 @@ export class MenuController {
   @Permissions(Permission.MENU_MANAGE)
   async getMenuItem(@Param('id', ParseUUIDPipe) id: string) {
     const menuItem = await this.menuService.getMenuItem(id);
-    return {
-      success: true,
-      data: menuItem,
-      message: 'Item del menú obtenido exitosamente',
-    };
+    return { success: true, data: menuItem, message: 'Ítem obtenido exitosamente' };
   }
 
+  // ── CRUD ──────────────────────────────────────────────────────────
   @Post()
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
   async createMenuItem(@Body() createDto: CreateMenuDto) {
-    // const menuItem = await this.menuService.createMenuItem(createDto);
-    return {
-      success: true,
-      // data: menuItem,
-      message: 'Item del menú creado exitosamente',
-    };
+    const menuItem = await this.menuService.createMenuItem(createDto);
+    return { success: true, data: menuItem, message: 'Ítem creado exitosamente' };
   }
 
   @Patch(':id')
@@ -80,11 +89,7 @@ export class MenuController {
     @Body() updateDto: UpdateMenuDto,
   ) {
     const menuItem = await this.menuService.updateMenuItem(id, updateDto);
-    return {
-      success: true,
-      data: menuItem,
-      message: 'Item del menú actualizado exitosamente',
-    };
+    return { success: true, data: menuItem, message: 'Ítem actualizado exitosamente' };
   }
 
   @Patch(':id/toggle-active')
@@ -97,8 +102,8 @@ export class MenuController {
     const menuItem = await this.menuService.toggleMenuItemStatus(id, isActive);
     return {
       success: true,
-      data: menuItem,
-      message: `Item del menú ${isActive ? 'activado' : 'desactivado'} exitosamente`,
+      data:    menuItem,
+      message: `Ítem ${isActive ? 'activado' : 'desactivado'} exitosamente`,
     };
   }
 
@@ -112,8 +117,8 @@ export class MenuController {
     const menuItem = await this.menuService.toggleMenuItemVisibility(id, isVisible);
     return {
       success: true,
-      data: menuItem,
-      message: `Item del menú ${isVisible ? 'hecho visible' : 'ocultado'} exitosamente`,
+      data:    menuItem,
+      message: `Ítem ${isVisible ? 'hecho visible' : 'ocultado'} exitosamente`,
     };
   }
 
@@ -122,32 +127,24 @@ export class MenuController {
   @Permissions(Permission.MENU_MANAGE)
   async deleteMenuItem(@Param('id', ParseUUIDPipe) id: string) {
     await this.menuService.deleteMenuItem(id);
-    return {
-      success: true,
-      message: 'Item del menú eliminado exitosamente',
-    };
+    return { success: true, message: 'Ítem eliminado exitosamente' };
   }
 
+  // ── Reordenar ─────────────────────────────────────────────────────
   @Post('reorder')
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
   async reorderMenuItems(@Body('orderedIds') orderedIds: string[]) {
     const menuItems = await this.menuService.reorderMenuItems(orderedIds);
-    return {
-      success: true,
-      data: menuItems,
-      message: 'Menú reordenado exitosamente',
-    };
+    return { success: true, data: menuItems, message: 'Menú reordenado exitosamente' };
   }
 
+  // ── Seed ──────────────────────────────────────────────────────────
   @Post('seed')
   @UseGuards(RolesGuard)
   @Permissions(Permission.MENU_MANAGE)
   async seedDefaultMenu() {
     await this.menuService.seedDefaultMenu();
-    return {
-      success: true,
-      message: 'Menú por defecto creado exitosamente',
-    };
+    return { success: true, message: 'Menú por defecto creado exitosamente' };
   }
 }

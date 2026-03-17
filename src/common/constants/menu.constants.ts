@@ -156,7 +156,29 @@ export const DEFAULT_MENU_ITEMS = [
     isActive: true,
     isVisible: true,
     other: 'NO',
-    metadata: { badge: null }
+    metadata: { badge: null },
+    children: [
+      {
+        title: 'Reportes Generales',
+        icon: '<i class="fa-solid fa-chart-line"></i>',
+        route: '/panel/reports/reports-general',
+        requiredPermission: Permission.REPORT_VIEW,
+        order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: 'Reportes Cartera',
+        icon: '<i class="fa-solid fa-chart-line"></i>',
+        route: '/panel/reports/reports-cartera',
+        requiredPermission: Permission.REPORT_VIEW,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      }
+    ]
   },
   {
     title: 'Administración',

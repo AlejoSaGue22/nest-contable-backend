@@ -36,7 +36,7 @@ export class MenuItem {
   other: string;
 
   @TreeParent()
-  parent?: MenuItem;
+  parent?: MenuItem | null;
 
   @TreeChildren()
   children: MenuItem[];

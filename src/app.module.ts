@@ -25,14 +25,13 @@ import { MunicipalitiesModule } from './core/municipalities/municipalities.modul
 import { MenuService } from './core/menu/menu.service';
 import { MunicipalitiesService } from './core/municipalities/municipalities.service';
 import { ReportesModule } from './reportes/reportes-general/reportes.module';
-
 @Module({
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3307,
+      port: 3306,
       username: 'root',
-      password: 'root',
+      password: '',
       database: 'finance_tejo',
       // logging: true,
       autoLoadEntities: true,

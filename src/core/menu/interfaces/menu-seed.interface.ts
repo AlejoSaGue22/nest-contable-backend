@@ -11,6 +11,6 @@ export interface MenuSeedItem {
   isActive: boolean;
   isVisible: boolean;
   metadata?: any;
-  parent?: MenuSeedItem;
+  parent?: MenuSeedItem | null;
   children?: MenuSeedItem[];
 }
