@@ -88,7 +88,11 @@ export class MenuService {
   // TODOS LOS ÍTEMS (admin — gestor de menú)
   // ══════════════════════════════════════════════════════════════════
   async getAllMenuItems(): Promise<MenuItem[]> {
-    return await this.menuItemRepository.findTrees();
+    const allItems = await this.menuItemRepository.findTrees();
+
+    const all = allItems.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    return all;
   }
 
   async getMenuItem(id: string): Promise<MenuItem> {

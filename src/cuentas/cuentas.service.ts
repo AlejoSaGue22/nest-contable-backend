@@ -1,19 +1,98 @@
 import { Injectable } from '@nestjs/common';
 import { CreateCuentaDto } from './dto/create-cuenta.dto';
 import { UpdateCuentaDto } from './dto/update-cuenta.dto';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PLAN_CUENTAS_MINIMO } from 'src/common/constants/plan-cuentas.constants';
-import { CuentaContable } from './entities/cuenta.entity';
+import { CuentaContable, NaturalezaCuenta } from './entities/cuenta.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { AsientoDetalle } from 'src/asientos-contables/entities/asientos-detalles.entity';
+import { FilterCuentaDto } from './dto/filter-cuenta.dto';
 
 @Injectable()
 export class CuentasService {
+
+  constructor(
+    @InjectRepository(CuentaContable)
+    private readonly cuentaRepository: Repository<CuentaContable>,
+    @InjectRepository(AsientoDetalle)
+    private readonly asientoDetalleRepository: Repository<AsientoDetalle>,
+  ) { }
 
   create(createCuentaDto: CreateCuentaDto) {
     return 'This action adds a new cuenta';
   }
 
-  findAll() {
-    return `This action returns all cuentas`;
+  async findAll(filterDto?: FilterCuentaDto) {
+    const { search, tipo } = filterDto || {};
+
+    const query = this.cuentaRepository.createQueryBuilder('cuenta')
+      .leftJoinAndSelect('cuenta.cuentaPadre', 'cuentaPadre')
+      .leftJoin(AsientoDetalle, 'detalle', 'detalle.cuentaId = cuenta.id')
+      .select([
+        'cuenta.id',
+        'cuenta.codigo',
+        'cuenta.nombre',
+        'cuenta.descripcion',
+        'cuenta.tipo',
+        'cuenta.naturaleza',
+        'cuenta.nivel',
+        'cuenta.aceptaMovimiento',
+        'cuenta.isActive',
+        'cuenta.cuentaPadreId',
+      ])
+      .addSelect('SUM(COALESCE(detalle.debito, 0))', 'totalDebito')
+      .addSelect('SUM(COALESCE(detalle.credito, 0))', 'totalCredito')
+      .groupBy('cuenta.id')
+      .addGroupBy('cuentaPadre.id')
+      .orderBy('cuenta.codigo', 'ASC');
+
+    if (search) {
+      query.andWhere('(cuenta.codigo LIKE :search OR cuenta.nombre LIKE :search)', { search: `%${search}%` });
+    }
+
+    if (tipo) {
+      query.andWhere('cuenta.tipo = :tipo', { tipo });
+    }
+
+    const rawResults = await query.getRawAndEntities();
+    const accounts = rawResults.entities;
+    const rawData = rawResults.raw;
+
+    // Create a map for quick access
+    const accountMap = new Map<string, any>();
+
+    accounts.forEach((acc, index) => {
+      const raw = rawData[index];
+      const totalDebito = parseFloat(raw.totalDebito || '0');
+      const totalCredito = parseFloat(raw.totalCredito || '0');
+
+      let saldo = 0;
+      if (acc.naturaleza === NaturalezaCuenta.DEBITO) {
+        saldo = totalDebito - totalCredito;
+      } else {
+        saldo = totalCredito - totalDebito;
+      }
+
+      accountMap.set(acc.id, {
+        ...acc,
+        totalDebito,
+        totalCredito,
+        saldoPropio: saldo,
+        saldo: saldo, // Initial saldo will be updated for parents
+      });
+    });
+
+    // Calculate aggregate balances for parent accounts
+    const sortedByLevel = Array.from(accountMap.values()).sort((a, b) => b.nivel - a.nivel);
+
+    sortedByLevel.forEach(acc => {
+      if (acc.cuentaPadreId && accountMap.has(acc.cuentaPadreId)) {
+        const parent = accountMap.get(acc.cuentaPadreId);
+        parent.saldo += acc.saldo;
+      }
+    });
+
+    return Array.from(accountMap.values()).sort((a, b) => a.codigo.localeCompare(b.codigo));
   }
 
   async seedCuentasBasicas(dataSource: DataSource) {

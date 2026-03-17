@@ -233,4 +233,37 @@ export const DEFAULT_MENU_ITEMS = [
       },
     ],
   },
+  {
+    title: 'Contabilidad',
+    icon: '<i class="fa-solid fa-chart-line"></i>',
+    route: '/panel/contabilidad',
+    requiredPermission: Permission.MENU_MANAGE,
+    order: 4,
+    isActive: true,
+    isVisible: true,
+    other: 'NO',
+    metadata: { badge: null },
+    children: [
+      {
+        title: 'Cuentas Contables',
+        icon: '',
+        route: '/panel/contabilidad/cuentas',
+        requiredPermission: Permission.MENU_MANAGE,
+        order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: 'Asientos Contables',
+        icon: '',
+        route: '/panel/contabilidad/asientos',
+        requiredPermission: Permission.MENU_MANAGE,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      }
+    ]
+  },
 ];

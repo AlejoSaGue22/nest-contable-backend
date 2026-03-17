@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { CuentasService } from './cuentas.service';
 import { CreateCuentaDto } from './dto/create-cuenta.dto';
 import { UpdateCuentaDto } from './dto/update-cuenta.dto';
+import { FilterCuentaDto } from './dto/filter-cuenta.dto';
 
 @Controller('cuentas')
 export class CuentasController {
@@ -13,8 +14,8 @@ export class CuentasController {
   }
 
   @Get()
-  findAll() {
-    return this.cuentasService.findAll();
+  findAll(@Query() filterDto: FilterCuentaDto) {
+    return this.cuentasService.findAll(filterDto);
   }
 
   @Get(':id')

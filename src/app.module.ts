@@ -25,13 +25,14 @@ import { MunicipalitiesModule } from './core/municipalities/municipalities.modul
 import { MenuService } from './core/menu/menu.service';
 import { MunicipalitiesService } from './core/municipalities/municipalities.service';
 import { ReportesModule } from './reportes/reportes-general/reportes.module';
+import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cartera.module';
 @Module({
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3306,
+      port: 3307,
       username: 'root',
-      password: '',
+      password: 'root',
       database: 'finance_tejo',
       // logging: true,
       autoLoadEntities: true,
@@ -52,6 +53,7 @@ import { ReportesModule } from './reportes/reportes-general/reportes.module';
     CuentasModule,
     AsientosContablesModule,
     ReportesModule,
+    ReportesCarteraModule,
     DashboardModule,
     ApiDianModule,
     MunicipalitiesModule,
