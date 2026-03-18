@@ -26,6 +26,7 @@ import { MenuService } from './core/menu/menu.service';
 import { MunicipalitiesService } from './core/municipalities/municipalities.service';
 import { ReportesModule } from './reportes/reportes-general/reportes.module';
 import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cartera.module';
+import { BancosModule } from './bancos/bancos.module';
 @Module({
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
@@ -59,7 +60,8 @@ import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cart
     MunicipalitiesModule,
     CatalogsModule,
     PagosModule,
-    CuentasBancariasModule
+    CuentasBancariasModule,
+    BancosModule
   ],
   controllers: [],
 })

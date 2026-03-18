@@ -9,7 +9,7 @@ import {
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { User } from 'src/users/entities/user.entity';
-import { CuentaBancaria } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 
 import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
 
@@ -66,9 +66,9 @@ export class Pago {
    * Si medioPago = BANCO | TRANSFERENCIA | CHEQUE,
    * referencia qué cuenta bancaria se usó.
    */
-  @ManyToOne(() => CuentaBancaria, { nullable: true })
+  @ManyToOne(() => CuentasBancarias, { nullable: true })
   @JoinColumn({ name: 'cuentaBancariaId' })
-  cuentaBancaria: CuentaBancaria;
+  cuentaBancaria: CuentasBancarias;
 
   @Column({ nullable: true })
   cuentaBancariaId: string | null;

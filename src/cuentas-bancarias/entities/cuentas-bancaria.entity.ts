@@ -4,7 +4,10 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Banco } from '../../bancos/entities/banco.entity';
 
 export enum TipoCuentaBancaria {
   CORRIENTE = 'corriente',
@@ -17,7 +20,7 @@ export enum TipoCuentaBancaria {
  * para saber exactamente a qué banco/cuenta ingresó o salió el dinero.
  */
 @Entity('cuentas_bancarias')
-export class CuentaBancaria {
+export class CuentasBancarias {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -25,8 +28,9 @@ export class CuentaBancaria {
   @Column({ length: 120 })
   nombre: string;
 
-  @Column({ length: 80 })
-  banco: string;
+  @ManyToOne(() => Banco, { eager: true })
+  @JoinColumn({ name: 'bancoId' })
+  banco: Banco;
 
   @Column({ type: 'enum', enum: TipoCuentaBancaria })
   tipoCuenta: TipoCuentaBancaria;
@@ -45,6 +49,12 @@ export class CuentaBancaria {
 
   @Column({ default: true })
   activa: boolean;
+
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  saldoInicial: number;
+
+  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  saldoActual: number;
 
   @Column({ nullable: true })
   observaciones: string;

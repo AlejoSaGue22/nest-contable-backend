@@ -247,7 +247,7 @@ export const DEFAULT_MENU_ITEMS = [
       {
         title: 'Cuentas Contables',
         icon: '',
-        route: '/panel/contabilidad/cuentas',
+        route: '/panel/contabilidad/cuentas-contables',
         requiredPermission: Permission.MENU_MANAGE,
         order: 0,
         isActive: true,
@@ -255,15 +255,16 @@ export const DEFAULT_MENU_ITEMS = [
         metadata: { badge: null }
       },
       {
-        title: 'Asientos Contables',
+        title: 'Bancos',
         icon: '',
-        route: '/panel/contabilidad/asientos',
+        route: '/panel/contabilidad/bancos',
         requiredPermission: Permission.MENU_MANAGE,
         order: 1,
         isActive: true,
         isVisible: true,
         metadata: { badge: null }
       }
+      
     ]
   },
 ];

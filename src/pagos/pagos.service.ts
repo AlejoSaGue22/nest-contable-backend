@@ -9,7 +9,7 @@ import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entit
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 
-import { CuentaBancaria } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 
@@ -21,8 +21,8 @@ export class PagosService {
     @InjectRepository(Pago)
     private readonly pagoRepository: Repository<Pago>,
 
-    @InjectRepository(CuentaBancaria)
-    private readonly cuentaBancariaRepository: Repository<CuentaBancaria>,
+    @InjectRepository(CuentasBancarias)
+    private readonly cuentaBancariaRepository: Repository<CuentasBancarias>,
 
     @InjectRepository(FacturasVenta)
     private readonly facturaVentaRepository: Repository<FacturasVenta>,
@@ -107,9 +107,9 @@ export class PagosService {
         );
       }
 
-      let cuentaBancaria: CuentaBancaria | null = null;
+      let cuentaBancaria: CuentasBancarias | null = null;
       if (dto.cuentaBancariaId) {
-        cuentaBancaria = await queryRunner.manager.findOne(CuentaBancaria, {
+        cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
           where: { id: dto.cuentaBancariaId, activa: true },
         });
         if (!cuentaBancaria) {
@@ -167,6 +167,15 @@ export class PagosService {
         saldoPendiente: nuevoSaldoPendiente,
         paymentStatus:  nuevoPaymentStatus,
       });
+
+      // ── 8. Actualizar saldo de cuenta bancaria ─────────────────────
+      if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
+        const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
+        if (cta) {
+          cta.saldoActual = Number(cta.saldoActual) + Number(dto.monto);
+          await queryRunner.manager.save(CuentasBancarias, cta);
+        }
+      }
 
       await queryRunner.commitTransaction();
 
@@ -263,9 +272,9 @@ export class PagosService {
         );
       }
 
-      let cuentaBancaria: CuentaBancaria | null = null;
+      let cuentaBancaria: CuentasBancarias | null = null;
       if (dto.cuentaBancariaId) {
-        cuentaBancaria = await queryRunner.manager.findOne(CuentaBancaria, {
+        cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
           where: { id: dto.cuentaBancariaId, activa: true },
         });
         if (!cuentaBancaria) {
@@ -296,6 +305,7 @@ export class PagosService {
         this.logger.log(`Asiento de pago generado: ${asientoId}`);
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de pago: ${asientoError.message}`);
+        
       }
 
       // ── 6. Crear registro de pago ────────────────────────────────────
@@ -328,6 +338,15 @@ export class PagosService {
       // }
 
       await queryRunner.manager.update(FacturaCompra, { id: factura.id }, updatePayload);
+
+      // ── 8. Actualizar saldo de cuenta bancaria ─────────────────────
+      if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
+        const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
+        if (cta) {
+          cta.saldoActual = Number(cta.saldoActual) - Number(dto.monto);
+          await queryRunner.manager.save(CuentasBancarias, cta);
+        }
+      }
 
       await queryRunner.commitTransaction();
 
@@ -386,7 +405,7 @@ export class PagosService {
   // CUENTAS BANCARIAS
   // ═══════════════════════════════════════════════════════════════
 
-  async findCuentasBancarias(): Promise<CuentaBancaria[]> {
+  async findCuentasBancarias(): Promise<CuentasBancarias[]> {
     return this.cuentaBancariaRepository.find({
       where: { activa: true },
       order: { nombre: 'ASC' },

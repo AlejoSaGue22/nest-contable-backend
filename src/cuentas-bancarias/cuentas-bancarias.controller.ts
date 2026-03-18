@@ -22,16 +22,16 @@ export class CuentasBancariasController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.cuentasBancariasService.findOne(+id);
+    return this.cuentasBancariasService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateCuentasBancariaDto: UpdateCuentasBancariaDto) {
-    return this.cuentasBancariasService.update(+id, updateCuentasBancariaDto);
+    return this.cuentasBancariasService.update(id, updateCuentasBancariaDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.cuentasBancariasService.remove(+id);
+    return this.cuentasBancariasService.remove(id);
   }
 }
