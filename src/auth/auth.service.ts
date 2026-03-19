@@ -36,9 +36,6 @@ export class AuthService {
     }
 
     // const isPasswordValid = await bcryptjs.compare(password, user.password);
-    // console.log('isPasswordValid', isPasswordValid);
-    // console.log('password', password);
-    // console.log('user.password', user.password);
 
     // if (!isPasswordValid) {
     //   throw new BadRequestException('Credenciales incorrectas');
@@ -151,6 +148,38 @@ export class AuthService {
     }
   }
 
+  async refreshToken(userId: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['role'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role.name as SystemRole,
+      permissions: user.role.permissions,
+    };
+
+    const token = this.jwtService.sign(payload);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role.name,
+        permissions: user.role.permissions,
+      }
+    };
+  }
+
   private async getJwtToken(payload: JwtPayload) {
     const token = await this.jwtService.signAsync(payload);
     return token;
@@ -159,6 +188,7 @@ export class AuthService {
   async changePassword(userId: string, oldPassword: string, newPassword: string) {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
+      select: ['id', 'password'], // Ensure password is selected
     });
 
     if (!user) {
@@ -176,5 +206,23 @@ export class AuthService {
     return { message: 'Contraseña actualizada exitosamente' };
   }
 
+  async changePasswordByAdmin(userId: string, password: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'password'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    user.password = await bcryptjs.hash(password, 10);
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada exitosamente'
+    };
+  }
 
 }

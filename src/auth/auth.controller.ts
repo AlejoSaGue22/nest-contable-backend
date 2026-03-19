@@ -6,6 +6,7 @@ import { AuthGuard } from './guard/auth/auth.guard';
 import { RequestWithUser } from './interfaces/jwt-payload.interface';
 import { User } from 'src/users/entities/user.entity';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -23,22 +24,21 @@ export class AuthController {
 
   @Get('profile')
   @UseGuards(AuthGuard)
-  async getProfile(@CurrentUser() user: User) {
-    // const profile = await this.authService.getProfile(user.id);
+  async getProfile(@CurrentUser() user: any) {
     return {
       success: true,
-      // data: profile,
+      data: user,
       message: 'Perfil obtenido exitosamente',
     };
   }
 
   @Post('refresh')
   @UseGuards(AuthGuard)
-  async refreshToken(@CurrentUser() user: User) {
-    // const token = await this.authService.refreshToken(user.id);
+  async refreshToken(@CurrentUser() user: any) {
+    const data = await this.authService.refreshToken(user.sub);
     return {
       success: true,
-      // data: token,
+      data: data,
       message: 'Token refrescado exitosamente',
     };
   }
@@ -51,5 +51,23 @@ export class AuthController {
     return { user, token };
   }
 
+  @Patch('change-password')
+  @UseGuards(AuthGuard)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() changePasswordDto: ChangePasswordDto
+  ) {
+    return this.authService.changePassword(
+      user.sub,
+      changePasswordDto.oldPassword,
+      changePasswordDto.newPassword
+    );
+  }
+
+  @Patch('change-password/:id')
+  @UseGuards(AuthGuard)
+  async changePasswordByAdmin(@Param('id') id: string, @Body() password: string ) {
+    return this.authService.changePasswordByAdmin(id, password);
+  }
 
 }

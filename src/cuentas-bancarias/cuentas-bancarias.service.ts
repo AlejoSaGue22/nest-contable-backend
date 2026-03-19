@@ -81,17 +81,23 @@ export class CuentasBancariasService {
         throw new NotFoundException('Cuenta bancaria no encontrada');
       }
 
-      const { nombre, bancoId, numeroCuenta, tipoCuenta, observaciones } = updateCuentasBancariaDto;
-      
-      
+      const { bancoId, ...rest } = updateCuentasBancariaDto;
 
-      // await this.cuentasBancariasRepository.save(cuentaBancaria);
+      if (bancoId) {
+        cuentaBancaria.banco = { id: bancoId } as any;
+      }
+
+      Object.assign(cuentaBancaria, rest);
+
+      await this.cuentasBancariasRepository.save(cuentaBancaria);
 
       return {
         message: 'Cuenta bancaria actualizada exitosamente',
         data: cuentaBancaria
       };
+      
     } catch (error) {
+      if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Error al actualizar la cuenta bancaria');
     }
   }

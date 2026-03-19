@@ -50,10 +50,10 @@ export class CuentasBancarias {
   @Column({ default: true })
   activa: boolean;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2 })
   saldoInicial: number;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2 })
   saldoActual: number;
 
   @Column({ nullable: true })
