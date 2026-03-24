@@ -16,4 +16,5 @@ export class Banco {
 
   @Column({ default: true })
   activa: boolean;
+  
 }

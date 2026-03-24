@@ -31,9 +31,9 @@ import { BancosModule } from './bancos/bancos.module';
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3307,
+      port: 3306,
       username: 'root',
-      password: 'root',
+      password: '',
       database: 'finance_tejo',
       // logging: true,
       autoLoadEntities: true,
