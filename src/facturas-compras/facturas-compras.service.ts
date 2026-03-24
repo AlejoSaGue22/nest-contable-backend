@@ -267,8 +267,7 @@ export class FacturasComprasService {
         // ✅ Validar: no anular si tiene pagos parciales registrados
         if (factura.paymentStatus === PaymentStatus.PARTIAL || factura.paymentStatus === PaymentStatus.PAID) {
             throw new BadRequestException(
-                'No se puede anular una factura de compra con pagos registrados. ' +
-                'Primero anule los pagos correspondientes.',
+                'No se puede anular una factura de compra con pagos registrados.'
             );
         }
         

@@ -237,10 +237,19 @@ export class FacturasVenta {
   /**
    * Verifica si puede ser anulada
    */
-  puedeAnularse(): boolean {
+  puedeAnularseElectronica(): boolean {
     // Solo se pueden anular facturas aceptadas por DIAN
     // mediante nota crédito electrónica
-    return this.status === InvoiceStatus.ACCEPTED;
+    return this.status === InvoiceStatus.ACCEPTED && this.tipoFactura === TipoFactura.ELECTRONICA;
+  }
+
+  /**
+   * Verifica si puede ser anulada
+   */
+  puedeAnularseEstandar(): boolean {
+    // Solo se pueden anular facturas aceptadas por DIAN
+    // mediante nota crédito electrónica
+    return this.status === InvoiceStatus.ACCEPTED && this.tipoFactura === TipoFactura.STANDARD;
   }
 
 

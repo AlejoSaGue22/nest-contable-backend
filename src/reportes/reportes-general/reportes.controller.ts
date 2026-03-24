@@ -27,4 +27,38 @@ export class ReportesController {
   async balanceGeneral(@Query('fecha') fecha: string) {
     return await this.reportesService.generarBalanceGeneral(new Date(fecha));
   }
+
+  // =========================================================================
+  // ENDPOINTS REPORTES AVANZADOS
+  // =========================================================================
+
+  @Get('facturacion-detallada')
+  @Permissions(Permission.REPORT_READ)
+  async facturacionAvanzada(@Query('fechaInicio') inicio: string, @Query('fechaFin') fin: string) {
+    return await this.reportesService.generarReporteFacturacionAvanzada(new Date(inicio), new Date(fin));
+  }
+
+  @Get('conciliacion-dian')
+  @Permissions(Permission.REPORT_READ)
+  async conciliacionDian(@Query('fechaInicio') inicio: string, @Query('fechaFin') fin: string) {
+    return await this.reportesService.generarReporteConciliacionDIAN(new Date(inicio), new Date(fin));
+  }
+
+  @Get('conciliacion-recaudos')
+  @Permissions(Permission.REPORT_READ)
+  async conciliacionRecaudos(@Query('fechaInicio') inicio: string, @Query('fechaFin') fin: string) {
+    return await this.reportesService.generarReporteConciliacionRecaudos(new Date(inicio), new Date(fin));
+  }
+
+  @Get('impuestos-detallado')
+  @Permissions(Permission.REPORT_READ)
+  async impuestosAvanzado(@Query('fechaInicio') inicio: string, @Query('fechaFin') fin: string) {
+    return await this.reportesService.generarReporteImpuestosAvanzado(new Date(inicio), new Date(fin));
+  }
+
+  @Get('dashboard-avanzado')
+  @Permissions(Permission.REPORT_READ)
+  async dashboardAvanzado() {
+    return await this.reportesService.generarDashboardAvanzado();
+  }
 }

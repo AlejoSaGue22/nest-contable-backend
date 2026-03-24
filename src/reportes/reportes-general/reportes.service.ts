@@ -6,6 +6,12 @@ import { AsientoDetalle } from 'src/asientos-contables/entities/asientos-detalle
 import { CuentaContable, TipoCuenta } from 'src/cuentas/entities/cuenta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { BalanceGeneral, EstadoResultados, FlujoCaja } from './entities/reporte.entity';
+import { Between, In } from 'typeorm';
+import { DianStatus, InvoiceStatus, TipoFactura } from 'src/facturas-ventas/enums/factura-venta.enum';
+import { DashboardAvanzadoKPIs, ReporteConciliacionDIAN, ReporteConciliacionRecaudos, ReporteFacturacionAvanzada, ReporteImpuestos } from './dto/reportes-avanzados.dto';
+import { ItemsFacturaVenta } from 'src/facturas-ventas/entities/items-facturas-venta.entity';
+import { Pago } from 'src/pagos/entities/pago.entity';
+import { TipoPago } from 'src/pagos/enums/pago.enum';
 
 @Injectable()
 export class ReportesService {
@@ -23,6 +29,12 @@ export class ReportesService {
 
     @InjectRepository(FacturaCompra)
     private facturaCompraRepository: Repository<FacturaCompra>,
+
+    @InjectRepository(ItemsFacturaVenta)
+    private itemsFacturaRepository: Repository<ItemsFacturaVenta>,
+
+    @InjectRepository(Pago)
+    private pagoRepository: Repository<Pago>,
   ) { }
 
 
@@ -350,5 +362,342 @@ export class ReportesService {
     } else {
       return totalCredito - totalDebito;
     }
+  }
+
+  // =========================================================================
+  // REPORTES AVANZADOS
+  // =========================================================================
+
+  /**
+   * Reporte Detallado de Facturación (Electronica vs Standard)
+   */
+  async generarReporteFacturacionAvanzada(fechaInicio: Date, fechaFin: Date): Promise<ReporteFacturacionAvanzada> {
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    const facturas = await this.facturaRepository.find({
+      where: {
+        createdAt: Between(fechaInicio, fin)
+      },
+      relations: ['client'],
+      order: { createdAt: 'ASC' }
+    });
+
+    const electronicas = facturas.filter(f => f.tipoFactura === TipoFactura.ELECTRONICA);
+    const standard = facturas.filter(f => f.tipoFactura === TipoFactura.STANDARD);
+
+    // Top Clientes
+    const clientesMap = new Map<string, { nombre: string; cant: number; monto: number }>();
+    facturas.forEach(f => {
+      const key = f.clientId;
+      const data = clientesMap.get(key) || { nombre: f.client?.nombre || 'Desconocido', cant: 0, monto: 0 };
+      data.cant++;
+      data.monto += Number(f.total);
+      clientesMap.set(key, data);
+    });
+
+    const topClientes = Array.from(clientesMap.entries())
+      .map(([id, data]) => ({
+        clienteId: id,
+        clienteNombre: data.nombre,
+        cantidadFacturas: data.cant,
+        montoTotal: data.monto
+      }))
+      .sort((a, b) => b.montoTotal - a.montoTotal)
+      .slice(0, 10);
+
+    // Ventas por día
+    const ventasDiaMap = new Map<string, { el: number; st: number; total: number }>();
+    facturas.forEach(f => {
+      const dia = f.createdAt.toISOString().split('T')[0];
+      const data = ventasDiaMap.get(dia) || { el: 0, st: 0, total: 0 };
+      if (f.tipoFactura === TipoFactura.ELECTRONICA) data.el++;
+      else data.st++;
+      data.total += Number(f.total);
+      ventasDiaMap.set(dia, data);
+    });
+
+    const ventasPorDia = Array.from(ventasDiaMap.entries())
+      .map(([fecha, data]) => ({
+        fecha,
+        cantidadElectronicas: data.el,
+        cantidadStandard: data.st,
+        montoTotal: data.total
+      }))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+    return {
+      periodo: { fechaInicio, fechaFin },
+      resumen: {
+        totalFacturas: facturas.length,
+        totalElectronicas: electronicas.length,
+        totalStandard: standard.length,
+        montoTotal: facturas.reduce((s, f) => s + Number(f.total), 0),
+        montoElectronicas: electronicas.reduce((s, f) => s + Number(f.total), 0),
+        montoStandard: standard.reduce((s, f) => s + Number(f.total), 0),
+        ivaTotal: facturas.reduce((s, f) => s + Number(f.iva), 0)
+      },
+      electronicas: {
+        emitidas: electronicas.length,
+        aceptadas: electronicas.filter(f => f.dianStatus === DianStatus.ACCEPTED).length,
+        rechazadas: electronicas.filter(f => f.dianStatus === DianStatus.REJECTED).length,
+        pendientes: electronicas.filter(f => [DianStatus.PENDING, DianStatus.SENT, DianStatus.PROCESSING].includes(f.dianStatus)).length,
+        tasaAceptacion: electronicas.length > 0 ? (electronicas.filter(f => f.dianStatus === DianStatus.ACCEPTED).length / electronicas.length) * 100 : 0,
+        montoPromedio: electronicas.length > 0 ? electronicas.reduce((s, f) => s + Number(f.total), 0) / electronicas.length : 0
+      },
+      standard: {
+        emitidas: standard.length,
+        montoPromedio: standard.length > 0 ? standard.reduce((s, f) => s + Number(f.total), 0) / standard.length : 0,
+        totalPagado: standard.reduce((s, f) => s + Number(f.totalPagado), 0),
+        saldoPendiente: standard.reduce((s, f) => s + Number(f.saldoPendiente), 0)
+      },
+      topClientes,
+      ventasPorDia
+    };
+  }
+
+  /**
+   * Conciliación DIAN (Ventas vs Contabilidad)
+   */
+  async generarReporteConciliacionDIAN(fechaInicio: Date, fechaFin: Date): Promise<ReporteConciliacionDIAN> {
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    // Facturas Electrónicas Aceptadas
+    const electronicasAceptadas = await this.facturaRepository.find({
+      where: {
+        tipoFactura: TipoFactura.ELECTRONICA,
+        dianStatus: DianStatus.ACCEPTED,
+        createdAt: Between(fechaInicio, fin)
+      }
+    });
+
+    const montoAcceptedDIAN = electronicasAceptadas.reduce((s, f) => s + Number(f.total), 0);
+
+    // Saldo en Cuentas de Ingreso (4135, 4155)
+    const codigosIngreso = ['4135', '4155'];
+    const cuentasIngreso = await this.cuentaRepository.find({
+      where: { codigo: In(codigosIngreso) }
+    });
+
+    const detallePorCuenta = await Promise.all(
+      cuentasIngreso.map(async (c) => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: await this.calcularSaldoCuenta(c.id, fechaInicio, fin)
+      }))
+    );
+
+    const saldoCuentasIngreso = detallePorCuenta.reduce((s, c) => s + c.saldo, 0);
+
+    // Detección de Standard que expliquen la diferencia
+    const standardTotal = await this.facturaRepository.find({
+      where: {
+        tipoFactura: TipoFactura.STANDARD,
+        createdAt: Between(fechaInicio, fin)
+      }
+    }).then(list => list.reduce((s, f) => s + Number(f.subtotal), 0)); // Comparar subtotal usualmente es mejor si cuentas de ingreso no incluyen IVA
+
+    const diferencia = saldoCuentasIngreso - montoAcceptedDIAN;
+    const cuadra = Math.abs(diferencia - standardTotal) < 100; // Tolerancia por redondeo o precisión decimal
+
+    return {
+      periodo: { fechaInicio, fechaFin },
+      facturasElectronicas: {
+        cantidad: electronicasAceptadas.length,
+        montoDebito: electronicasAceptadas.reduce((s, f) => s + Number(f.subtotal), 0),
+        montoAcceptedDIAN
+      },
+      contabilidad: {
+        saldoCuentasIngreso,
+        detallePorCuenta
+      },
+      diferencia,
+      cuadra,
+      explicacion: cuadra ? 'La diferencia coincide con las facturas estándar registradas.' : 'Existe una diferencia no explicada por facturas estándar.'
+    };
+  }
+
+  /**
+   * Conciliación de Recaudos (Sistema vs Contabilidad Bancaria)
+   */
+  async generarReporteConciliacionRecaudos(fechaInicio: Date, fechaFin: Date): Promise<ReporteConciliacionRecaudos> {
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    // Total Pagos registrados en plataforma (Recaudos/Cobros)
+    const pagos = await this.pagoRepository.find({
+      where: {
+        tipo: TipoPago.COBRO,
+        fecha: Between(fechaInicio, fin)
+      }
+    });
+
+    const totalPagosRegistrados = pagos.reduce((s, p) => s + Number(p.monto), 0);
+
+    // Total Movimientos en Cuenta 1110 (Bancos) - Solo Débitos (Entradas)
+    const cuentaBancos = await this.cuentaRepository.findOne({ where: { codigo: '1110' } });
+    let totalMovimientosBancos = 0;
+    if (cuentaBancos) {
+      const result = await this.asientoDetalleRepository
+        .createQueryBuilder('d')
+        .leftJoin('d.asiento', 'a')
+        .where('d.cuentaId = :id', { id: cuentaBancos.id })
+        .andWhere('a.fecha BETWEEN :ini AND :fin', { ini: fechaInicio, fin })
+        .select('SUM(d.debito)', 'total')
+        .getRawOne();
+      totalMovimientosBancos = parseFloat(result.total || '0');
+    }
+
+    // Detalle por medio
+    const detallePorMedioMap = new Map<string, number>();
+    pagos.forEach(p => {
+      detallePorMedioMap.set(p.medioPago, (detallePorMedioMap.get(p.medioPago) || 0) + Number(p.monto));
+    });
+
+    const detallePorMedio = Array.from(detallePorMedioMap.entries()).map(([medio, monto]) => ({
+      medio: medio as any,
+      monto
+    }));
+
+    return {
+      periodo: { fechaInicio, fechaFin },
+      totalPagosRegistrados,
+      totalMovimientosBancos,
+      diferencia: totalPagosRegistrados - totalMovimientosBancos,
+      cuadra: Math.abs(totalPagosRegistrados - totalMovimientosBancos) < 1,
+      detallePorMedio
+    };
+  }
+
+  /**
+   * Reporte de Impuestos IVA Detallado
+   */
+  async generarReporteImpuestosAvanzado(fechaInicio: Date, fechaFin: Date): Promise<ReporteImpuestos> {
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    const facturas = await this.facturaRepository.find({
+      where: {
+        createdAt: Between(fechaInicio, fin),
+        status: In([InvoiceStatus.ACCEPTED, InvoiceStatus.ISSUED, InvoiceStatus.PAID])
+      },
+      relations: ['items']
+    });
+
+    const tarifaMap = new Map<number, { base: number; iva: number; cant: number }>();
+    let baseEl = 0, ivaEl = 0;
+    let baseSt = 0, ivaSt = 0;
+
+    facturas.forEach(f => {
+      f.items?.forEach(item => {
+        const rate = Number(item.iva);
+        const base = Number(item.subtotal);
+        const iva = Number(item.valor_iva);
+
+        const data = tarifaMap.get(rate) || { base: 0, iva: 0, cant: 0 };
+        data.base += base;
+        data.iva += iva;
+        data.cant++;
+        tarifaMap.set(rate, data);
+
+        if (f.tipoFactura === TipoFactura.ELECTRONICA) {
+          baseEl += base;
+          ivaEl += iva;
+        } else {
+          baseSt += base;
+          ivaSt += iva;
+        }
+      });
+    });
+
+    const desglosePorTarifa = Array.from(tarifaMap.entries()).map(([rate, d]) => ({
+      tarifa: rate,
+      base: d.base,
+      iva: d.iva,
+      cantidadItems: d.cant
+    })).sort((a,b) => a.tarifa - b.tarifa);
+
+    return {
+      periodo: { fechaInicio, fechaFin },
+      totalIVAGenerado: facturas.reduce((s, f) => s + Number(f.iva), 0),
+      desglosePorTarifa,
+      porTipoFactura: {
+        electronicas: { base: baseEl, iva: ivaEl },
+        standard: { base: baseSt, iva: ivaSt }
+      }
+    };
+  }
+
+  /**
+   * Dashboard Avanzado con Comparativa
+   */
+  async generarDashboardAvanzado(): Promise<DashboardAvanzadoKPIs> {
+    const ahora = new Date();
+    const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const finMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
+
+    // Datos Hoy
+    const facturasHoy = await this.facturaRepository.find({
+      where: { createdAt: Between(hoyInicio, ahora) }
+    });
+    const montoHoy = facturasHoy.reduce((s,f) => s + Number(f.total), 0);
+    const rechazoHoy = facturasHoy.filter(f => f.dianStatus === DianStatus.REJECTED).length;
+
+    // Datos Semana (últimos 7 días)
+    const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const hace14Dias = new Date(ahora.getTime() - 14 * 24 * 60 * 60 * 1000);
+    
+    const facturasSemana = await this.facturaRepository.find({ where: { createdAt: Between(hace7Dias, ahora) } });
+    const facturasSemanaAnt = await this.facturaRepository.find({ where: { createdAt: Between(hace14Dias, hace7Dias) } });
+    
+    const montoSemana = facturasSemana.reduce((s,f) => s + Number(f.total), 0);
+    const montoSemanaAnt = facturasSemanaAnt.reduce((s,f) => s + Number(f.total), 0);
+    const crecimientoSem = montoSemanaAnt > 0 ? ((montoSemana - montoSemanaAnt) / montoSemanaAnt) * 100 : 0;
+
+    // Datos Mes
+    const iniMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    const iniMesAnt = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+    const finMesAnt = new Date(ahora.getFullYear(), ahora.getMonth(), 0);
+
+    const facturasMes = await this.facturaRepository.find({ where: { createdAt: Between(iniMes, ahora) } });
+    const facturasMesAnt = await this.facturaRepository.find({ where: { createdAt: Between(iniMesAnt, finMesAnt) } });
+
+    const montoMes = facturasMes.reduce((s,f) => s + Number(f.total), 0);
+    const montoMesAnt = facturasMesAnt.reduce((s,f) => s + Number(f.total), 0);
+    const crecimientoMes = montoMesAnt > 0 ? ((montoMes - montoMesAnt) / montoMesAnt) * 100 : 0;
+
+    // Proyeccion
+    const diaActual = ahora.getDate();
+    const totalDiasMes = finMes.getDate();
+    const proyeccion = (montoMes / diaActual) * totalDiasMes;
+
+    // Alertas
+    const facturasRechazadas = await this.facturaRepository.count({ where: { dianStatus: DianStatus.REJECTED } });
+    const erroresAsiento = await this.facturaRepository.count({ where: { status: InvoiceStatus.ERROR_ASIENTO } });
+
+    return {
+      hoy: {
+        cantidad: facturasHoy.length,
+        total: montoHoy,
+        tasaRechazo: facturasHoy.length > 0 ? (rechazoHoy / facturasHoy.length) * 100 : 0
+      },
+      semana: {
+        cantidad: facturasSemana.length,
+        total: montoSemana,
+        crecimiento: crecimientoSem
+      },
+      mes: {
+        cantidad: facturasMes.length,
+        total: montoMes,
+        proyeccionFinMes: proyeccion,
+        crecimiento: crecimientoMes
+      },
+      alertas: {
+        facturasRechazadas,
+        saldosVencidos: 0, // TODO: Implementar lógica de vencimiento
+        erroresAsiento
+      }
+    };
   }
 }

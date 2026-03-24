@@ -6,9 +6,13 @@ import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entit
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { AsientoDetalle } from 'src/asientos-contables/entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { Articulo } from 'src/articulos/entities/articulos.entity';
+import { ItemsFacturaVenta } from 'src/facturas-ventas/entities/items-facturas-venta.entity';
+import { Pago } from 'src/pagos/entities/pago.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FacturasVenta, FacturaCompra, AsientoDetalle, CuentaContable])],
+  imports: [TypeOrmModule.forFeature([FacturasVenta, FacturaCompra, AsientoDetalle, CuentaContable, 
+                          Articulo, ItemsFacturaVenta, Pago])],
   controllers: [ReportesController],
   providers: [ReportesService],
   exports: [ReportesService],

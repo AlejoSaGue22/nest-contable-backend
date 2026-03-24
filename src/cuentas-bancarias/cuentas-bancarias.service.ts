@@ -85,11 +85,10 @@ export class CuentasBancariasService {
 
       if (bancoId) {
         cuentaBancaria.banco = { id: bancoId } as any;
+        
       }
 
-      Object.assign(cuentaBancaria, rest);
-
-      await this.cuentasBancariasRepository.save(cuentaBancaria);
+      await this.cuentasBancariasRepository.update(id, rest);
 
       return {
         message: 'Cuenta bancaria actualizada exitosamente',

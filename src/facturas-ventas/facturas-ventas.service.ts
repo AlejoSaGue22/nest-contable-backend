@@ -450,8 +450,14 @@ export class FacturasVentasService {
 
   async anular(id: string, motivo: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
-    if (!factura.puedeAnularse()) {
-      throw new BadRequestException('No se puede anular esta factura.');
+    if (factura.tipoFactura === TipoFactura.ELECTRONICA) {
+      if (!factura.puedeAnularseElectronica()) {
+        throw new BadRequestException('No se puede anular esta factura.');
+      }
+    } else {
+      if (!factura.puedeAnularseEstandar()) {
+        throw new BadRequestException('No se puede anular esta factura.');
+      }
     }
     
     try {
