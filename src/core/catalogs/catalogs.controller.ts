@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { CatalogsService } from './catalogs.service';
+import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 
 @Controller('catalogs')
 export class CatalogsController {
@@ -26,7 +27,14 @@ export class CatalogsController {
     }
 
     @Get('categories-articles')
-    findAllCategoriesArticles() {
-        return this.catalogsService.findAllCategoriesArticles();
+    findAllCategoriesArticles(@Query() pagination: PaginatioDto) {
+        return this.catalogsService.findAllCategoriesArticles(pagination);
     }
+
+    @Get('categories-articles/:id')
+    findCategoryArticleById(@Param('id') id: string) {
+        // return this.catalogsService.findCategoryArticleById(id);
+    }
+
+
 }

@@ -7,6 +7,7 @@ import { CanalVenta } from './entities/canal-venta.entity';
 import { UnidadMedida } from './entities/unidad-medida.entity';
 import { CategoriaArticulo } from './entities/categorias-articulos-entity';
 import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
+import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 
 @Injectable()
 export class CatalogsService {
@@ -41,18 +42,24 @@ export class CatalogsService {
         return this.unidadMedidaRepo.find({ where: { state: true } });
     }
 
-    async findAllCategoriesArticles() {
-        const data = await this.categoriasArticulosRepo.find({ where: { state: true } });
+    async findAllCategoriesArticles(pagination: PaginatioDto) {
+        const { limit = 10, offset = 0 } = pagination;
 
-        const data2 = data.map((item) => {
-            return {
-                codigo: item.codigo,
-                nombre: item.nombre,
-                tipo: item.tipo,
-                descripcion: item.descripcion,
-            };
+        const data = await this.categoriasArticulosRepo.find({
+            where: { state: true },
+            relations: ['cuentaContable', 'cuentaIva'],
+            order: { nombre: 'ASC' },
+            take: limit,
+            skip: offset,
         });
-        return data2;
+
+        const count = await this.categoriasArticulosRepo.count({ where: { state: true } });
+
+        return {
+            count: count,
+            pages: Math.ceil(count / limit),
+            categoriesArticles: data
+        };
     }
 
     async seedAll() {

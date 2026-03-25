@@ -20,7 +20,7 @@ export class CuentaContable {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column()
+    @Column({ unique: true })
     codigo: string;
 
     @Column()

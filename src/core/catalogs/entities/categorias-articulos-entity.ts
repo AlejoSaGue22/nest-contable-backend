@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('categorias_articulos')
 export class CategoriaArticulo {
@@ -14,8 +15,13 @@ export class CategoriaArticulo {
     @Column()
     tipo: string;
 
-    @Column()
-    cuentaContableCodigo: string;
+    @ManyToOne(() => CuentaContable)
+    @JoinColumn({ name: 'cuentaContableCodigo', referencedColumnName: 'codigo' })
+    cuentaContable: CuentaContable;
+
+    @ManyToOne(() => CuentaContable)
+    @JoinColumn({ name: 'cuentaIvaCodigo', referencedColumnName: 'codigo' })
+    cuentaIva: CuentaContable;
 
     @Column()
     cuentaIvaCodigo: string;
