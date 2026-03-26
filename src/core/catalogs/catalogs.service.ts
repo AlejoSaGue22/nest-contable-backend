@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { TipoDocumento } from './entities/tipo-documento.entity';
@@ -8,6 +8,10 @@ import { UnidadMedida } from './entities/unidad-medida.entity';
 import { CategoriaArticulo } from './entities/categorias-articulos-entity';
 import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { CreateCategoryArticleDto } from './dtos/create-category.dto';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { UpdateCategoryArticleDto } from './dtos/update-category.dto';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class CatalogsService {
@@ -24,6 +28,8 @@ export class CatalogsService {
         private unidadMedidaRepo: Repository<UnidadMedida>,
         @InjectRepository(CategoriaArticulo)
         private categoriasArticulosRepo: Repository<CategoriaArticulo>,
+        @InjectRepository(CuentaContable)
+        private cuentaContableRepo: Repository<CuentaContable>,
     ) { }
 
     async findAllDocumentTypes() {
@@ -60,6 +66,71 @@ export class CatalogsService {
             pages: Math.ceil(count / limit),
             categoriesArticles: data
         };
+    }
+
+    async findCategoryArticleById(id: string) {
+        const category = await this.categoriasArticulosRepo.findOne({
+            where: { id, state: true },
+            relations: ['cuentaContable', 'cuentaIva']
+        });
+
+        if (!category) {
+            throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
+        }
+
+        return category;
+    }
+
+    async createCategoryArticle(createCategoryArticleDto: CreateCategoryArticleDto) {
+        const { nombre, cuentaContable, cuentaIva, ...rest } = createCategoryArticleDto;
+
+        const cContable = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaContable } });
+        if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContable} no encontrada`);
+
+        const cIva = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaIva } });
+        if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIva} no encontrada`);
+
+        const codigo = this.generarCodigo(nombre);
+
+        const newCategory = this.categoriasArticulosRepo.create({
+            ...rest,
+            nombre,
+            codigo,
+            cuentaContable: cContable,
+            cuentaIva: cIva,
+            state: true
+        });
+
+        return await this.categoriasArticulosRepo.save(newCategory);
+    }
+
+    async updateCategoryArticle(id: string, updateCategoryArticleDto: UpdateCategoryArticleDto) {
+        const category = await this.findCategoryArticleById(id);
+
+        const { cuentaContable, cuentaIva, ...rest } = updateCategoryArticleDto;
+
+        if (cuentaContable) {
+            const cContable = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaContable } });
+            if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContable} no encontrada`);
+            category.cuentaContable = cContable;
+        }
+
+        if (cuentaIva) {
+            const cIva = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaIva } });
+            if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIva} no encontrada`);
+            category.cuentaIva = cIva;
+        }
+
+        Object.assign(category, rest);
+
+        return await this.categoriasArticulosRepo.save(category);
+    }
+
+    async removeCategoryArticle(id: string) {
+        const category = await this.findCategoryArticleById(id);
+        category.state = false;
+        await this.categoriasArticulosRepo.save(category);
+        return { message: 'Categoría eliminada correctamente' };
     }
 
     async seedAll() {
@@ -155,6 +226,8 @@ export class CatalogsService {
         this.logger.log('✔ Unidades de medida sincronizadas');
     }
 
+    // Categorias de articulos
+
     private async seedCategoriesArticles() {
         const data = Object.values(CATEGORIAS_ARTICULOS);
 
@@ -168,5 +241,10 @@ export class CatalogsService {
             }
         }
         this.logger.log('✔ Categorías de artículos sincronizadas');
+    }
+
+    private generarCodigo(nombre: string): string {
+        const codigo = nombre.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3);
+        return codigo;
     }
 }

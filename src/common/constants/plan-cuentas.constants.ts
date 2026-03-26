@@ -21,7 +21,7 @@ export const PLAN_CUENTAS_MINIMO = [
         tipo: TipoCuenta.PASIVO,
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -39,7 +39,7 @@ export const PLAN_CUENTAS_MINIMO = [
         tipo: TipoCuenta.INGRESO,
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -48,7 +48,7 @@ export const PLAN_CUENTAS_MINIMO = [
         tipo: TipoCuenta.GASTO,
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -57,7 +57,7 @@ export const PLAN_CUENTAS_MINIMO = [
         tipo: TipoCuenta.COSTO,
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
 
@@ -81,7 +81,7 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 2,
         cuentaPadreId: '1',
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -111,7 +111,7 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 2,
         cuentaPadreId: '2',
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -141,7 +141,7 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 2,
         cuentaPadreId: '4',
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
     {
@@ -161,7 +161,7 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 2,
         cuentaPadreId: '6',
-        aceptaMovimiento: true,
+        aceptaMovimiento: false,
         isActive: true
     },
 

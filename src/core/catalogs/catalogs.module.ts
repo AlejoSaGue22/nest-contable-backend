@@ -7,6 +7,7 @@ import { MetodoPago } from './entities/metodo-pago.entity';
 import { CanalVenta } from './entities/canal-venta.entity';
 import { UnidadMedida } from './entities/unidad-medida.entity';
 import { CategoriaArticulo } from './entities/categorias-articulos-entity';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { CategoriaArticulo } from './entities/categorias-articulos-entity';
             CanalVenta,
             UnidadMedida,
             CategoriaArticulo,
+            CuentaContable,
         ]),
     ],
     providers: [CatalogsService],
