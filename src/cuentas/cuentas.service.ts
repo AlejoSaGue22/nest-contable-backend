@@ -95,6 +95,58 @@ export class CuentasService {
     return Array.from(accountMap.values()).sort((a, b) => a.codigo.localeCompare(b.codigo));
   }
 
+  async seedCuentasBasicasSincronizacion(dataSource: DataSource) {
+    const repository = dataSource.getRepository(CuentaContable);
+
+    console.log('📊 Sincronizando plan de cuentas básico...');
+
+    const cuentasMap = new Map<string, CuentaContable>();
+
+    // 1️⃣ Sincronizar clases (Nivel 1)
+    const clasesData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel === 1);
+    for (const data of clasesData) {
+      let cuenta = await repository.findOne({ where: { codigo: data.codigo } });
+      
+      if (cuenta) {
+        // Actualizar si existe (especialmente aceptaMovimiento)
+        await repository.update({ id: cuenta.id }, { 
+          aceptaMovimiento: data.aceptaMovimiento,
+          nombre: data.nombre 
+        });
+        cuenta = await repository.findOne({ where: { id: cuenta.id } });
+      } else {
+        cuenta = repository.create(data);
+        await repository.save(cuenta);
+      }
+      cuentasMap.set(data.codigo, cuenta!);
+    }
+
+    // 2️⃣ Sincronizar grupos e hijas (Nivel > 1)
+    const hijasData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1);
+    for (const data of hijasData) {
+      const { cuentaPadreId, ...rest } = data;
+      let cuenta = await repository.findOne({ where: { codigo: data.codigo } });
+
+      if (cuenta) {
+        // Actualizar valores clave
+        await repository.update({ id: cuenta.id }, { 
+          aceptaMovimiento: data.aceptaMovimiento,
+          nombre: data.nombre,
+          descripcion: data.descripcion 
+        });
+      } else {
+        cuenta = repository.create({
+          ...rest,
+          cuentaPadre: cuentasMap.get(cuentaPadreId!),
+        });
+        await repository.save(cuenta);
+      }
+      cuentasMap.set(data.codigo, cuenta!);
+    }
+
+    console.log('✅ Plan de cuentas básico sincronizado');
+  }
+
   async seedCuentasBasicas(dataSource: DataSource) {
     const repository = dataSource.getRepository(CuentaContable);
 
