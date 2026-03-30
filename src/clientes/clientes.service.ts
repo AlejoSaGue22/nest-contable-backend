@@ -64,7 +64,11 @@ export class ClientesService {
     }
 
     const cliente = await this.clientesRepository.findOne({
-      where: { id }
+      where: { id },
+      relations: {
+        tipoDocumentoRel: true,
+        ciudadRel: true
+      }
     });
 
     if (!cliente) {

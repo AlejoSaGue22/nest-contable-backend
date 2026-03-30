@@ -30,6 +30,9 @@ export class Proveedor {
     nombre: string;
 
     @Column()
+    apellido: string;
+
+    @Column()
     email: string;
 
     @Column()

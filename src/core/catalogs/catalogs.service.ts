@@ -82,13 +82,16 @@ export class CatalogsService {
     }
 
     async createCategoryArticle(createCategoryArticleDto: CreateCategoryArticleDto) {
-        const { nombre, cuentaContable, cuentaIva, ...rest } = createCategoryArticleDto;
+        const { nombre, cuentaContableId, cuentaIvaId, ...rest } = createCategoryArticleDto;
 
-        const cContable = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaContable } });
-        if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContable} no encontrada`);
+        const category = await this.categoriasArticulosRepo.findOne({ where: { nombre } });
+        if (category) throw new BadRequestException(`Categoría ${nombre} ya existe`);   
 
-        const cIva = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaIva } });
-        if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIva} no encontrada`);
+        const cContable = await this.cuentaContableRepo.findOne({ where: { id: cuentaContableId } });
+        if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContableId} no encontrada`);
+
+        const cIva = await this.cuentaContableRepo.findOne({ where: { id: cuentaIvaId } });
+        if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIvaId} no encontrada`);
 
         const codigo = this.generarCodigo(nombre);
 
@@ -107,17 +110,17 @@ export class CatalogsService {
     async updateCategoryArticle(id: string, updateCategoryArticleDto: UpdateCategoryArticleDto) {
         const category = await this.findCategoryArticleById(id);
 
-        const { cuentaContable, cuentaIva, ...rest } = updateCategoryArticleDto;
+        const { cuentaContableId, cuentaIvaId, ...rest } = updateCategoryArticleDto;
 
-        if (cuentaContable) {
-            const cContable = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaContable } });
-            if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContable} no encontrada`);
+        if (cuentaContableId) {
+            const cContable = await this.cuentaContableRepo.findOne({ where: { id: cuentaContableId } });
+            if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContableId} no encontrada`);
             category.cuentaContable = cContable;
         }
 
-        if (cuentaIva) {
-            const cIva = await this.cuentaContableRepo.findOne({ where: { codigo: cuentaIva } });
-            if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIva} no encontrada`);
+        if (cuentaIvaId) {
+            const cIva = await this.cuentaContableRepo.findOne({ where: { id: cuentaIvaId } });
+            if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIvaId} no encontrada`);
             category.cuentaIva = cIva;
         }
 
@@ -244,7 +247,7 @@ export class CatalogsService {
     }
 
     private generarCodigo(nombre: string): string {
-        const codigo = nombre.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3);
+        const codigo = nombre.toLowerCase().replace(/[^a-z]/g, '_');
         return codigo;
     }
 }

@@ -30,7 +30,7 @@ export class UsersService {
 
     // Verificar rol
     const role = await this.rolesRepository.findOne({
-      where: { id: createUserDto.roleId },
+      where: { id: createUserDto.role },
     });
 
     if (!role) {
@@ -51,16 +51,13 @@ export class UsersService {
 
     const user = this.usersRepository.create({
       ...createUserDto,
+      fullName: `${createUserDto.firstName} ${createUserDto.lastName}`,
       password: hashedPassword,
       role,
-      isActive: true,
+      isActive: createUserDto.isActive ?? true,
     });
 
     return await this.usersRepository.save(user);
-  }
-
-  async save(createUserDto: CreateUserDto) {
-    return await this.usersRepository.save(createUserDto);
   }
 
   async findAll(page: number = 1, limit: number = 10, search?: string) {
@@ -92,7 +89,6 @@ export class UsersService {
       },
     };
   }
-
 
   async findOne(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({
@@ -135,9 +131,9 @@ export class UsersService {
     const user = await this.findOne(id);
 
     // Verificar si se está actualizando el rol
-    if (updateUserDto.roleId && updateUserDto.roleId !== user.roleId) {
+    if (updateUserDto.role && updateUserDto.role !== user.roleId) {
       const newRole = await this.rolesRepository.findOne({
-        where: { id: updateUserDto.roleId },
+        where: { id: updateUserDto.role },
       });
 
       if (!newRole) {

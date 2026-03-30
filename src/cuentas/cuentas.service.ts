@@ -103,15 +103,16 @@ export class CuentasService {
     const cuentasMap = new Map<string, CuentaContable>();
 
     // 1️⃣ Sincronizar clases (Nivel 1)
-    const clasesData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel === 1);
-    for (const data of clasesData) {
+    const clasesData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1);
+    for (const data of PLAN_CUENTAS_MINIMO) {
       let cuenta = await repository.findOne({ where: { codigo: data.codigo } });
       
       if (cuenta) {
         // Actualizar si existe (especialmente aceptaMovimiento)
         await repository.update({ id: cuenta.id }, { 
           aceptaMovimiento: data.aceptaMovimiento,
-          nombre: data.nombre 
+          nombre: data.nombre,
+          nivel: data.nivel
         });
         cuenta = await repository.findOne({ where: { id: cuenta.id } });
       } else {

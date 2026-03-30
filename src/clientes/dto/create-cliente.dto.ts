@@ -10,9 +10,9 @@ export class CreateClienteDto {
     // @IsNotEmpty()
     apellido: string;
 
-    @IsString()
+    @IsNumber()
     @IsNotEmpty()
-    tipoDocumento: string;
+    tipoDocumento: number;
 
     @IsString()
     @IsNotEmpty()
@@ -34,9 +34,9 @@ export class CreateClienteDto {
     @IsNotEmpty()
     direccion: string;
 
-    @IsString()
+    @IsNumber()
     @IsNotEmpty()
-    ciudad: string;
+    ciudad: number;
 
     @IsString()
     @MaxLength(10)

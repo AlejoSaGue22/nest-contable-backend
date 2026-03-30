@@ -72,7 +72,7 @@ export class MenuService {
     // Asegurar que permissions sea un arreglo para evitar error en .includes
     const authPermissions = Array.isArray(permissions) ? permissions : [];
 
-    console.log(authPermissions);
+    // console.log(authPermissions);
 
     return items
       .filter(item => item && item.isActive && item.isVisible)

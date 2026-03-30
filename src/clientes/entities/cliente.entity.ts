@@ -15,7 +15,7 @@ export class Cliente {
     apellido: string;
 
     @Column()
-    tipoDocumento: string;
+    tipoDocumento: number;
 
     @ManyToOne(() => TipoDocumento)
     @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'id' })
@@ -41,7 +41,7 @@ export class Cliente {
     ciudadRel: Municipality;
 
     @Column()
-    ciudad: string;
+    ciudad: number;
 
     @Column()
     telefono: string;

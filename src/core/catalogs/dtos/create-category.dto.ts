@@ -12,11 +12,11 @@ export class CreateCategoryArticleDto {
 
     @IsString()
     @IsNotEmpty()
-    cuentaContable: string;
+    cuentaContableId: string;
 
     @IsString()
     @IsNotEmpty()
-    cuentaIva: string;
+    cuentaIvaId: string;
 
     @IsString()
     @IsOptional()
