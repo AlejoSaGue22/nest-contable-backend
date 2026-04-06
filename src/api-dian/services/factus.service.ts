@@ -252,7 +252,7 @@ export class FactusService {
                 discount_rate: item.discount || 0,
                 price: item.unitPrice,
                 tax_rate: item.iva.toString(),
-                unit_measure_id: 70, // 70 = "unidad" (código 94)
+                unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
                 standard_code_id: 1, // 1 = Estándar del contribuyente (999)
                 is_excluded: 0, // 0 = No excluido de IVA
                 tribute_id: 1, // 1 = IVA (código 01)
@@ -485,7 +485,7 @@ export class FactusService {
                 discount_rate: 0,
                 price: item.valorUnitario,
                 tax_rate: (item.porcentajeIVA || 0).toString(),
-                unit_measure_id: 70, // unidad
+                unit_measure_id: item.articulo.unidadmedida, // unidad
                 standard_code_id: 1, // estandar
                 is_excluded: 0,
                 tribute_id: 1, // IVA

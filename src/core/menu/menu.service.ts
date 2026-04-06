@@ -9,8 +9,9 @@ import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MenuItem } from './entities/menu.entity';
-import { In, IsNull, TreeRepository } from 'typeorm';
-import { Permission, ROLE_PERMISSIONS } from 'src/common/constants/roles.constants';
+import { Permission as PermissionEntity } from '../roles/entities/permission.entity';
+import { In, IsNull, Repository, TreeRepository } from 'typeorm';
+import { ROLE_PERMISSIONS } from 'src/common/constants/roles.constants';
 import { MenuSeedItem } from './interfaces/menu-seed.interface';
 import { DEFAULT_MENU_ITEMS } from 'src/common/constants/menu.constants';
 import { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
@@ -22,6 +23,8 @@ export class MenuService {
   constructor(
     @InjectRepository(MenuItem)
     private menuItemRepository: TreeRepository<MenuItem>,
+    @InjectRepository(PermissionEntity)
+    private permissionRepository: Repository<PermissionEntity>,
   ) {}
 
   // ══════════════════════════════════════════════════════════════════
@@ -43,8 +46,24 @@ export class MenuService {
       createDto.requiredPermission = `menu:auto:${this.generateSlug(createDto.title)}`;
     }
 
+    // Asegurar que el permiso existe en la tabla de Permission
+    await this.ensurePermissionExists(createDto.requiredPermission, createDto.title);
+
     const menuItem = this.menuItemRepository.create({ ...createDto, parent });
     return await this.menuItemRepository.save(menuItem);
+  }
+
+  private async ensurePermissionExists(permissionName: string, title: string): Promise<void> {
+    let permission = await this.permissionRepository.findOne({ where: { name: permissionName } });
+    if (!permission) {
+      permission = this.permissionRepository.create({
+        name: permissionName,
+        description: `Permiso automático para el menú: ${title}`,
+        isSystem: false,
+      });
+      await this.permissionRepository.save(permission);
+      this.logger.log(`Permiso creado automáticamente para el menú: ${permissionName}`);
+    }
   }
 
   private generateSlug(text: string): string {
@@ -146,6 +165,11 @@ export class MenuService {
     }
 
     Object.assign(menuItem, updateDto);
+
+    if (menuItem.requiredPermission) {
+      await this.ensurePermissionExists(menuItem.requiredPermission, menuItem.title);
+    }
+
     return await this.menuItemRepository.save(menuItem);
   }
 
@@ -250,6 +274,11 @@ export class MenuService {
         menuItem = this.menuItemRepository.create({ ...data, parent });
         menuItem = await this.menuItemRepository.save(menuItem);
         this.logger.log(`Ítem de menú creado: ${data.title}`);
+      }
+
+      // Asegurar que el permiso existe
+      if (menuItem.requiredPermission) {
+        await this.ensurePermissionExists(menuItem.requiredPermission, menuItem.title);
       }
 
       if (children?.length) {

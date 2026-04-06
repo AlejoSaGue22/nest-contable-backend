@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { User } from '../../../users/entities/user.entity';
-import { Permission } from 'src/common/constants/roles.constants';
+import { Permission } from './permission.entity';
 
 @Entity('roles')
 export class Role {
@@ -13,7 +13,12 @@ export class Role {
   @Column()
   description: string;
 
-  @Column('json')
+  @ManyToMany(() => Permission, permission => permission.roles)
+  @JoinTable({
+    name: 'roles_permissions',
+    joinColumn: { name: 'role_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'permission_id', referencedColumnName: 'id' }
+  })
   permissions: Permission[];
 
   @Column({ default: true })
@@ -32,20 +37,20 @@ export class Role {
   updatedAt: Date;
 
   // Métodos de ayuda
-  hasPermission(permission: Permission): boolean {
-    return this.permissions.includes(permission);
+  hasPermission(permissionName: string): boolean {
+    if (!this.permissions) return false;
+    return this.permissions.some(p => p.name === permissionName);
   }
 
   addPermission(permission: Permission): void {
-    if (!this.hasPermission(permission)) {
+    if (!this.permissions) this.permissions = [];
+    if (!this.hasPermission(permission.name)) {
       this.permissions.push(permission);
     }
   }
 
-  removePermission(permission: Permission): void {
-    const index = this.permissions.indexOf(permission);
-    if (index > -1) {
-      this.permissions.splice(index, 1);
-    }
+  removePermission(permissionName: string): void {
+    if (!this.permissions) return;
+    this.permissions = this.permissions.filter(p => p.name !== permissionName);
   }
 }

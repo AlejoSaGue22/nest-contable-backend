@@ -234,7 +234,7 @@ export class NotasAjusteService {
       nota.fechaEnvioDIAN = new Date();
       nota.intentosEnvio += 1;
       await this.notaRepository.save(nota);
- 
+
       // 2. Enviar a Factus/DIAN
       let respuesta: any;
       if (nota.esNotaCredito()) {
@@ -243,10 +243,16 @@ export class NotasAjusteService {
           nota.motivo,
           nota.concepto,
           nota.items.map(item => ({
-            descripcion: item.descripcion,
-            cantidad: Number(item.cantidad),
-            valorUnitario: Number(item.valorUnitario),
-            porcentajeIVA: Number(item.porcentajeIVA)
+            code_reference: item.articulo.codigo,
+            name: item.articulo.nombre,
+            quantity: Number(item.cantidad),
+            discount_rate: 0,
+            price: Number(item.valorUnitario),
+            tax_rate: Number(item.porcentajeIVA),
+            unit_measure_id: Number(item.articulo.unidadmedida),
+            is_excluded: 0,
+            tribute_id: 1,
+            withholding_taxes: []
           }))
         );
       } else {
@@ -256,10 +262,16 @@ export class NotasAjusteService {
           nota.motivo,
           nota.concepto,
           nota.items.map(item => ({
-            descripcion: item.descripcion,
-            cantidad: Number(item.cantidad),
-            valorUnitario: Number(item.valorUnitario),
-            porcentajeIVA: Number(item.porcentajeIVA)
+            code_reference: item.articulo.codigo,
+            name: item.articulo.nombre,
+            quantity: Number(item.cantidad),
+            discount_rate: 0,
+            price: Number(item.valorUnitario),
+            tax_rate: Number(item.porcentajeIVA),
+            unit_measure_id: Number(item.articulo.unidadmedida),
+            is_excluded: 0,
+            tribute_id: 1,
+            withholding_taxes: []
           }))
         );
       }
@@ -587,13 +599,14 @@ export class NotasAjusteService {
  
       itemsCalculados.push({
         articuloId: itemDto.articuloId,
-        descripcion: itemDto.descripcion,
-        cantidad: cantidad,
-        valorUnitario: valorUnitario,
-        porcentajeIVA: porcentajeIVA,
+        valorUnitario,
+        porcentajeIVA,
+        cantidad,
         subtotal: itemSubtotal,
         valorIVA: itemIVA,
-        total: itemTotal
+        discount: itemDto.discount || 0,
+        valor_discount: itemDto.valor_discount || 0,
+        total: itemTotal,
       });
  
       subtotal += itemSubtotal;

@@ -23,7 +23,7 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<User> {
     const user = await this.usersRepository.findOne({
       where: { email },
-      relations: ['role'],
+      relations: ['role', 'role.permissions'],
       select: ['id', 'email', 'fullName', 'password', 'role', 'roleId', 'isActive', 'lastLogin'],
     });
 
@@ -59,7 +59,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role.name as SystemRole,
-        permissions: user.role.permissions,
+        permissions: user.role.permissions.map(p => p.name),
       };
 
       const token = this.jwtService.sign(payload);
@@ -71,7 +71,7 @@ export class AuthService {
           email: user.email,
           fullName: user.fullName,
           role: user.role.name,
-          permissions: user.role.permissions,
+          permissions: user.role.permissions.map(p => p.name),
           lastLogin: user.lastLogin,
         },
       };
@@ -92,6 +92,7 @@ export class AuthService {
     // Obtener rol por defecto (Viewer)
     const defaultRole = await this.rolesRepository.findOne({
       where: { name: SystemRole.VIEWER },
+      relations: ['permissions'],
     });
 
     if (!defaultRole) {
@@ -115,7 +116,7 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       role: user.role.name as SystemRole,
-      permissions: user.role.permissions,
+      permissions: user.role.permissions.map(p => p.name),
     };
     const token = this.jwtService.sign(payload);
 
@@ -126,7 +127,7 @@ export class AuthService {
         email: user.email,
         name: user.fullName,
         role: user.role.name,
-        permissions: user.role.permissions,
+        permissions: user.role.permissions.map(p => p.name),
       },
     }
 
@@ -151,7 +152,7 @@ export class AuthService {
   async refreshToken(userId: string) {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
-      relations: ['role'],
+      relations: ['role', 'role.permissions'],
     });
 
     if (!user) {
@@ -163,7 +164,7 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       role: user.role.name as SystemRole,
-      permissions: user.role.permissions,
+      permissions: user.role.permissions.map(p => p.name),
     };
 
     const token = this.jwtService.sign(payload);
@@ -175,7 +176,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role.name,
-        permissions: user.role.permissions,
+        permissions: user.role.permissions.map(p => p.name),
       }
     };
   }

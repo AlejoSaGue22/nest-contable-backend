@@ -51,9 +51,9 @@ export class RolesGuard implements CanActivate {
 
     // Verificar permisos si se especifican
     if (requiredPermissions && requiredPermissions.length > 0) {
-      const userPermissions = ROLE_PERMISSIONS[user.role] || [];
+      const userPermissions = user.permissions || [];
       const hasPermission = requiredPermissions.some(permission =>
-        userPermissions.includes(permission)
+        userPermissions.includes(permission as any)
       );
 
       if (!hasPermission) {

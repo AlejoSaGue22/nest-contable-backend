@@ -41,7 +41,7 @@ export class User {
 
     // Método para obtener permisos
     getPermissions(): string[] {
-        return this.role.permissions || [];
+        return (this.role?.permissions || []).map(p => p.name);
     }
 
     hasPermission(permission: string): boolean {

@@ -16,17 +16,23 @@ export class ItemNotaAjuste {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @ManyToOne(() => Articulo, { nullable: true })
+  articulo: Articulo;
+
+  @Column({ nullable: true })
+  articuloId: string;
+
   @Column('decimal', { precision: 10, scale: 2 })
   cantidad: number;
 
   @Column('decimal', { precision: 10, scale: 2 })
   valorUnitario: number;
 
-  @Column('decimal', { precision: 5, scale: 2 })
-  porcentajeIVA: number;
-
   @Column('decimal', { precision: 10, scale: 2 })
   subtotal: number;
+
+  @Column('decimal', { precision: 5, scale: 2 })
+  porcentajeIVA: number;
 
   @Column('decimal', { precision: 10, scale: 2 })
   valorIVA: number;
@@ -34,11 +40,11 @@ export class ItemNotaAjuste {
   @Column('decimal', { precision: 10, scale: 2 })
   total: number;
 
-  @ManyToOne(() => Articulo, { nullable: true })
-  articulo: Articulo;
+  @Column('decimal', { precision: 10, scale: 2 })
+  discount: number;
 
-  @Column({ nullable: true })
-  articuloId: string;
+  @Column('decimal', { precision: 10, scale: 2 })
+  valor_discount: number;
 
   @ManyToOne(() => NotaAjuste, nota => nota.items)
   nota: NotaAjuste;

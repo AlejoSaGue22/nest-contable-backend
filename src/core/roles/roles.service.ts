@@ -3,8 +3,9 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Role } from './entities/role.entity';
-import { Repository } from 'typeorm';
-import { Permission, ROLE_PERMISSIONS, SystemRole } from 'src/common/constants/roles.constants';
+import { Permission } from './entities/permission.entity';
+import { Repository, In } from 'typeorm';
+import { Permission as PermissionEnum, ROLE_PERMISSIONS, SystemRole } from 'src/common/constants/roles.constants';
 import { MenuItem } from '../menu/entities/menu.entity';
 
 @Injectable()
@@ -12,6 +13,8 @@ export class RolesService {
   constructor(
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
+    @InjectRepository(Permission)
+    private permissionRepository: Repository<Permission>,
     @InjectRepository(MenuItem)
     private menuItemRepository: Repository<MenuItem>,
   ) { }
@@ -26,9 +29,14 @@ export class RolesService {
       throw new BadRequestException('El nombre del rol ya existe');
     }
 
+    const permissions = await this.permissionRepository.findBy({
+      name: In(createRoleDto.permissions as unknown as string[])
+    });
+
     // Crear rol
     const role = this.rolesRepository.create({
       ...createRoleDto,
+      permissions,
       isSystem: false, // Los roles creados por usuarios no son del sistema
     });
 
@@ -38,13 +46,14 @@ export class RolesService {
   async findAll(): Promise<Role[]> {
     return await this.rolesRepository.find({
       order: { name: 'ASC' },
+      relations: ['permissions'],
     });
   }
 
   async findOne(id: string): Promise<Role> {
     const role = await this.rolesRepository.findOne({
       where: { id },
-      relations: ['users'],
+      relations: ['users', 'permissions'],
     });
 
     if (!role) {
@@ -57,6 +66,7 @@ export class RolesService {
   async findByName(name: string): Promise<Role> {
     const role = await this.rolesRepository.findOne({
       where: { name },
+      relations: ['permissions'],
     });
 
     if (!role) {
@@ -85,6 +95,14 @@ export class RolesService {
       }
     }
 
+    if (updateRoleDto.permissions) {
+      const permissions = await this.permissionRepository.findBy({
+        name: In(updateRoleDto.permissions as unknown as string[])
+      });
+      role.permissions = permissions;
+      delete updateRoleDto.permissions;
+    }
+
     Object.assign(role, updateRoleDto);
     return await this.rolesRepository.save(role);
   }
@@ -106,14 +124,18 @@ export class RolesService {
   }
 
 
-  async addPermission(id: string, permission: Permission): Promise<Role> {
+  async addPermission(id: string, permissionName: string): Promise<Role> {
     const role = await this.findOne(id);
 
     if (role.isSystem) {
       throw new BadRequestException('No se pueden modificar los permisos de roles del sistema');
     }
 
-    if (!role.hasPermission(permission)) {
+    if (!role.hasPermission(permissionName)) {
+      const permission = await this.permissionRepository.findOne({ where: { name: permissionName } });
+      if (!permission) {
+        throw new NotFoundException(`Permiso ${permissionName} no encontrado`);
+      }
       role.addPermission(permission);
       return await this.rolesRepository.save(role);
     }
@@ -121,55 +143,71 @@ export class RolesService {
     return role;
   }
 
-  async removePermission(id: string, permission: Permission): Promise<Role> {
+  async removePermission(id: string, permissionName: string): Promise<Role> {
     const role = await this.findOne(id);
 
     if (role.isSystem) {
       throw new BadRequestException('No se pueden modificar los permisos de roles del sistema');
     }
 
-    if (role.hasPermission(permission)) {
-      role.removePermission(permission);
+    if (role.hasPermission(permissionName)) {
+      role.removePermission(permissionName);
       return await this.rolesRepository.save(role);
     }
 
     return role;
   }
 
-  async getAvailablePermissions(): Promise<string[]> {
-    // 1. Obtener permisos estáticos del enum Permission
-    const staticPermissions = Object.values(Permission);
+  async getAvailablePermissions(): Promise<Permission[]> {
+    return await this.permissionRepository.find({
+      order: { name: 'ASC' },
+    });
+  }
 
-    // 2. Obtener permisos dinámicos de la tabla de menús
-    const menuPermissions = await this.menuItemRepository
-      .createQueryBuilder('menu')
-      .select('DISTINCT(menu.requiredPermission)', 'permission')
-      .where('menu.requiredPermission IS NOT NULL')
-      .getRawMany();
-
-    const dynamicPermissions = menuPermissions.map(mp => mp.permission);
-
-    // 3. Unir y eliminar duplicados
-    const allPermissions = new Set([...staticPermissions, ...dynamicPermissions]);
+  async seedPermissions(): Promise<void> {
+    const staticPermissions = Object.values(PermissionEnum);
     
-    return Array.from(allPermissions).sort();
+    for (const permName of staticPermissions) {
+      let permission = await this.permissionRepository.findOne({ where: { name: permName } });
+      if (!permission) {
+        permission = this.permissionRepository.create({
+          name: permName,
+          description: `Permiso de sistema para ${permName}`,
+          isSystem: true,
+        });
+        await this.permissionRepository.save(permission);
+      }
+    }
   }
 
   async seedDefaultRoles(): Promise<void> {
+    // Asegurar que los permisos existen primero
+    await this.seedPermissions();
+
     for (const roleName of Object.values(SystemRole)) {
+      const permsForRole = ROLE_PERMISSIONS[roleName] || [];
+      
+      // Buscar los permisos en la DB
+      const permissions = await this.permissionRepository.findBy({
+        name: In(permsForRole)
+      });
+
       const roleData = {
         name: roleName,
         description: this.getRoleDescription(roleName),
-        permissions: ROLE_PERMISSIONS[roleName] || [],
+        permissions: permissions,
         isSystem: true,
         isActive: true,
       };
 
-      let role = await this.rolesRepository.findOne({ where: { name: roleName } });
+      let role = await this.rolesRepository.findOne({ 
+        where: { name: roleName },
+        relations: ['permissions'] 
+      });
 
       if (role) {
         // Actualizar permisos si es un rol de sistema
-        role.permissions = roleData.permissions;
+        role.permissions = permissions;
         await this.rolesRepository.save(role);
       } else {
         // Crear nuevo
