@@ -5,7 +5,7 @@ export interface MenuSeedItem {
   icon: string;
   route?: string;
   externalUrl?: string;
-  requiredPermission?: Permission;
+  requiredPermission?: string;
   order: number;
   other?: string;
   isActive: boolean;

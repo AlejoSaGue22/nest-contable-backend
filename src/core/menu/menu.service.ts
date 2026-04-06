@@ -9,7 +9,7 @@ import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MenuItem } from './entities/menu.entity';
-import { In, TreeRepository } from 'typeorm';
+import { In, IsNull, TreeRepository } from 'typeorm';
 import { Permission, ROLE_PERMISSIONS } from 'src/common/constants/roles.constants';
 import { MenuSeedItem } from './interfaces/menu-seed.interface';
 import { DEFAULT_MENU_ITEMS } from 'src/common/constants/menu.constants';
@@ -39,8 +39,22 @@ export class MenuService {
       }
     }
 
+    if (!createDto.requiredPermission) {
+      createDto.requiredPermission = `menu:auto:${this.generateSlug(createDto.title)}`;
+    }
+
     const menuItem = this.menuItemRepository.create({ ...createDto, parent });
     return await this.menuItemRepository.save(menuItem);
+  }
+
+  private generateSlug(text: string): string {
+    return text
+      .toLowerCase()
+      .normalize('NFD') // Quitar acentos
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '_') // Caracteres no alfanuméricos a guion bajo
+      .replace(/_{2,}/g, '_') // Evitar guiones bajos dobles
+      .replace(/^_|_$/g, ''); // Quitar guiones bajos al inicio/final
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -190,32 +204,56 @@ export class MenuService {
   }
 
   // ══════════════════════════════════════════════════════════════════
-  // SEED (menú por defecto)
+  // SEED / SYNC (menú por defecto)
+  //
+  // ✅ FIX: ahora no solo inserta si está vacío, sino que sincroniza
+  //    los permisos y rutas de los ítems existentes basándose en el título.
   // ══════════════════════════════════════════════════════════════════
   async seedDefaultMenu(): Promise<void> {
-    this.logger.log('Iniciando seed del menú por defecto...');
-
-    const existingCount = await this.menuItemRepository.count();
-    if (existingCount > 0) {
-      this.logger.log('El menú ya existe, omitiendo seed');
-      return;
-    }
+    this.logger.log('Iniciando sincronización del menú por defecto...');
 
     try {
-      await this.createMenuTree(DEFAULT_MENU_ITEMS as Partial<MenuSeedItem>[]);
-      this.logger.log('Seed del menú completado exitosamente');
+      await this.syncMenuTree(DEFAULT_MENU_ITEMS as Partial<MenuSeedItem>[]);
+      this.logger.log('Sincronización del menú completada exitosamente');
     } catch (error) {
-      this.logger.error('Error durante el seed del menú:', error);
+      this.logger.error('Error durante la sincronización del menú:', error);
       throw error;
     }
   }
 
-  private async createMenuTree(items: Partial<MenuSeedItem>[],parent?: MenuItem): Promise<void> {
+  private async syncMenuTree(items: Partial<MenuSeedItem>[], parent?: MenuItem): Promise<void> {
     for (const itemData of items) {
-      const menuItem = this.menuItemRepository.create({ ...itemData, parent });
-      const savedItem = await this.menuItemRepository.save(menuItem);
-      if (itemData.children?.length) {
-        await this.createMenuTree(itemData.children as Partial<MenuSeedItem>[], savedItem);
+      const { children, ...data } = itemData;
+
+      // Buscar si ya existe por título y padre para actualizar permisos/rutas
+      let menuItem = await this.menuItemRepository.findOne({
+        where: { 
+          title: data.title,
+          parent: parent ? { id: parent.id } : IsNull()
+        },
+        relations: ['parent']
+      });
+
+      if (menuItem) {
+        // Actualizar existente (permisos, iconos, rutas, etc. desde constantes)
+        if (!data.requiredPermission && !menuItem.requiredPermission) {
+          data.requiredPermission = `menu:auto:${this.generateSlug(data.title ?? '')}`;
+        }
+        Object.assign(menuItem, data);
+        menuItem.parent = parent || null;
+        menuItem = await this.menuItemRepository.save(menuItem);
+      } else {
+        // Crear nuevo
+        if (!data.requiredPermission) {
+          data.requiredPermission = `menu:auto:${this.generateSlug(data.title ?? '')}`;
+        }
+        menuItem = this.menuItemRepository.create({ ...data, parent });
+        menuItem = await this.menuItemRepository.save(menuItem);
+        this.logger.log(`Ítem de menú creado: ${data.title}`);
+      }
+
+      if (children?.length) {
+        await this.syncMenuTree(children as Partial<MenuSeedItem>[], menuItem);
       }
     }
   }

@@ -9,6 +9,17 @@ import { Permissions } from '../../auth/decorators/roles.decorator';
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
+  @Get('permissions/available')
+  @Permissions(Permission.ROLE_READ)
+  async getAvailablePermissions() {
+    const permissions = await this.rolesService.getAvailablePermissions();
+    return {
+      success: true,
+      data: permissions,
+      message: 'Permisos disponibles obtenidos exitosamente',
+    };
+  }
+
   @Post()
   @Permissions(Permission.ROLE_CREATE)
   async create(@Body() createRoleDto: CreateRoleDto) {

@@ -47,14 +47,14 @@ export enum Permission {
   REPORT_EXPORT = 'report:export',
   REPORT_VIEW = 'report:view',
 
-  // Purchases
+  // Purchases 
   PURCHASE_CREATE = 'purchase:create',
   PURCHASE_READ = 'purchase:read',
   PURCHASE_UPDATE = 'purchase:update',
   PURCHASE_DELETE = 'purchase:delete',
   PURCHASE_EXPORT = 'purchase:export',
 
-  // Products Purchase
+  // Products Purchase  
   PRODUCT_PURCHASE_CREATE = 'product_purchase:create',
   PRODUCT_PURCHASE_READ = 'product_purchase:read',
   PRODUCT_PURCHASE_UPDATE = 'product_purchase:update',
@@ -98,6 +98,10 @@ export enum Permission {
 
   // Menu
   MENU_MANAGE = 'menu:manage',
+
+  // Contabilidad
+  ACCOUNTING_VIEW = 'accounting:view',
+  ACCOUNTING_MANAGE = 'accounting:manage',
 }
 
 export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
@@ -114,6 +118,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE,
     Permission.PAGO_DELETE, Permission.PAGO_EXPORT,Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
+    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_MANAGE,
   ],
   [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
@@ -125,26 +130,31 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE, Permission.PAGO_READ, 
-    Permission.PAGO_CREATE, Permission.PAGO_UPDATE, Permission.PAGO_DELETE, Permission.PAGO_EXPORT
+    Permission.PAGO_CREATE, Permission.PAGO_UPDATE, Permission.PAGO_DELETE, Permission.PAGO_EXPORT,
+    Permission.ACCOUNTING_VIEW,
   ],
   [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ, Permission.INVOICE_EXPORT,
-    Permission.CLIENT_READ,
-    Permission.PRODUCT_READ,
+    Permission.PURCHASE_READ, Permission.PURCHASE_EXPORT,
+    Permission.PROVIDER_READ, Permission.PROVIDER_EXPORT,
+    Permission.PRODUCT_READ, Permission.PRODUCT_PURCHASE_READ,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
-    Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE, Permission.PAGO_DELETE, 
-    Permission.PAGO_EXPORT
+    Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE, 
+    Permission.PAGO_DELETE, Permission.PAGO_EXPORT,
+    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_MANAGE,
+    Permission.CLIENT_READ,
   ],
   [SystemRole.SALES]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_CREATE, Permission.INVOICE_READ,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ,
-    Permission.PRODUCT_READ,
+    Permission.PRODUCT_READ, Permission.PROVIDER_READ
   ],
   [SystemRole.VIEWER]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ,
+    Permission.PURCHASE_READ,
     Permission.CLIENT_READ,
     Permission.PRODUCT_READ,
     Permission.REPORT_VIEW,

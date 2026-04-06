@@ -170,7 +170,6 @@ export class FactusService {
 
             // Procesar respuesta de Factus
             return this.procesarRespuestaFactus(response.data);
-            // return payload;
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -327,25 +326,18 @@ export class FactusService {
     /**
      * Crear nota crédito (anulación de factura)
      */
-    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string): Promise<any> {
+    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, concepto: string, items: Array<{}>): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
-            // TODO: Implementar estructura de nota crédito según Factus
-            // Similar a crear factura pero con document: "NC" y referenciando factura original
+            // Construir payload con los datos corregidos para NC
+            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, concepto, items, 'credito');
 
-            const payload = {
-                document: "91", // Código para nota crédito
-                numbering_range_id: this.configService.get<number>('FACTUS_NC_NUMBERING_RANGE_ID'),
-                reference_code: `NC_${facturaOriginal.comprobante}_${Date.now()}`,
-                observation: motivo,
-                // ... resto de campos similares a factura
-                // + campos específicos de nota crédito (factura referenciada)
-            };
+            this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
             const response = await firstValueFrom(
                 this.httpService.post(
-                    `${this.apiUrl}/v1/credit-notes/validate`, // TODO: Verificar endpoint correcto
+                    `${this.apiUrl}/v1/credit-notes/validate`,
                     payload,
                     {
                         headers: {
@@ -357,14 +349,188 @@ export class FactusService {
                 )
             );
 
-            return response.data;
+            this.logger.log('✅ Respuesta recibida de Factus');
+
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito');
 
         } catch (error) {
-            this.logger.error('Error creando nota crédito en Factus:', error);
-            throw new BadRequestException('Error al crear nota crédito');
+            this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
+
+            if (error.response?.status === 409) {
+                throw new BadRequestException('Ya existe una nota crédito pendiente por enviar a DIAN con ese código de referencia');
+            }
+
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar nota crédito a Factus/DIAN');
         }
     }
 
+    /**
+     * Crear Nota Débito en DIAN
+     */
+    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, concepto: string, items: Array<{}>) {
+        try {
+            const token = await this.obtenerToken();
+
+            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, concepto, items, 'debito');
+
+            this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v1/debit-notes/validate`,
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                )
+            );
+
+            this.logger.log('✅ Respuesta recibida de Factus');
+
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'debito');
+
+        } catch (error) {
+            this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
+
+            if (error.response?.status === 409) {
+                throw new BadRequestException('Ya existe una nota débito pendiente por enviar a DIAN con ese código de referencia');
+            }
+
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar nota débito a Factus/DIAN');
+        }
+    }
+
+
+    /**
+     * Construir payload Nota Ajuste para Factus (NC o ND)
+     */
+    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, concepto: string, items: any[], tipo: 'credito' | 'debito') {
+        // Generar código de referencia único
+        const referenceCode = `${factura.comprobante}_${Date.now()}`;
+
+        const isNC = tipo === 'credito';
+        
+        // Obtener el ID de la factura en el sistema de Factus si existe
+        const billId = factura.proveedorResponse?.data?.bill?.id || 
+                       factura.proveedorResponse?.data?.id || 514; // Fallback 514 por defecto (del ejemplo del user)
+
+        const payload: any = {
+            // ID del rango de numeración para NC o ND
+            numbering_range_id: this.configService.get<number>(isNC ? 'FACTUS_NC_NUMBERING_RANGE_ID' : 'FACTUS_ND_NUMBERING_RANGE_ID')!,
+            
+            // Concepto de corrección (según DIAN/Factus)
+            correction_concept_code: parseInt(concepto),
+            
+            // 20 = Nota Crédito que referencia una factura electrónica.
+            // 30 = Nota Débito que referencia una factura electrónica.
+            customization_id: isNC ? 20 : 30,
+            
+            // ID de la factura en Factus
+            bill_id: billId,
+            
+            reference_code: referenceCode,
+            observation: motivo,
+
+            // Metadatos de la factura original para facilitar procesamiento
+            payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
+            payment_due_date: factura.fechaVencimiento || factura.fecha,
+            payment_method_code: factura.metodoPago || '10',
+
+            // Datos del establecimiento/sucursal
+            establishment: {
+                name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
+                address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
+                phone_number: this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE')!,
+                email: this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL')!,
+                municipality_id: this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID')!
+            },
+
+            // Datos del cliente
+            customer: {
+                identification: factura.client.numeroDocumento,
+                dv: factura.client.dv || null,
+                company: factura.client.razonSocial || "",
+                trade_name: factura.client.nombre + " " + factura.client.apellido,
+                names: factura.client.nombre + " " + factura.client.apellido,
+                address: factura.client.direccion,
+                email: factura.client.email,
+                phone: factura.client.telefono,
+                legal_organization_id: factura.client.tipoPersona == 'PN' ? 2 : 1,
+                tribute_id: factura.client.tributo || 21,
+                identification_document_id: factura.client.tipoDocumento,
+                municipality_id: factura.client.ciudad
+            },
+
+            // Items de la nota (ya vienen mapeados por el servicio de Notas de Ajuste)
+            items: items.map(item => ({
+                code_reference: item.codigo_referencia || 'Generico', // Fallback si no hay código
+                name: item.descripcion,
+                quantity: item.cantidad,
+                discount_rate: 0,
+                price: item.valorUnitario,
+                tax_rate: (item.porcentajeIVA || 0).toString(),
+                unit_measure_id: 70, // unidad
+                standard_code_id: 1, // estandar
+                is_excluded: 0,
+                tribute_id: 1, // IVA
+                withholding_taxes: []
+            })),
+        };
+
+        return payload;
+    }
+
+    /**
+     * Procesar respuesta de Factus para Notas de Ajuste
+     */
+    private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito'): any {
+        if (responseData.status === 'Created') {
+            const data = responseData.data;
+            const nota = tipo === 'credito' ? data.credit_note : data.debit_note;
+
+            return {
+                cufe: nota.cude || nota.cufe, // CUDE para notas de ajuste
+                xmlUrl: nota.qr,
+                pdfUrl: nota.qr,
+                qrCode: nota.qr,
+                qrImageBase64: nota.qr_image,
+                numeroCompleto: nota.number,
+                estado: 'aceptada',
+                mensaje: responseData.message,
+                respuestaCompleta: responseData
+            };
+        }
+
+        return {
+            cufe: '',
+            xmlUrl: '',
+            pdfUrl: '',
+            qrCode: '',
+            qrImageBase64: '',
+            numeroCompleto: '',
+            estado: 'rechazada',
+            mensaje: responseData.message || 'Nota rechazada',
+            respuestaCompleta: responseData
+        };
+    }
+
+    
     // ========== ENDPOINTS DE REFERENCIA ==========
 
     /**
@@ -463,7 +629,7 @@ export class FactusService {
     }
 
     /**
-     * Descargar XML de factura usando CUFE
+     * Descargar XML de factura usando el numero del documento (en Factus ej. 'fv09008257590002400000241')
      */
     async descargarXML(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
         try {
@@ -472,6 +638,69 @@ export class FactusService {
             const response = await firstValueFrom(
                 this.httpService.get(
                     `${this.apiUrl}/v1/bills/download-xml/${numeroCompleto}`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    }
+                )
+            );
+
+            return {
+                buffer: Buffer.from(response.data.data.xml_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name
+            };
+
+        } catch (error) {
+            this.logger.error('Error descargando XML:', error);
+            throw new BadRequestException('Error al descargar XML');
+        }
+    }
+
+
+    /**
+     * Descargar PDF de Nota Ajuste usando el numero de la Nota
+     */
+    async descargarPDFNota(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
+        try {
+            const token = await this.obtenerToken();
+
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v1/credit-notes/download-pdf/${numeroCompleto}`, // TODO: Verificar endpoint correcto
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                        }
+                    }
+                )
+            );
+
+            return {
+                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name
+            };
+
+        } catch (error) {
+            this.logger.error('Error descargando PDF:', error);
+            throw new BadRequestException('Error al descargar PDF');
+        }
+    }
+
+    /**
+     * Descargar XML de Nota Ajuste usando el numero de la Nota
+     */
+    async descargarXMLNota(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
+        try {
+            const token = await this.obtenerToken();
+
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v1/credit-notes/download-xml/${numeroCompleto}`,
                     {
                         headers: {
                             'Content-Type': 'application/json',

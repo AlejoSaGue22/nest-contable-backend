@@ -20,8 +20,8 @@ export class CreateMenuDto {
   externalUrl?: string;
 
   @IsOptional()
-  @IsEnum(Permission)
-  requiredPermission?: Permission;
+  @IsString()
+  requiredPermission?: string;
 
   @IsOptional()
   @IsUUID()

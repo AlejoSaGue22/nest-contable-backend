@@ -1,7 +1,3 @@
-// menu.controller.ts (BACKEND — NestJS)
-// ✅ FIX: GET /menu ahora llama a getMenuForUser(user) en vez de
-//         getMenuForRole(user.role) para respetar los permisos exactos del JWT.
-
 import {
   Controller, Get, Post, Body, Patch, Param,
   Delete, UseGuards, ParseUUIDPipe,

@@ -10,6 +10,8 @@ export enum TipoAsiento {
   PAGO_FACTURA_VENTA      = 'PAGO_FACTURA_VENTA',  // legacy
   COBRO                   = 'COBRO',               // ← NUEVO
   PAGO_PROVEEDOR          = 'PAGO_PROVEEDOR',      // ← NUEVO
+  NOTA_CREDITO            = 'NOTA_CREDITO',
+  NOTA_DEBITO             = 'NOTA_DEBITO',
 }
 
 @Entity('asientos_contables')

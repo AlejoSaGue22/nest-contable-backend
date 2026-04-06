@@ -461,9 +461,6 @@ export class FacturasVentasService {
     }
     
     try {
-      if (factura.tipoFactura === TipoFactura.ELECTRONICA) {
-        await this.factusService.crearNotaCredito(factura, motivo);
-      }
       factura.status = InvoiceStatus.CANCELLED;
       factura.dianStatus = DianStatus.CANCELLED;
       factura.paymentStatus = PaymentStatus.CANCELLED;

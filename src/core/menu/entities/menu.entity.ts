@@ -20,8 +20,8 @@ export class MenuItem {
   @Column({ nullable: true })
   externalUrl?: string;
 
-  @Column({ type: 'enum', enum: Permission, nullable: true })
-  requiredPermission?: Permission;
+  @Column({ nullable: true })
+  requiredPermission?: string;
 
   @Column({ default: 0 })
   order: number;
@@ -54,7 +54,7 @@ export class MenuItem {
   updatedAt: Date;
 
   // Método para verificar si es accesible
-  isAccessible(userPermissions: Permission[]): boolean {
+  isAccessible(userPermissions: string[]): boolean {
     if (!this.isActive || !this.isVisible) return false;
     if (!this.requiredPermission) return true;
     return userPermissions.includes(this.requiredPermission);

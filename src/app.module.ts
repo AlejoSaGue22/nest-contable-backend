@@ -27,6 +27,7 @@ import { MunicipalitiesService } from './core/municipalities/municipalities.serv
 import { ReportesModule } from './reportes/reportes-general/reportes.module';
 import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cartera.module';
 import { BancosModule } from './bancos/bancos.module';
+import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
@@ -62,7 +63,8 @@ import { BancosModule } from './bancos/bancos.module';
     CatalogsModule,
     PagosModule,
     CuentasBancariasModule,
-    BancosModule
+    BancosModule,
+    NotasAjusteModule
   ],
   controllers: [],
 })

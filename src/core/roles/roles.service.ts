@@ -5,12 +5,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Role } from './entities/role.entity';
 import { Repository } from 'typeorm';
 import { Permission, ROLE_PERMISSIONS, SystemRole } from 'src/common/constants/roles.constants';
+import { MenuItem } from '../menu/entities/menu.entity';
 
 @Injectable()
 export class RolesService {
   constructor(
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
+    @InjectRepository(MenuItem)
+    private menuItemRepository: Repository<MenuItem>,
   ) { }
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
@@ -133,24 +136,46 @@ export class RolesService {
     return role;
   }
 
+  async getAvailablePermissions(): Promise<string[]> {
+    // 1. Obtener permisos estáticos del enum Permission
+    const staticPermissions = Object.values(Permission);
+
+    // 2. Obtener permisos dinámicos de la tabla de menús
+    const menuPermissions = await this.menuItemRepository
+      .createQueryBuilder('menu')
+      .select('DISTINCT(menu.requiredPermission)', 'permission')
+      .where('menu.requiredPermission IS NOT NULL')
+      .getRawMany();
+
+    const dynamicPermissions = menuPermissions.map(mp => mp.permission);
+
+    // 3. Unir y eliminar duplicados
+    const allPermissions = new Set([...staticPermissions, ...dynamicPermissions]);
+    
+    return Array.from(allPermissions).sort();
+  }
+
   async seedDefaultRoles(): Promise<void> {
-    const defaultRoles = Object.values(SystemRole).map(roleName => ({
-      name: roleName,
-      description: this.getRoleDescription(roleName),
-      permissions: ROLE_PERMISSIONS[roleName] || [],
-      isSystem: true,
-      isActive: true,
-    }));
+    for (const roleName of Object.values(SystemRole)) {
+      const roleData = {
+        name: roleName,
+        description: this.getRoleDescription(roleName),
+        permissions: ROLE_PERMISSIONS[roleName] || [],
+        isSystem: true,
+        isActive: true,
+      };
 
-    // Verificar si ya existen roles
-    const existingRoles = await this.rolesRepository.count();
-    if (existingRoles > 0) {
-      return; // No hacer seed si ya hay datos
-    }
+      let role = await this.rolesRepository.findOne({ where: { name: roleName } });
 
-    for (const roleData of defaultRoles) {
-      const role = this.rolesRepository.create(roleData);
-      await this.rolesRepository.save(role);
+      if (role) {
+        // Actualizar permisos si es un rol de sistema
+        role.permissions = roleData.permissions;
+        await this.rolesRepository.save(role);
+      } else {
+        // Crear nuevo
+        role = this.rolesRepository.create(roleData);
+        await this.rolesRepository.save(role);
+      }
     }
   }
 

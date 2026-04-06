@@ -269,6 +269,13 @@ export class FacturasVenta {
     );
   }
 
+  /**
+   * Verifica si es factura electrónica
+   */
+  esElectronica(): boolean {
+    return this.tipoFactura === TipoFactura.ELECTRONICA;
+  }
+
 }
 
 
