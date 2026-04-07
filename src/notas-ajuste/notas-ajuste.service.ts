@@ -59,9 +59,7 @@ export class NotasAjusteService {
       }
  
       if (factura.status !== InvoiceStatus.ACCEPTED) {
-        throw new BadRequestException(
-          'Solo se pueden crear notas para facturas aceptadas por DIAN'
-        );
+        throw new BadRequestException('Solo se pueden crear notas para facturas aceptadas por DIAN');
       }
  
       // 2. Validar que el total de la NC no exceda el saldo de la factura
