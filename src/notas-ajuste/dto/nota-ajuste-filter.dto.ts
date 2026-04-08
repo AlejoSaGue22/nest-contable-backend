@@ -127,6 +127,6 @@ export function toNotaAjusteResponse(
   return {
     success: true,
     message: mensaje || 'Nota obtenida exitosamente',
-    data: mapear(nota)
+    data: nota
   };
 }

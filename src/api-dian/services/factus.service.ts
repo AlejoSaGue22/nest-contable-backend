@@ -326,12 +326,12 @@ export class FactusService {
     /**
      * Crear nota crédito (anulación de factura)
      */
-    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, concepto: string, items: Array<{}>): Promise<any> {
+    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: Array<{}>): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
             // Construir payload con los datos corregidos para NC
-            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, concepto, items, 'credito');
+            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -373,11 +373,11 @@ export class FactusService {
     /**
      * Crear Nota Débito en DIAN
      */
-    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, concepto: string, items: Array<{}>) {
+    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: Array<{}>) {
         try {
             const token = await this.obtenerToken();
 
-            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, concepto, items, 'debito');
+            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
 
             this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -420,15 +420,14 @@ export class FactusService {
     /**
      * Construir payload Nota Ajuste para Factus (NC o ND)
      */
-    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, concepto: string, items: any[], tipo: 'credito' | 'debito') {
-        // Generar código de referencia único
+    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: any[], tipo: 'credito' | 'debito') {
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
 
         const isNC = tipo === 'credito';
         
         // Obtener el ID de la factura en el sistema de Factus si existe
         const billId = factura.proveedorResponse?.data?.bill?.id || 
-                       factura.proveedorResponse?.data?.id || 514; // Fallback 514 por defecto (del ejemplo del user)
+                       factura.proveedorResponse?.data?.id;
 
         const payload: any = {
             // ID del rango de numeración para NC o ND
@@ -450,7 +449,7 @@ export class FactusService {
             // Metadatos de la factura original para facilitar procesamiento
             payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
             payment_due_date: factura.fechaVencimiento || factura.fecha,
-            payment_method_code: factura.metodoPago || '10',
+            payment_method_code: metodoPago || '10',
 
             // Datos del establecimiento/sucursal
             establishment: {

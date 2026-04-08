@@ -1,11 +1,10 @@
-import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, MaxLength } from "class-validator";
+import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, MaxLength, IsNumber } from "class-validator";
 import { Type } from "class-transformer";
 import { TipoNota, ConceptoNotaCredito, ConceptoNotaDebito } from "../enums/notas-ajuste.enum";
 import { CreateItemNotaAjusteDto } from "./create-items-notas-ajuste.dto";
 
 export class CreateNotasAjusteDto {
 
-      // ========== TIPO ==========
   
   @IsEnum(TipoNota)
   @IsNotEmpty()
@@ -16,8 +15,10 @@ export class CreateNotasAjusteDto {
   @IsUUID()
   @IsNotEmpty()
   facturaOriginalId: string;
- 
-  // ========== CONCEPTO Y MOTIVO ==========
+
+  @IsString()
+  @IsNotEmpty()
+  metodoPago: string;
   
   @IsString()
   @IsOptional()
@@ -28,8 +29,6 @@ export class CreateNotasAjusteDto {
   @MaxLength(1000)
   motivo: string;
  
-  // ========== FECHAS ==========
-  
   @IsString()
   @IsNotEmpty()
   fecha: string; // YYYY-MM-DD
@@ -38,8 +37,6 @@ export class CreateNotasAjusteDto {
   @IsOptional()
   fechaVencimiento?: string;
  
-  // ========== ITEMS ==========
-  
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateItemNotaAjusteDto)
@@ -52,6 +49,23 @@ export class CreateNotasAjusteDto {
   @IsOptional()
   @MaxLength(1000)
   observaciones?: string;
+
+  @IsNumber()
+  @IsOptional()
+  subtotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  descuento?: number;
+
+  @IsNumber()
+  @IsOptional()
+  iva?: number;
+
+  @IsNumber()
+  @IsOptional()
+  total?: number;
+  
 }
 
 

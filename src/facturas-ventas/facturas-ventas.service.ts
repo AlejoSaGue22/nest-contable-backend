@@ -137,6 +137,7 @@ export class FacturasVentasService {
         .createQueryBuilder('invoice')
         .leftJoinAndSelect('invoice.client', 'client')
         .leftJoinAndSelect('invoice.items', 'items')
+        .leftJoinAndSelect('items.articulo', 'articulo')
         .leftJoinAndSelect('invoice.createdBy', 'createdBy')
         .where('1=1');
 
@@ -342,8 +343,7 @@ export class FacturasVentasService {
   async emitir(id: string, userId: string): Promise<FacturasVenta> 
   {
     const factura = await this.findOne(id);
-
-    // Validar que puede emitirse
+    
     if (!factura.puedeEmitirse()) {
       throw new BadRequestException(
         `No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`

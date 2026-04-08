@@ -1,8 +1,5 @@
 import { IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, IsUUID } from "class-validator";
 
-/**
- * DTO para items de nota de ajuste
- */
 export class CreateItemNotaAjusteDto {
   
   @IsUUID()
@@ -28,6 +25,11 @@ export class CreateItemNotaAjusteDto {
   @Min(0)
   @IsOptional()
   porcentajeIVA?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsNotEmpty()
+  descuento: number;
 
   @IsNumber()
   @Min(0)

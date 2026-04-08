@@ -2,6 +2,7 @@ import {
   Column, 
   CreateDateColumn, 
   Entity, 
+  JoinColumn, 
   ManyToOne, 
   OneToMany, 
   PrimaryGeneratedColumn,
@@ -12,6 +13,7 @@ import { Cliente } from "src/clientes/entities/cliente.entity";
 import { TipoNota, EstadoNota, EstadoDIANNota, ConceptoNotaCredito } from "../enums/notas-ajuste.enum";
 import { ItemNotaAjuste } from "./items-notas-ajuste.entity";
 import { FacturasVenta } from "src/facturas-ventas/entities/facturas-venta.entity";
+import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 
 /**
  * Entidad para Notas de Ajuste (Crédito y Débito)
@@ -63,34 +65,27 @@ export class NotaAjuste {
   @Column()
   clienteId: string;
 
-  // ========== CONCEPTO Y MOTIVO ==========
-
   /**
    * Concepto según DIAN
    */
   @Column({ nullable: true })
   concepto: string; // ConceptoNotaCredito o ConceptoNotaDebito
 
-  /**
-   * Descripción del motivo
-   */
   @Column('text')
   motivo: string;
 
-  // ========== FECHAS ==========
+  @ManyToOne(() => MetodoPago)
+  @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
+  metodoPagoRelacion: MetodoPago;
+
+  @Column({ nullable: true })
+  metodoPago: string;
 
   @Column({ type: 'date' })
   fecha: Date;
 
-  @Column({ type: 'date', nullable: true })
-  fechaVencimiento: Date;
-
-  // ========== ITEMS ==========
-
-  @OneToMany(() => ItemNotaAjuste, item => item.nota, { cascade: true, eager: true })
+  @OneToMany(() => ItemNotaAjuste, item => item.nota)
   items: ItemNotaAjuste[];
-
-  // ========== MONTOS ==========
 
   @Column('decimal', { precision: 15, scale: 2 })
   subtotal: number;
@@ -110,12 +105,10 @@ export class NotaAjuste {
   @Column('decimal', { precision: 15, scale: 2, default: 0 })
   saldoPendiente: number;
 
-  // ========== ESTADOS ==========
-
   @Column({ 
     type: 'enum', 
     enum: EstadoNota,
-    default: EstadoNota.BORRADOR 
+    default: EstadoNota.DRAFT 
   })
   estado: EstadoNota;
 
@@ -161,8 +154,6 @@ export class NotaAjuste {
   @Column({ default: 0 })
   intentosEnvio: number;
 
-  // ========== OBSERVACIONES ==========
-
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
@@ -200,14 +191,14 @@ export class NotaAjuste {
    * Verifica si puede ser enviada a DIAN
    */
   puedeEnviarse(): boolean {
-    return this.estado === EstadoNota.BORRADOR;
+    return this.estado === EstadoNota.DRAFT;
   }
 
   /**
    * Verifica si está aceptada por DIAN
    */
   estaAceptada(): boolean {
-    return this.estado === EstadoNota.ACEPTADA &&
+    return this.estado === EstadoNota.ACCEPTED &&
            this.estadoDIAN === EstadoDIANNota.ACEPTADA &&
            this.cufe !== null;
   }
@@ -216,7 +207,7 @@ export class NotaAjuste {
    * Verifica si puede reintentarse
    */
   puedeReintentarse(): boolean {
-    return this.estado === EstadoNota.RECHAZADA &&
+    return this.estado === EstadoNota.REJECTED &&
            this.intentosEnvio < 3;
   }
 
@@ -236,12 +227,12 @@ export class NotaAjuste {
    */
   obtenerEstadoLegible(): string {
     const estados = {
-      [EstadoNota.BORRADOR]: 'Borrador',
-      [EstadoNota.ENVIADA]: 'Enviada a DIAN',
-      [EstadoNota.PROCESANDO]: 'DIAN Procesando',
-      [EstadoNota.ACEPTADA]: 'Aceptada por DIAN',
-      [EstadoNota.RECHAZADA]: 'Rechazada por DIAN',
-      [EstadoNota.ANULADA]: 'Anulada'
+      [EstadoNota.DRAFT]: 'Borrador',
+      [EstadoNota.SENT]: 'Enviada a DIAN',
+      [EstadoNota.PROCESSING]: 'DIAN Procesando',
+      [EstadoNota.ACCEPTED]: 'Aceptada por DIAN',
+      [EstadoNota.REJECTED]: 'Rechazada por DIAN',
+      [EstadoNota.CANCELLED]: 'Anulada'
     };
     return estados[this.estado] || this.estado;
   }

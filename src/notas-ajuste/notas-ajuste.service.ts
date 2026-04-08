@@ -84,20 +84,21 @@ export class NotasAjusteService {
         prefijo: 'NC',
         numero: numeroNota,
         numeroCompleto: `NC-${numeroNota}`,
+        metodoPago: createDto.metodoPago,
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.comprobante_completo,
         clienteId: factura.clientId,
         concepto: createDto.concepto,
         motivo: createDto.motivo,
         fecha: createDto.fecha,
-        fechaVencimiento: createDto.fechaVencimiento,
+        // fechaVencimiento: createDto.fechaVencimiento,
         items: itemsCalculados,
         subtotal,
         iva,
-        descuento: 0,
+        descuento: createDto.descuento,
         total,
         saldoPendiente: total,
-        estado: EstadoNota.BORRADOR,
+        estado: EstadoNota.DRAFT,
         estadoDIAN: EstadoDIANNota.PENDIENTE,
         observaciones: createDto.observaciones,
         createdById: userId
@@ -179,14 +180,14 @@ export class NotasAjusteService {
         concepto: createDto.concepto,
         motivo: createDto.motivo,
         fecha: createDto.fecha || '',
-        fechaVencimiento: createDto.fechaVencimiento || '',
+        // fechaVencimiento: createDto.fechaVencimiento || '',
         items: itemsCalculados,
         subtotal,
         iva,
         descuento: 0,
         total,
         saldoPendiente: total,
-        estado: EstadoNota.BORRADOR,
+        estado: EstadoNota.DRAFT,
         estadoDIAN: EstadoDIANNota.PENDIENTE,
         observaciones: createDto.observaciones,
         createdById: userId
@@ -227,7 +228,7 @@ export class NotasAjusteService {
  
     try {
       // 1. Cambiar estado
-      nota.estado = EstadoNota.ENVIADA;
+      nota.estado = EstadoNota.SENT;
       nota.estadoDIAN = EstadoDIANNota.ENVIADA;
       nota.fechaEnvioDIAN = new Date();
       nota.intentosEnvio += 1;
@@ -239,6 +240,7 @@ export class NotasAjusteService {
         respuesta = await this.factusService.crearNotaCredito(
           nota.facturaOriginal,
           nota.motivo,
+          nota.metodoPago,
           nota.concepto,
           nota.items.map(item => ({
             code_reference: item.articulo.codigo,
@@ -258,6 +260,7 @@ export class NotasAjusteService {
         respuesta = await this.factusService.crearNotaDebito(
           nota.facturaOriginal,
           nota.motivo,
+          nota.metodoPago,
           nota.concepto,
           nota.items.map(item => ({
             code_reference: item.articulo.codigo,
@@ -276,7 +279,7 @@ export class NotasAjusteService {
  
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
-        nota.estado = EstadoNota.ACEPTADA;
+        nota.estado = EstadoNota.ACCEPTED;
         nota.estadoDIAN = EstadoDIANNota.ACEPTADA;
         nota.fechaAceptacionDIAN = new Date();
         nota.cufe = respuesta.cufe;
@@ -298,7 +301,7 @@ export class NotasAjusteService {
         this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: ${respuesta.cufe}`);
  
       } else {
-        nota.estado = EstadoNota.RECHAZADA;
+        nota.estado = EstadoNota.REJECTED;
         nota.estadoDIAN = EstadoDIANNota.RECHAZADA;
         nota.mensajeError = respuesta.mensaje;
         nota.dianResponse = respuesta.respuestaCompleta;
@@ -311,7 +314,7 @@ export class NotasAjusteService {
  
     } catch (error) {
       // Revertir a borrador
-      nota.estado = EstadoNota.BORRADOR;
+      nota.estado = EstadoNota.DRAFT;
       nota.estadoDIAN = EstadoDIANNota.PENDIENTE;
       nota.mensajeError = error.message;
       await this.notaRepository.save(nota);
@@ -405,7 +408,7 @@ export class NotasAjusteService {
     try {
       const nota = await this.notaRepository.findOne({
         where: { id },
-        relations: ['cliente', 'facturaOriginal', 'items', 'createdBy']
+        relations: ['cliente', 'facturaOriginal', 'items', 'items.articulo', 'metodoPagoRelacion', 'createdBy']
       });
  
       if (!nota) {
@@ -508,7 +511,7 @@ export class NotasAjusteService {
       );
     }
  
-    nota.estado = EstadoNota.ANULADA;
+    nota.estado = EstadoNota.CANCELLED;
     nota.estadoDIAN = EstadoDIANNota.ANULADA;
     nota.observaciones = `Anulada: ${motivo}`;
  
@@ -563,13 +566,13 @@ export class NotasAjusteService {
    */
   async calcularImpactoEnFactura(facturaId: string): Promise<{totalNotasCredito: number; totalNotasDebito: number; saldoNeto: number;}> {
     const notas = await this.obtenerNotasPorFactura(facturaId);
-    const notasCredito = notas.filter(n => n.tipo === TipoNota.CREDITO && n.estado === EstadoNota.ACEPTADA);
-    const notasDebito = notas.filter(n => n.tipo === TipoNota.DEBITO && n.estado === EstadoNota.ACEPTADA);
+    const notasCredito = notas.filter(n => n.tipo === TipoNota.CREDITO && n.estado === EstadoNota.ACCEPTED);
+    const notasDebito = notas.filter(n => n.tipo === TipoNota.DEBITO && n.estado === EstadoNota.ACCEPTED);
     const totalNotasCredito = notasCredito.reduce((sum, n) => sum + Number(n.total), 0);
     const totalNotasDebito = notasDebito.reduce((sum, n) => sum + Number(n.total), 0);
     const saldoNeto = totalNotasDebito - totalNotasCredito;
  
-    return { totalNotasCredito, totalNotasDebito, saldoNeto};
+    return { totalNotasCredito, totalNotasDebito, saldoNeto };
   }
  
   // ========== MÉTODOS PRIVADOS ==========
@@ -590,10 +593,12 @@ export class NotasAjusteService {
       const cantidad = Number(itemDto.cantidad);
       const valorUnitario = Number(itemDto.valorUnitario);
       const porcentajeIVA = Number(itemDto.porcentajeIVA || 0);
- 
+      const descuento = Number(itemDto.descuento || 0);
+      
       const itemSubtotal = valorUnitario * cantidad;
       const itemIVA = itemSubtotal * (porcentajeIVA / 100);
-      const itemTotal = itemSubtotal + itemIVA;
+      const valorDescuento = itemSubtotal * (descuento / 100);
+      const itemTotal = itemSubtotal + itemIVA - valorDescuento;
  
       itemsCalculados.push({
         articuloId: itemDto.articuloId,
@@ -602,8 +607,8 @@ export class NotasAjusteService {
         cantidad,
         subtotal: itemSubtotal,
         valorIVA: itemIVA,
-        discount: itemDto.discount || 0,
-        valor_discount: itemDto.valor_discount || 0,
+        descuento: descuento,
+        valorDescuento: valorDescuento,
         total: itemTotal,
       });
  
@@ -620,7 +625,7 @@ export class NotasAjusteService {
       where: {
         facturaOriginalId: facturaId,
         tipo: TipoNota.CREDITO,
-        estado: EstadoNota.ACEPTADA
+        estado: EstadoNota.ACCEPTED
       }
     });
  

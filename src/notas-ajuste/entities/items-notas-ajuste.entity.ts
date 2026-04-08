@@ -40,11 +40,11 @@ export class ItemNotaAjuste {
   @Column('decimal', { precision: 10, scale: 2 })
   total: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
-  discount: number;
+  @Column('decimal', { precision: 5, scale: 2 })
+  descuento: number;
 
   @Column('decimal', { precision: 10, scale: 2 })
-  valor_discount: number;
+  valorDescuento: number;
 
   @ManyToOne(() => NotaAjuste, nota => nota.items)
   nota: NotaAjuste;

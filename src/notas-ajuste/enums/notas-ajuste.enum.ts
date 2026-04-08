@@ -19,12 +19,12 @@ export enum TipoNota {
  * Estados de la nota de ajuste
  */
 export enum EstadoNota {
-  BORRADOR = 'borrador',           // Creada pero no enviada
-  ENVIADA = 'enviada',             // Enviada a DIAN
-  PROCESANDO = 'procesando',       // DIAN procesando
-  ACEPTADA = 'aceptada',           // DIAN aceptó
-  RECHAZADA = 'rechazada',         // DIAN rechazó
-  ANULADA = 'anulada'              // Nota anulada
+  DRAFT = 'borrador',               // Creada pero no enviada
+  SENT = 'enviada',                 // Enviada a DIAN
+  PROCESSING = 'procesando',        // DIAN procesando
+  ACCEPTED = 'aceptada',            // DIAN aceptó
+  REJECTED = 'rechazada',           // DIAN rechazó
+  CANCELLED = 'anulada'             // Nota anulada
 }
 
 /**
