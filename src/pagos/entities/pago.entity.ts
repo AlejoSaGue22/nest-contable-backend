@@ -10,6 +10,7 @@ import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entit
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { User } from 'src/users/entities/user.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
 import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
 
@@ -56,7 +57,7 @@ export class Pago {
   fecha: Date;
 
   /** Monto de ESTE abono (no el total de la factura) */
-  @Column('int')
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   monto: number;
 
   @Column({ type: 'enum', enum: MedioPago })

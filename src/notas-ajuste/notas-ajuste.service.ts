@@ -11,6 +11,7 @@ import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class NotasAjusteService {
@@ -359,13 +360,13 @@ export class NotasAjusteService {
       }
  
       if (where.facturaNumero) {
-        queryBuilder.andWhere('nota.facturaOriginalNumero ILIKE :facturaNumero', {
+        queryBuilder.andWhere('nota.facturaOriginalNumero LIKE :facturaNumero', {
           facturaNumero: `%${where.facturaNumero}%`
         });
       }
  
       if (where.clienteNombre) {
-        queryBuilder.andWhere('cliente.nombre ILIKE :clienteNombre', {
+        queryBuilder.andWhere('cliente.nombre LIKE :clienteNombre', {
           clienteNombre: `%${where.clienteNombre}%`
         });
       }
@@ -475,6 +476,7 @@ export class NotasAjusteService {
       };
 
       if (updateDto.motivo) updatePayload.motivo = updateDto.motivo;
+      if (updateDto.metodoPago) updatePayload.metodoPago = updateDto.metodoPago;
       if (updateDto.fecha) updatePayload.fecha = new Date(updateDto.fecha);
       if (updateDto.observaciones) updatePayload.observaciones = updateDto.observaciones;
 
@@ -568,9 +570,9 @@ export class NotasAjusteService {
     const notas = await this.obtenerNotasPorFactura(facturaId);
     const notasCredito = notas.filter(n => n.tipo === TipoNota.CREDITO && n.estado === EstadoNota.ACCEPTED);
     const notasDebito = notas.filter(n => n.tipo === TipoNota.DEBITO && n.estado === EstadoNota.ACCEPTED);
-    const totalNotasCredito = notasCredito.reduce((sum, n) => sum + Number(n.total), 0);
-    const totalNotasDebito = notasDebito.reduce((sum, n) => sum + Number(n.total), 0);
-    const saldoNeto = totalNotasDebito - totalNotasCredito;
+    const totalNotasCredito = notasCredito.reduce((sum, n) => MathUtil.sum(sum, Number(n.total)), 0);
+    const totalNotasDebito = notasDebito.reduce((sum, n) => MathUtil.sum(sum, Number(n.total)), 0);
+    const saldoNeto = MathUtil.sub(totalNotasDebito, totalNotasCredito);
  
     return { totalNotasCredito, totalNotasDebito, saldoNeto };
   }
@@ -595,10 +597,12 @@ export class NotasAjusteService {
       const porcentajeIVA = Number(itemDto.porcentajeIVA || 0);
       const descuento = Number(itemDto.descuento || 0);
       
-      const itemSubtotal = valorUnitario * cantidad;
-      const itemIVA = itemSubtotal * (porcentajeIVA / 100);
-      const valorDescuento = itemSubtotal * (descuento / 100);
-      const itemTotal = itemSubtotal + itemIVA - valorDescuento;
+      const itemSubtotal = MathUtil.mul(valorUnitario, cantidad);
+      const itemIVA = MathUtil.percentage(itemSubtotal, porcentajeIVA);
+      const valorDescuento = MathUtil.percentage(itemSubtotal, descuento);
+      
+      // itemSubtotal + itemIVA - valorDescuento
+      const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, itemIVA), valorDescuento);
  
       itemsCalculados.push({
         articuloId: itemDto.articuloId,
@@ -612,9 +616,9 @@ export class NotasAjusteService {
         total: itemTotal,
       });
  
-      subtotal += itemSubtotal;
-      iva += itemIVA;
-      total += itemTotal;
+      subtotal = MathUtil.sum(subtotal, itemSubtotal);
+      iva = MathUtil.sum(iva, itemIVA);
+      total = MathUtil.sum(total, itemTotal);
     }
  
     return { subtotal, iva, total, itemsCalculados };
@@ -629,7 +633,7 @@ export class NotasAjusteService {
       }
     });
  
-    return notasCredito.reduce((sum, nota) => sum + Number(nota.total), 0);
+    return notasCredito.reduce((sum, nota) => MathUtil.sum(sum, Number(nota.total)), 0);
   }
  
   private async generateNotaNumber(tipo: TipoNota): Promise<string> {

@@ -5,6 +5,7 @@ import { User } from "src/users/entities/user.entity";
 import { Pago } from "src/pagos/entities/pago.entity";
 import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { FormaPago } from "../../facturas-ventas/enums/factura-venta.enum";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
 
 export enum GastoEstado {
@@ -55,16 +56,16 @@ export class FacturaCompra {
     @OneToMany(() => FacturaCompraDetalle, detalle => detalle.facturaCompra, { cascade: true })
     items: FacturaCompraDetalle[];
 
-    @Column('int')
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
     subtotal: number;
 
-    @Column('int')
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
     descuento: number;
 
-    @Column('int')
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
     iva: number;
 
-    @Column('int')
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
     total: number;
 
     @Column({ nullable: true })
@@ -94,14 +95,14 @@ export class FacturaCompra {
      * Suma de todos los pagos registrados en la tabla `pagos`.
      * Se actualiza cada vez que se registra un pago.
      */
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     totalPagado: number;
 
     /**
      * Saldo pendiente = total - totalPagado.
      * Se recalcula automáticamente al registrar cada pago.
      */
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     saldoPendiente: number;
 
     /** Relación para acceder al historial de pagos de esta compra */

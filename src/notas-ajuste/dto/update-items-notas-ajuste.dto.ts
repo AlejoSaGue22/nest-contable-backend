@@ -1,4 +1,4 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { CreateNotasAjusteDto } from './create-notas-ajuste.dto';
+import { CreateItemNotaAjusteDto } from './create-items-notas-ajuste.dto';
 
-export class UpdateNotasAjusteDto extends PartialType(CreateNotasAjusteDto) {}
+export class UpdateItemNotaAjusteDto extends PartialType(CreateItemNotaAjusteDto) {}

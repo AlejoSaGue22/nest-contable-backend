@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Banco } from '../../bancos/entities/banco.entity';
+import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
 export enum TipoCuentaBancaria {
   CORRIENTE = 'corriente',
@@ -50,10 +51,10 @@ export class CuentasBancarias {
   @Column({ default: true })
   activa: boolean;
 
-  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2 })
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2, transformer: new ColumnNumericTransformer() })
   saldoInicial: number;
 
-  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2 })
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2, transformer: new ColumnNumericTransformer() })
   saldoActual: number;
 
   @Column({ nullable: true })

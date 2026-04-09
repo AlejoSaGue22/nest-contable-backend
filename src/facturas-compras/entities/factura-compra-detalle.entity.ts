@@ -1,5 +1,6 @@
 import { Articulo } from "src/articulos/entities/articulos.entity";
 import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { FacturaCompra } from "./factura-compra.entity";
 
 @Entity('facturas_compras_detalles')
@@ -22,28 +23,28 @@ export class FacturaCompraDetalle {
     @Column({ type: 'text', nullable: true })
     descripcion: string;
 
-    @Column('int')
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
     unitPrice: number;
 
-    @Column('int')
+    @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
     quantity: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     porcentajeIva: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     valorIva: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     descuento: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     valorDescuento: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     valorSubtotal: number;
 
-    @Column('int', { default: 0 })
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     itemTotal: number;
 
     @CreateDateColumn()

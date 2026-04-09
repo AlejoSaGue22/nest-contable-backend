@@ -12,6 +12,7 @@ import { AsientosContablesService } from 'src/asientos-contables/asientos-contab
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class PagosService {
@@ -118,8 +119,8 @@ export class PagosService {
       }
 
       // ── 4. Calcular nuevo saldo ──────────────────────────────────────
-      const nuevoTotalPagado    = factura.totalPagado + dto.monto;
-      const nuevoSaldoPendiente = factura.total - nuevoTotalPagado;
+      const nuevoTotalPagado    = MathUtil.sum(factura.totalPagado, dto.monto);
+      const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
       const nuevoPaymentStatus  = nuevoSaldoPendiente === 0
         ? PaymentStatus.PAID
         : PaymentStatus.PARTIAL;
@@ -172,7 +173,7 @@ export class PagosService {
       if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
-          cta.saldoActual = Number(cta.saldoActual) + Number(dto.monto);
+          cta.saldoActual = MathUtil.sum(cta.saldoActual, dto.monto);
           await queryRunner.manager.save(CuentasBancarias, cta);
         }
       }
@@ -283,8 +284,8 @@ export class PagosService {
       }
 
       // ── 4. Calcular nuevo saldo ──────────────────────────────────────
-      const nuevoTotalPagado    = factura.totalPagado + dto.monto;
-      const nuevoSaldoPendiente = factura.total - nuevoTotalPagado;
+      const nuevoTotalPagado    = MathUtil.sum(factura.totalPagado, dto.monto);
+      const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
       const nuevoPaymentStatus  = nuevoSaldoPendiente === 0
         ? PaymentStatus.PAID
         : PaymentStatus.PARTIAL;
@@ -343,7 +344,7 @@ export class PagosService {
       if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
-          cta.saldoActual = Number(cta.saldoActual) - Number(dto.monto);
+          cta.saldoActual = MathUtil.sub(cta.saldoActual, dto.monto);
           await queryRunner.manager.save(CuentasBancarias, cta);
         }
       }

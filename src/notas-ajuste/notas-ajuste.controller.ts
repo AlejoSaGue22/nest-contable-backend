@@ -38,15 +38,9 @@ export class NotasAjusteController {
     @Body() createDto: CreateNotaCreditoDto,
     @Req() req: AuthenticatedRequest
   ) {
-    const nota = await this.notasAjusteService.crearNotaCredito(
-      createDto,
-      req.user.sub
-    );
+    const nota = await this.notasAjusteService.crearNotaCredito(createDto, req.user.sub);
  
-    return toNotaAjusteResponse(
-      nota,
-      'Nota Crédito creada en borrador. Use /emitir para enviar a DIAN.'
-    );
+    return toNotaAjusteResponse(nota, 'Nota Crédito creada en borrador. Use /emitir para enviar a DIAN.');
   }
  
   /**
@@ -181,10 +175,7 @@ export class NotasAjusteController {
    */
   @Patch(':id')
   @Permissions(Permission.INVOICE_UPDATE)
-  async update(
-    @Param('id') id: string,
-    @Body() updateDto: UpdateNotasAjusteDto
-  ) {
+  async update(@Param('id') id: string, @Body() updateDto: UpdateNotasAjusteDto) {
     const nota = await this.notasAjusteService.update(id, updateDto);
     return toNotaAjusteResponse(nota, 'Nota actualizada exitosamente');
   }
@@ -198,10 +189,7 @@ export class NotasAjusteController {
   @Patch(':id/anular')
   @Permissions(Permission.INVOICE_DELETE)
   @HttpCode(HttpStatus.OK)
-  async anular(
-    @Param('id') id: string,
-    @Body() body: { motivo: string }
-  ) {
+  async anular(@Param('id') id: string, @Body() body: { motivo: string }) {
     const nota = await this.notasAjusteService.anular(id, body.motivo);
     return toNotaAjusteResponse(nota, 'Nota de ajuste anulada');
   }

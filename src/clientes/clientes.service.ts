@@ -25,21 +25,24 @@ export class ClientesService {
 
   async findAll(options: PaginatioDto) {
 
-    const { limit = 10, offset = 0 } = options;
+    const { limit = 10, offset = 0, search } = options;
 
-    const clientes = await this.clientesRepository.find({
-      take: limit,
-      skip: offset,
-      order: {
-        id: 'DESC'
-      },
-      relations: {
-        tipoDocumentoRel: true,
-        ciudadRel: true
-      }
-    });
+    const queryBuilder = this.clientesRepository.createQueryBuilder('cliente');
 
-    const totalClients = await this.clientesRepository.count();
+    if (search) {
+      queryBuilder.andWhere('cliente.nombre LIKE :search', {
+        search: `%${search}%`
+      });
+    }
+
+    queryBuilder.take(limit);
+    queryBuilder.skip(offset);
+    queryBuilder.orderBy('cliente.id', 'DESC');
+    queryBuilder.leftJoinAndSelect('cliente.tipoDocumentoRel', 'tipoDocumentoRel');
+    queryBuilder.leftJoinAndSelect('cliente.ciudadRel', 'ciudadRel');
+
+    const clientes = await queryBuilder.getMany();
+    const totalClients = await queryBuilder.getCount();
 
     const clientesMap = clientes.map((cli, indx) => {
       return {
@@ -49,7 +52,7 @@ export class ClientesService {
           estado: cli.isActive == true ? 'Activo' : 'Inactivo',
           ind: (indx + 1).toString()
       }
-    })
+    })  
 
     return {
       count: totalClients,

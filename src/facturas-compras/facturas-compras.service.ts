@@ -14,6 +14,7 @@ import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
 import { CreateFacturaCompraItemDto } from './dto/create-items-factura-compra.dto';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { ComprasFilterDto } from './dto/compras-filter.dto';
+import { MathUtil } from 'src/common/utils/math.util';
 
 
 @Injectable()
@@ -73,13 +74,15 @@ export class FacturasComprasService {
                     );
                 }
 
-                const unitPrice = itemDto.unitPrice | articulo.precio;
+                const unitPrice = itemDto.unitPrice || articulo.precio || 0;
                 const porcentajeIva = itemDto.iva || articulo.porcentajeIva || 0;
 
-                const itemSubtotal = itemDto.quantity * unitPrice;
-                const descuentoValor = (itemDto.discount / 100) * itemSubtotal;
-                const valorIva = itemSubtotal * (porcentajeIva / 100);
-                const itemTotal = (itemSubtotal - descuentoValor) + valorIva;
+                const itemSubtotal = MathUtil.mul(itemDto.quantity, unitPrice);
+                const descuentoValor = MathUtil.percentage(itemSubtotal, itemDto.discount || 0);
+                const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
+                
+                // (itemSubtotal - descuentoValor) + valorIva
+                const itemTotal = MathUtil.sum(MathUtil.sub(itemSubtotal, descuentoValor), valorIva);
 
                 detalles.push({
                     articuloId: articulo.id,
@@ -89,17 +92,17 @@ export class FacturasComprasService {
                     porcentajeIva,
                     valorIva,
                     valorSubtotal: itemSubtotal,
-                    descuento,
+                    descuento: itemDto.discount || 0,
                     valorDescuento: descuentoValor,
                     itemTotal
                 });
 
-                subtotal += itemSubtotal;
-                totalIva += valorIva;
-                descuento += descuentoValor;
+                subtotal = MathUtil.sum(subtotal, itemSubtotal);
+                totalIva = MathUtil.sum(totalIva, valorIva);
+                descuento = MathUtil.sum(descuento, descuentoValor);
             }
 
-            const total = subtotal + totalIva;
+            const total = MathUtil.sum(subtotal, totalIva);
             const numero = await this.generarNumeroGasto(queryRunner);
 
             // Crear gasto
@@ -329,7 +332,7 @@ export class FacturasComprasService {
                 subtotal = calc.subtotal;
                 totalIva = calc.totalIva;
                 descuento = calc.descuento;
-                total = (subtotal - descuento) + totalIva;
+                total = MathUtil.sum(MathUtil.sub(subtotal, descuento), totalIva);
 
                 // eliminar items actuales
                 await queryRunner.manager.delete(FacturaCompraDetalle, { facturaId: id });
@@ -351,10 +354,10 @@ export class FacturasComprasService {
                 formaPago: updateFacturaCompraDto.formaPago,
                 metodoPago: updateFacturaCompraDto.metodoPago,
                 fechaVencimiento: updateFacturaCompraDto.fechaVencimiento,
-                subtotal: Math.round(subtotal),
-                iva: Math.round(totalIva),
-                descuento: Math.round(descuento),
-                total: Math.round(total)
+                subtotal,
+                iva: totalIva,
+                descuento,
+                total
             };
 
             this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
@@ -397,15 +400,17 @@ export class FacturasComprasService {
             if (!articulo) throw new NotFoundException(`Producto no encontrado: ${item.articuloId}`);
             if (!articulo.isActive) throw new BadRequestException(`El producto ${articulo.nombre} no está activo`);
 
-            const precioUnitario = Number(item.unitPrice);
-            const cantidad = Number(item.quantity);
-            const porcentajeIva = Number(item.iva);
-            const porcentajeDescuento = Number(item.discount);
+            const precioUnitario = Number(item.unitPrice) || 0;
+            const cantidad = Number(item.quantity) || 0;
+            const porcentajeIva = Number(item.iva) || 0;
+            const porcentajeDescuento = Number(item.discount) || 0;
 
-            const itemSubtotal = precioUnitario * cantidad;
-            const valorIva = itemSubtotal * (porcentajeIva / 100);
-            const descuentoValor = itemSubtotal * (porcentajeDescuento / 100);
-            const itemTotal = itemSubtotal + valorIva - descuentoValor;
+            const itemSubtotal = MathUtil.mul(precioUnitario, cantidad);
+            const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
+            const descuentoValor = MathUtil.percentage(itemSubtotal, porcentajeDescuento);
+            
+            // itemSubtotal + valorIva - descuentoValor
+            const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, valorIva), descuentoValor);
 
             detalles.push({
                 articuloId: articulo.id,
@@ -420,9 +425,9 @@ export class FacturasComprasService {
                 itemTotal: itemTotal
             });
 
-            subtotal += itemSubtotal;
-            totalIva += valorIva;
-            descuento += descuentoValor;
+            subtotal = MathUtil.sum(subtotal, itemSubtotal);
+            totalIva = MathUtil.sum(totalIva, valorIva);
+            descuento = MathUtil.sum(descuento, descuentoValor);
         }
 
         return { subtotal, totalIva, descuento, detalles };

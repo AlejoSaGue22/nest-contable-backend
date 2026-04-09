@@ -12,6 +12,7 @@ import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { FactusService } from 'src/api-dian/services/factus.service';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class FacturasVentasService {
@@ -53,7 +54,7 @@ export class FacturasVentasService {
 
 
       const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
-      const total = (subtotal - descuento) + iva;
+      const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = createFacturasVentaDto.prefijo || (createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FAC');
@@ -237,7 +238,7 @@ export class FacturasVentasService {
       subtotal = calc.subtotal;
       iva = calc.iva;
       descuento = calc.descuento;
-      total = (subtotal - descuento) + iva;
+      total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
       // eliminar items actuales
       await queryRunner.manager.delete(ItemsFacturaVenta, { facturaId: id });
@@ -263,10 +264,10 @@ export class FacturasVentasService {
           metodoPago: updateDto.metodoPago || null,
           fechaVencimiento: updateDto.fechaVencimiento || null,
           tipoFactura: updateDto.tipoFactura,
-          subtotal: Math.round(subtotal),
-          iva: Math.round(iva),
-          descuento: Math.round(descuento),
-          total: Math.round(total)
+          subtotal,
+          iva,
+          descuento,
+          total
     };
 
     this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
@@ -513,7 +514,7 @@ export class FacturasVentasService {
       total: facturas.length,
       aceptadas: facturas.filter(f => f.status === InvoiceStatus.ACCEPTED).length,
       rechazadas: facturas.filter(f => f.status === InvoiceStatus.REJECTED).length,
-      montoTotal: facturas.reduce((sum, f) => sum + Number(f.total), 0),
+      montoTotal: facturas.reduce((sum, f) => MathUtil.sum(sum, Number(f.total)), 0),
     };
   }
 
@@ -532,17 +533,17 @@ export class FacturasVentasService {
       if (!product) throw new NotFoundException(`Producto no encontrado: ${itemDto.articuloId}`);
       if (!product.isActive) throw new BadRequestException(`El producto ${product.nombre} no está activo`);
 
-      const unitPrice = Math.round(Number(itemDto.unitPrice) || product.precio || 0);
+      const unitPrice = Number(itemDto.unitPrice) || product.precio || 0;
       const quantity = Number(itemDto.quantity) || 0;
-      const itemSubtotal = Math.round(unitPrice * quantity);
+      const itemSubtotal = MathUtil.mul(unitPrice, quantity);
       
       const taxRate = Number(itemDto.iva) || 0;
-      const itemIva = Math.round(itemSubtotal * (taxRate / 100));
+      const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
       
       const discountRate = Number(itemDto.discount) || 0;
-      const itemDiscount = Math.round(itemSubtotal * (discountRate / 100));
+      const itemDiscount = MathUtil.percentage(itemSubtotal, discountRate);
       
-      const itemTotal = Math.round(itemSubtotal + itemIva - itemDiscount);
+      const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, itemIva), itemDiscount);
 
       itemsCalculados.push({
         articuloId: product.id,
@@ -552,21 +553,21 @@ export class FacturasVentasService {
         quantity,
         subtotal: itemSubtotal,
         valor_iva: itemIva,
-        importe: Math.round(itemSubtotal - itemDiscount),
+        importe: MathUtil.sub(itemSubtotal, itemDiscount),
         discount: discountRate,
         valor_discount: itemDiscount,
         total: itemTotal,
       });
 
-      subtotal += itemSubtotal;
-      iva += itemIva;
-      descuento += itemDiscount;
+      subtotal = MathUtil.sum(subtotal, itemSubtotal);
+      iva = MathUtil.sum(iva, itemIva);
+      descuento = MathUtil.sum(descuento, itemDiscount);
     }
 
     return { 
-      subtotal: Math.round(subtotal), 
-      iva: Math.round(iva), 
-      descuento: Math.round(descuento), 
+      subtotal, 
+      iva, 
+      descuento, 
       itemsCalculados 
     };
   }

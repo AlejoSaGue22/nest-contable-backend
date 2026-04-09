@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 import { NotaAjuste } from "./notas-ajuste.entity";
 import { Articulo } from "src/articulos/entities/articulos.entity";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
 /**
  * Items de la nota de ajuste
@@ -22,28 +23,28 @@ export class ItemNotaAjuste {
   @Column({ nullable: true })
   articuloId: string;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   cantidad: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   valorUnitario: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   subtotal: number;
 
-  @Column('decimal', { precision: 5, scale: 2 })
+  @Column('int')
   porcentajeIVA: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   valorIVA: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   total: number;
 
-  @Column('decimal', { precision: 5, scale: 2 })
+  @Column('int')
   descuento: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   valorDescuento: number;
 
   @ManyToOne(() => NotaAjuste, nota => nota.items)

@@ -14,6 +14,7 @@ import { TipoNota, EstadoNota, EstadoDIANNota, ConceptoNotaCredito } from "../en
 import { ItemNotaAjuste } from "./items-notas-ajuste.entity";
 import { FacturasVenta } from "src/facturas-ventas/entities/facturas-venta.entity";
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
 /**
  * Entidad para Notas de Ajuste (Crédito y Débito)
@@ -87,22 +88,22 @@ export class NotaAjuste {
   @OneToMany(() => ItemNotaAjuste, item => item.nota)
   items: ItemNotaAjuste[];
 
-  @Column('decimal', { precision: 15, scale: 2 })
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   subtotal: number;
 
-  @Column('decimal', { precision: 15, scale: 2 })
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   iva: number;
 
-  @Column('decimal', { precision: 15, scale: 2 })
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   descuento: number;
 
-  @Column('decimal', { precision: 15, scale: 2 })
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   total: number;
 
   /**
    * Saldo pendiente (si la nota es parcial)
    */
-  @Column('decimal', { precision: 15, scale: 2, default: 0 })
+  @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
   saldoPendiente: number;
 
   @Column({ 

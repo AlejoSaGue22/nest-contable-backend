@@ -17,4 +17,8 @@ export class PaginatioDto {
     @IsOptional()
     venta_compra?: 'venta' | 'compra';
 
+    @IsString()
+    @IsOptional()
+    search?: string;
+
 }

@@ -7,6 +7,7 @@ import { CanalVenta } from "src/core/catalogs/entities/canal-venta.entity";
 import { Pago } from "src/pagos/entities/pago.entity";
 import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from "../enums/factura-venta.enum";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
 @Entity('facturas_venta')
 export class FacturasVenta {
@@ -71,10 +72,10 @@ export class FacturasVenta {
   @OneToMany(() => ItemsFacturaVenta, item => item.factura)
   items: ItemsFacturaVenta[];
 
-  @Column('int')
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   iva: number;
 
-  @Column('int')
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   descuento: number;
 
   @ManyToOne(() => Cliente)
@@ -84,16 +85,11 @@ export class FacturasVenta {
   clientId: string;
 
   // Totales (calculados automáticamente)
-  @Column('int')
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   subtotal: number;
 
-  @Column('int')
+  @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   total: number;
-
-   // ══════════════════════════════════════════════════════
-  // ✅ NUEVOS CAMPOS: SEGUIMIENTO DE PAGOS (CxC)
-  // Completamente independientes del status de la factura
-  // ══════════════════════════════════════════════════════
 
   /**
    * Estado del pago — INDEPENDIENTE de InvoiceStatus.
@@ -115,14 +111,14 @@ export class FacturasVenta {
    * Suma de todos los abonos registrados en la tabla `pagos`.
    * Se actualiza cada vez que se registra un cobro.
    */
-  @Column('int', { default: 0 })
+  @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
   totalPagado: number;
 
   /**
    * Saldo pendiente = total - totalPagado.
    * Se calcula y guarda cada vez que se registra un cobro.
    */
-  @Column('int', { default: 0 })
+  @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
   saldoPendiente: number;
 
   /** Relación para acceder al historial de cobros de esta factura */
