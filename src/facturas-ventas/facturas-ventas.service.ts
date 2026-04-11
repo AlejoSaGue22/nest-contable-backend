@@ -100,8 +100,7 @@ export class FacturasVentasService {
           await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
           this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
         } catch (asientoError) {
-          await queryRunner.manager.update(
-            FacturasVenta,
+          await queryRunner.manager.update(FacturasVenta,
             { id: savedInvoice.id },
             {
               status: InvoiceStatus.ERROR_ASIENTO,

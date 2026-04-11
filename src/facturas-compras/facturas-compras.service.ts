@@ -103,11 +103,12 @@ export class FacturasComprasService {
             }
 
             const total = MathUtil.sum(subtotal, totalIva);
-            const numero = await this.generarNumeroGasto(queryRunner);
+            const isDraft = createFacturaCompraDto.isDraft;
+            const numero = isDraft ? null : await this.generarNumeroGasto(queryRunner);
 
             // Crear gasto
             const gasto = queryRunner.manager.create(FacturaCompra, {
-                numero,
+                numero: numero || '',
                 fecha: createFacturaCompraDto.fecha,
                 proveedorId: proveedor.id,
                 observaciones: createFacturaCompraDto.observaciones,
@@ -118,35 +119,45 @@ export class FacturasComprasService {
                 iva: totalIva,
                 descuento,
                 total,
-                estado: GastoEstado.REGISTRADO,
+                estado: isDraft ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
                 paymentStatus: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
                 saldoPendiente: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0,
                 totalPagado: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total,
                 createdById: userId,
-                items: detalles
             });
 
             const gastoGuardado = await queryRunner.manager.save(FacturaCompra, gasto);
 
+            const itemsToSave = detalles.map(item => 
+                queryRunner.manager.create(FacturaCompraDetalle, {
+                    ...item,
+                    facturaCompraId: gastoGuardado.id
+                })
+            );
+            await queryRunner.manager.save(FacturaCompraDetalle, itemsToSave);
+
+
             // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO
-            try {
-                await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
-                this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
-            } catch (asientoError) {
-                await queryRunner.manager.update(
-                    FacturaCompra,
-                    { id: gastoGuardado.id },
-                    {
-                        estado: GastoEstado.ERROR_ASIENTO,
-                        asientoError: asientoError.message,
-                        fechaAsientoError: new Date()
-                    }
-                );
+            if (!isDraft) {
+                try {
+                    await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
+                    this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
+                } catch (asientoError) {
+                    await queryRunner.manager.update(
+                        FacturaCompra,
+                        { id: gastoGuardado.id },
+                        {
+                            estado: GastoEstado.ERROR_ASIENTO,
+                            asientoError: asientoError.message,
+                            fechaAsientoError: new Date()
+                        }
+                    );
 
-                this.logger.error(
-                    `Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`
-                );
+                    this.logger.error(
+                        `Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`
+);
 
+                }
             }
 
             await queryRunner.commitTransaction();
@@ -250,11 +261,67 @@ export class FacturasComprasService {
         }
     }
 
+    async registrar(id: string, userId: string): Promise<FacturaCompra> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            const factura = await queryRunner.manager.findOne(FacturaCompra, {
+                where: { id },
+                relations: ['items', 'items.articulo', 'proveedor']
+            });
+
+            if (!factura) {
+                throw new NotFoundException(`Factura de compra ${id} no encontrada`);
+            }
+
+            if (factura.estado !== GastoEstado.BORRADOR) {
+                throw new BadRequestException('Solo se pueden registrar facturas en estado borrador');
+            }
+
+            // Asignar número secuencial
+            const numero = await this.generarNumeroGasto(queryRunner);
+            factura.numero = numero;
+            factura.estado = GastoEstado.REGISTRADO;
+
+            const facturaGuardada = await queryRunner.manager.save(FacturaCompra, factura);
+
+            // Generar asiento contable
+            try {
+                await this.asientosContablesService.generarAsientoGasto(facturaGuardada, userId);
+                this.logger.log(`Asiento contable generado para factura registrada ${facturaGuardada.numero}`);
+            } catch (asientoError) {
+                await queryRunner.manager.update(
+                    FacturaCompra,
+                    { id: facturaGuardada.id },
+                    {
+                        estado: GastoEstado.ERROR_ASIENTO,
+                        asientoError: asientoError.message,
+                        fechaAsientoError: new Date()
+                    }
+                );
+                this.logger.error(`Error generando asiento para factura registrada ${facturaGuardada.numero}: ${asientoError.message}`);
+            }
+
+            await queryRunner.commitTransaction();
+            return facturaGuardada;
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error(`Error registrando factura ${id}: ${error.message}`, error.stack);
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
     private async generarNumeroGasto(queryRunner: any): Promise<string> {
-        const ultimoGasto = await queryRunner.manager.findOne(FacturaCompra, {
-            where: {},
-            order: { numero: 'DESC' }
-        });
+        const queryBuilder = queryRunner.manager.createQueryBuilder(FacturaCompra, 'gasto')
+            .where('gasto.numero IS NOT NULL')
+            .orderBy('gasto.numero', 'DESC');
+
+        const ultimoGasto = await queryBuilder.getOne();
 
         const ultimoNumero = ultimoGasto ? parseInt(ultimoGasto.numero?.split('-')[1]) : 0;
         return `FC-${(ultimoNumero + 1).toString().padStart(6, '0')}`;
@@ -383,8 +450,52 @@ export class FacturasComprasService {
         }
     }
 
+    async remove(id: string) {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            const factura = await queryRunner.manager.findOne(FacturaCompra, {
+                where: { id },
+                relations: ['items']
+            });
+
+            if (!factura) {
+                throw new NotFoundException('Factura no encontrada');
+            }
+
+            if (!factura.puedeEliminarse()) {
+                throw new BadRequestException('Solo se pueden eliminar facturas en estado borrador');
+            }
+
+            // Verificar si tiene pagos
+            const pagos = await queryRunner.manager.find(Pago, {
+                where: { facturaCompraId: id }
+            });
+
+            if (pagos.length > 0) {
+                throw new BadRequestException('No se puede eliminar la factura porque tiene pagos asociados');
+            }
+
+            await queryRunner.manager.softRemove(factura);
+            await queryRunner.manager.softRemove(factura.items);
+            
+
+            await queryRunner.commitTransaction();
+            this.logger.log(`Factura ${id} eliminada exitosamente`);
+
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error(`Error eliminando factura ${id}: ${error.message}`, error.stack);
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
     private async calcularTotales(queryRunner: QueryRunner, items: CreateFacturaCompraItemDto[]): 
-                    Promise<{ subtotal: number; totalIva: number; descuento: number, detalles: Partial<FacturaCompraDetalle>[] }> {
+            Promise<{ subtotal: number; totalIva: number; descuento: number, detalles: Partial<FacturaCompraDetalle>[] }> {
 
         let subtotal = 0;
         let totalIva = 0;

@@ -51,4 +51,7 @@ export class CreateFacturaCompraDto {
     @IsNumber()
     @IsOptional()
     total: number;
+
+    @IsOptional()
+    isDraft?: boolean;
 }

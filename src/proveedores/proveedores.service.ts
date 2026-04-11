@@ -59,8 +59,14 @@ export class ProveedoresService {
         };
     }
 
-    async findOne(id: string) {
-        const proveedor = await this.proveedorRepository.findOne({ where: { id } });
+    async findOne(id: string) { 
+        const proveedor = await this.proveedorRepository.findOne({
+            where: { id },
+            relations: {
+                tipoDocumentoRel: true,
+                ciudadRel: true
+            }
+        });
         if (!proveedor) {
             throw new NotFoundException(`Proveedor con id ${id} no encontrado`);
         }

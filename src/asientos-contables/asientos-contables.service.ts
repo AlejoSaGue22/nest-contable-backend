@@ -237,7 +237,7 @@ export class AsientosContablesService {
         {
           tipo:        TipoAsiento.GASTO,
           fecha:       gasto.fecha,
-          referencia:  gasto.numero,
+          referencia:  gasto.numero!,
           descripcion: `Asiento automático - Gasto ${gasto.numero}`,
           detalles,
           userId,
@@ -452,7 +452,7 @@ export class AsientosContablesService {
         {
           tipo:        TipoAsiento.ANULACION_FACTURA_COMPRA,
           fecha:       new Date(),
-          referencia:  gasto.numero,
+          referencia:  gasto.numero!,
           descripcion: `Asiento ANULACIÓN - Compra ${gasto.numero}`,
           detalles,
           userId,
@@ -697,7 +697,7 @@ export class AsientosContablesService {
         {
           tipo: TipoAsiento.PAGO_PROVEEDOR,
           fecha,
-          referencia:  facturaCompra.numero,
+          referencia:  facturaCompra.numero!,
           descripcion: `Pago $${monto.toLocaleString('es-CO')} a proveedor - Compra ${facturaCompra.numero}`,
           detalles,
           userId,

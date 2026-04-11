@@ -43,10 +43,24 @@ export class FacturasComprasController {
         return toInvoiceResponse(invoice, 'Factura actualizada exitosamente');
     }
 
+    @Patch(':id/registrar')
+    @Permissions(Permission.INVOICE_UPDATE)
+    async registrar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+        const invoice = await this.facturasComprasService.registrar(id, req.user.sub);
+        return toInvoiceResponse(invoice, 'Factura de compra registrada exitosamente');
+    }
+
     @Patch(':id/anular')
     @Permissions(Permission.INVOICE_DELETE)
     async anular(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
         const invoice = await this.facturasComprasService.anular(id, req.user.sub);
         return toInvoiceResponse(invoice, 'Factura de compra anulada exitosamente');
+    }
+
+    @Delete(':id')
+    @Permissions(Permission.INVOICE_DELETE)
+    async remove(@Param('id') id: string) {
+        await this.facturasComprasService.remove(id);
+        return toInvoiceResponse([], 'Factura eliminada exitosamente');
     }
 }

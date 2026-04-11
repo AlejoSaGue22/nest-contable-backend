@@ -75,7 +75,7 @@ export class ArticulosService {
   }
 
   async findAll(options: PaginatioDto) {
-    const { limit = 10, offset = 0, venta_compra } = options;
+    const { limit = 10, offset = 0, venta_compra, search } = options;
 
     const queryBuilder = this.articulosRepository.createQueryBuilder('articulo');
     queryBuilder.leftJoinAndSelect('articulo.unidadmedidaRel', 'unidadmedidaRel');
@@ -86,8 +86,18 @@ export class ArticulosService {
       queryBuilder.andWhere('articulo.tipo = :tipo', { tipo: venta_compra });
     }
 
+    if (search) {
+      queryBuilder.andWhere('articulo.nombre LIKE :search', {
+        search: `%${search}%`
+      });
+    }
+
+    queryBuilder.take(limit);
+    queryBuilder.skip(offset);
+    queryBuilder.orderBy('articulo.id', 'DESC');
+
     const articulos = await queryBuilder.getMany();
-    const totalArticulos = await this.articulosRepository.count();
+    const totalArticulos = await queryBuilder.getCount();
 
     const articulosMap = articulos.map((cli, indx) => {
       return {

@@ -59,7 +59,7 @@ export class FacturasVenta {
   @Column({ type: 'date', nullable: true })
   fechaVencimiento: Date | null;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date' }) 
   fecha: Date;
 
   @Column({ nullable: true })

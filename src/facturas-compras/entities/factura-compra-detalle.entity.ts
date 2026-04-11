@@ -1,5 +1,5 @@
 import { Articulo } from "src/articulos/entities/articulos.entity";
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { FacturaCompra } from "./factura-compra.entity";
 
@@ -49,4 +49,7 @@ export class FacturaCompraDetalle {
 
     @CreateDateColumn()
     createdAt: Date;
+
+    @DeleteDateColumn()
+    deletedAt: Date;
 }

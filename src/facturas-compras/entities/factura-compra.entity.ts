@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Proveedor } from "../../proveedores/entities/proveedor.entity";
 import { FacturaCompraDetalle } from "./factura-compra-detalle.entity";
 import { User } from "src/users/entities/user.entity";
@@ -6,6 +6,7 @@ import { Pago } from "src/pagos/entities/pago.entity";
 import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { FormaPago } from "../../facturas-ventas/enums/factura-venta.enum";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 
 
 export enum GastoEstado {
@@ -20,14 +21,15 @@ export class FacturaCompra {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column()
-    numero: string;
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    numero: string | null;
 
     @Column({ type: 'date' })
     fecha: Date;
 
     @ManyToOne(() => Proveedor)
-    proveedor: Proveedor;  
+    @JoinColumn({ name: 'proveedorId', referencedColumnName: 'id' })
+    proveedor: Proveedor; 
 
     @Column()
     proveedorId: string;
@@ -37,6 +39,10 @@ export class FacturaCompra {
 
     @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CREDITO })
     formaPago: FormaPago;
+
+    @ManyToOne(() => MetodoPago)
+    @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
+    metodoPagoRel: MetodoPago;
 
     @Column({ nullable: true })
     metodoPago: string;
@@ -70,11 +76,6 @@ export class FacturaCompra {
 
     @Column({ nullable: true })
     numeroFacturaProveedor: string;
-
-    // ══════════════════════════════════════════════════════
-    // ✅ NUEVOS CAMPOS: SEGUIMIENTO DE PAGOS (CxP)
-    // Completamente independientes del estado de la factura
-    // ══════════════════════════════════════════════════════
 
     /**
      * Estado del pago — INDEPENDIENTE de GastoEstado.
@@ -120,35 +121,33 @@ export class FacturaCompra {
 
     @UpdateDateColumn()
     updatedAt: Date;
-    
-    
+
+    @DeleteDateColumn()
+    deletedAt: Date;
     
     // ========== MÉTODOS HELPER ==========
     
-      /**
-       * Verifica si el documento puede ser editado
-       */
+      /** Verifica si el documento puede ser editado */
       puedeEditarse(): boolean {
           return this.estado === GastoEstado.BORRADOR;
       }
     
-      /**
-       * Verifica si puede ser anulado
-       */
+      /** Verifica si puede ser anulado */
       puedeAnularse(): boolean {
           return this.estado === GastoEstado.REGISTRADO;
       }
+
+      /** Verifica si puede ser eliminado */
+      puedeEliminarse(): boolean {
+          return this.estado === GastoEstado.BORRADOR;
+      }
     
-      /**
-       * Verifica si puede ser pagado
-       */
+      /** Verifica si puede ser pagado */
       puedePagarse(): boolean {
           return this.estado === GastoEstado.REGISTRADO;
       }
     
-      /**
-       * Verifica si puede ser registrado
-       */
+      /** Verifica si puede ser registrado */
       puedeRegistrarse(): boolean {
           return this.estado === GastoEstado.BORRADOR;
       }

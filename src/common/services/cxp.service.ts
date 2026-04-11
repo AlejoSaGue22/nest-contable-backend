@@ -8,7 +8,7 @@ import { AgingBucket, AgingCxp } from '../dtos/cxc_cxp.dto';
 
 export interface CxpItem {
   facturaId:        string;
-  numeroFactura:    string;
+  numeroFactura:    string | null;
   proveedorId:      string;
   proveedorNombre:  string;
   fechaEmision:     Date;
@@ -84,7 +84,7 @@ export class CxpService {
           facturaId:        f.id,
           numeroFactura:    f.numero,
           proveedorId:      f.proveedorId,
-          proveedorNombre:  f.proveedor.razonSocial || f.proveedor.nombre,
+          proveedorNombre:  f.proveedor.razonSocial || `${f.proveedor.nombre} ${f.proveedor.apellido}`,
           fechaEmision:     f.fecha,
           fechaVencimiento: f.fechaVencimiento,
           diasVencida,

@@ -26,11 +26,11 @@ export class Proveedor {
     @Column()
     identificacion: string;
 
-    @Column()
-    nombre: string;
+    @Column({ nullable: true })
+    nombre?: string;
 
-    @Column()
-    apellido: string;
+    @Column({ nullable: true })
+    apellido?: string;
 
     @Column()
     email: string;

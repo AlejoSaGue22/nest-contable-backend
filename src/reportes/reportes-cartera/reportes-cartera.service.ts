@@ -87,7 +87,7 @@ export class ReportesCarteraService {
       return this.construirAgingReporte(
         facturas.map(f => ({
           id:            f.id,
-          numero:        f.numero,
+          numero:        f.numero || '—',
           contraparteId: f.proveedorId,
           contraparte:   (f.proveedor as any)?.nombre ?? f.proveedorId,
           emision:       f.fecha,
