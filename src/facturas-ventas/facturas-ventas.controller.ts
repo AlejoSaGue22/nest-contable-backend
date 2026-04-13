@@ -99,4 +99,11 @@ export class FacturasVentasController {
     });
     res.end(buffer);
   }
+
+  @Post(':id/reintentar-asiento')
+  @Permissions(Permission.INVOICE_UPDATE)
+  async reintentarAsiento(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const invoice = await this.facturasVentasService.reintentarAsiento(id, req.user.sub);
+    return toInvoiceResponse(invoice, 'Reintento de asiento contable exitoso');
+  }
 }

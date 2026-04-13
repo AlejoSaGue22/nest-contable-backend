@@ -1,0 +1,488 @@
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+
+<head>
+<style type="text/css">
+  * {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-size: 11px;
+  }
+
+  /* ── Página ── */
+  .page {
+    width: 21cm;
+    min-height: 27.7cm;
+    padding: 10px 14px;
+    box-sizing: border-box;
+    page-break-after: always;
+  }
+
+  @media print {
+    .page { page-break-after: always; }
+  }
+
+  /* ── Tabla de cabecera principal ── */
+  .tbl-header {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2px;
+  }
+  .tbl-header td, .tbl-header th {
+    font-size: 11px;
+    vertical-align: middle;
+    padding: 1px 3px;
+  }
+  .logo-cell {
+    width: 90px;
+    vertical-align: middle;
+  }
+  .empresa-cell {
+    vertical-align: middle;
+    font-weight: bold;
+    font-size: 13px;
+    padding-left: 5px;
+  }
+  .empresa-cell .nit {
+    font-weight: normal;
+    font-size: 11px;
+  }
+  .empresa-cell .regimen {
+    font-weight: normal;
+    font-size: 11px;
+  }
+  .dir-cell {
+    vertical-align: top;
+    font-size: 11px;
+    text-align: right;
+    padding-left: 8px;
+    width: 220px;
+  }
+  .header-address {
+    line-height: 1.25;
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+  .numero-box {
+    border: 2px solid black;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+    min-width: 120px;
+  }
+  .numero-label {
+    font-weight: normal;
+    font-size: 12px;
+  }
+
+  /* ── Título central ── */
+  .titulo-acta {
+    font-size: 14px;
+    font-weight: bold;
+    color: #000181;
+    text-align: center;
+    text-decoration: underline;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Tabla de datos del encabezado ── */
+  .tbl-info {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2px 0;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  .tbl-info td, .tbl-info th {
+    padding: 1px 4px;
+    vertical-align: top;
+  }
+  .label { font-weight: bold; white-space: nowrap; }
+
+  /* ── Tabla de líneas de detalle ── */
+  .tbl-detalle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+    margin-top: 4px;
+  }
+  .tbl-detalle thead tr {
+    border-top: 2px solid black;
+    border-bottom: 2px solid black;
+  }
+  .tbl-detalle th {
+    font-weight: bold;
+    padding: 2px 3px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .tbl-detalle td {
+    padding: 2px 3px;
+    vertical-align: middle;
+  }
+  .tbl-detalle .col-desc { text-align: left; }
+  .tbl-detalle .col-num  { text-align: right; }
+  .tbl-detalle .col-center { text-align: center; }
+
+  /* ── Sección totales (derecha) ── */
+  .tbl-totales {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+    margin-top: 2px;
+  }
+  .tbl-totales td {
+    padding: 1px 4px;
+    line-height: 1.2;
+  }
+  .tot-label { text-align: right; font-weight: bold; white-space: nowrap; padding-right: 4px; }
+  .tot-value { text-align: right; width: 125px; border-bottom: 1px solid #aaa; }
+
+  /* ── Firmas ── */
+  .tbl-firmas {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+    font-size: 11px;
+  }
+  .tbl-firmas td {
+    text-align: center;
+    padding: 0 10px;
+    vertical-align: bottom;
+  }
+  .linea-firma {
+    border-top: 1px solid black;
+    padding-top: 2px;
+    min-width: 140px;
+    display: inline-block;
+  }
+
+  /* ── Pie de página ── */
+  .tbl-footer {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 10.5px;
+  }
+  .tbl-footer td { padding: 1px 4px; }
+
+  .separator { border-top: 1px solid black; margin: 3px 0; }
+
+  .textRight { text-align: right; }
+  .textCenter { text-align: center; }
+  .bold { font-weight: bold; }
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 1: CABECERA  (Logo | Empresa | Dir | Numero)
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-header">
+    <tr>
+      <!-- Logo -->
+      <td class="logo-cell" rowspan="3" style="width:90px;">
+        <img src="data:image/png;base64,PLACEHOLDER_LOGO_BASE64" width="80px" height="35px" alt="logo">
+      </td>
+
+      <!-- Nombre empresa -->
+      <td class="empresa-cell" rowspan="3">
+        PROTEGER EPS SAS<br>
+        <span class="nit">NIT &nbsp;901.543.211-6</span><br>
+        <span class="regimen">REGIMEN COMUN</span>
+      </td>
+
+      <!-- Dirección y número en columna derecha -->
+      <td class="dir-cell" style="vertical-align:top; text-align:right; width:220px;">
+        <div class="header-address">
+          SOLEDAD<br>
+          Calle 17 N 17-66 Barrio Centro<br>
+          3245953<br>
+          SOLEDAD
+        </div>
+        <div class="numero-box" style="margin-top:8px; display:inline-block; text-align:right;">
+          <span class="numero-label">Numero:</span>
+          <strong>614092</strong>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="font-size:11px; text-align:right; padding-left:8px;">
+        Fecha: &nbsp;<strong>08/02/2026</strong>
+      </td>
+    </tr>
+    <tr>
+      <td style="font-size:11px; text-align:right; padding-left:8px;">
+        Página: 1 de 2
+      </td>
+    </tr>
+  </table>
+
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 2: Orden de Compra | TÍTULO | (vacío)
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-info" style="margin-top:2px;">
+    <tr>
+      <td style="width:22%;">
+        <span style="font-style: italic;">Orden de Compra:</span>
+      </td>
+      <td style="width:56%; text-align:center;">
+        <span class="titulo-acta">ACTA DE RECIBO DE MERCANCIA</span>
+      </td>
+      <td style="width:22%;"></td>
+    </tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 3: ALMACEN | LOC | FACTURA PROV
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-info" style="margin-top:2px;">
+    <tr>
+      <td style="width:22%;">
+        <span class="label">ALMACEN:</span> &nbsp;0 &nbsp;INDEFINIDO
+      </td>
+      <td style="width:34%;">
+        <span class="label">Loc</span> &nbsp;114345
+      </td>
+      <td style="width:44%;">
+        <span class="label">FACTURA PROV:</span> &nbsp;12223
+      </td>
+    </tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 4: Datos Proveedor | NIT | FECHA FAC
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-info" style="margin-top:2px;margin-bottom: 4px;">
+    <tr>
+      <td style="width:56%;">
+        <span class="label">Datos Proveedor:</span> &nbsp;E.S.E HOSPITAL MATERNO INFANTIL CIUDADELA METR
+        &nbsp;&nbsp;<strong>802013023</strong>
+      </td>
+      <td style="width:44%;">
+        <span class="label">FECHA FAC PROV:</span> &nbsp;
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span class="label">NIT:</span> &nbsp;802013023
+        &nbsp;&nbsp;<span class="label">REGIMEN COMUN</span>
+        &nbsp;&nbsp;<span class="label">AUTORETENEDOR</span>
+        &nbsp;&nbsp;<span class="label">GRAN CONTRIBUYENTE</span>
+      </td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>
+        <span class="label">COND. DE PAGO :</span> &nbsp;CONTADO
+      </td>
+      <td>
+        <span class="label">CONTRATO:</span> &nbsp;NÚMERO DE CONTRATO
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2">
+        <span class="label">DIRECCIÓN:</span> &nbsp;DIRECCIÓN DEL PROVEEDOR
+        &nbsp;&nbsp;Tel: TELÉFONO DEL PROVEEDOR
+        &nbsp;&nbsp;Fax: FAX DEL PROVEEDOR
+      </td>
+    </tr>
+  </table>
+
+  <!-- Separador doble -->
+  <!-- <div style="border-top:2px solid black; margin:3px 0;"></div> -->
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 5: TABLA DE DETALLE DE PRODUCTOS
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-detalle">
+    <thead>
+      <tr>
+        <th style="width:3%;">Req</th>
+        <th style="width:4%;">Solic</th>
+        <th style="width:7%;">Codigo</th>
+        <th class="col-desc" style="width:25%;">Descripcion Producto</th>
+        <th style="width:4%;">Uso</th>
+        <th style="width:3%;">Imp<br>Cons</th>
+        <th style="width:4%;">Und</th>
+        <th style="width:7%;">Cantidad</th>
+        <th style="width:11%;">Precio</th>
+        <th style="width:4%;">Desc</th>
+        <th style="width:4%;">Imp.</th>
+        <th style="width:10%;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="col-center">REQ123</td>
+        <td class="col-center">SOLICITUD</td>
+        <td class="col-center">COD123</td>
+        <td class="col-desc">DESCRIPCIÓN GENÉRICA DEL PRODUCTO</td>
+        <td class="col-center">USO</td>
+        <td class="col-center">IMP</td>
+        <td class="col-center">UND</td>
+        <td class="col-num">10,00</td>
+        <td class="col-num">100,00</td>
+        <td class="col-num">0,00</td>
+        <td class="col-num">0,00</td>
+        <td class="col-num">1.000,00</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="border-bottom:1px solid black; margin-top:2px;"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 6: TOTALES (izquierda vacía + derecha)
+  ═══════════════════════════════════════════════ -->
+  <table style="width:100%; border-collapse:collapse; font-size:10.5px; margin-top:4px;">
+    <tr>
+      <!-- Columna izquierda: cantidad total de ítems -->
+      <td style="width:60%; vertical-align:top; padding-top:4px;">
+        <strong>10,00</strong>
+      </td>
+
+      <!-- Columna derecha: tabla de totales -->
+      <td style="width:40%; vertical-align:top;">
+        <table class="tbl-totales">
+          <tr>
+            <td class="tot-label">Bruto:</td>
+            <td class="tot-value">1.000,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Descuento 1:&nbsp;(&nbsp;&nbsp;&nbsp;&nbsp;,00&nbsp;)%</td>
+            <td class="tot-value">0,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Subtotal:</td>
+            <td class="tot-value">1.000,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Descuento Item:</td>
+            <td class="tot-value">0,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Subtotal 1:</td>
+            <td class="tot-value">1.000,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Descuento 2:&nbsp;(&nbsp;&nbsp;&nbsp;&nbsp;,00&nbsp;)%</td>
+            <td class="tot-value">0,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Subtotal 2:</td>
+            <td class="tot-value">1.000,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Impuesto:</td>
+            <td class="tot-value">190,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label">Ajuste:</td>
+            <td class="tot-value">0,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label"><strong>Total:</strong></td>
+            <td class="tot-value"><strong>1.190,00</strong></td>
+          </tr>
+          <tr>
+            <td class="tot-label">Retenciones:</td>
+            <td class="tot-value">0,00</td>
+          </tr>
+          <tr>
+            <td class="tot-label"><strong>Neto:</strong></td>
+            <td class="tot-value" style="border-bottom:2px solid black;">
+              <strong>1.190,00</strong>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 7: OBSERVACIÓN / CONTRATO / FECHA ENTREGA
+  ═══════════════════════════════════════════════ -->
+  <div style="margin-top:8px; font-size:11px;">
+    <strong>OBSERVACIÓN:</strong> &nbsp;OBSERVACIÓN GENÉRICA
+  </div>
+  <div style="margin-top:4px; font-size:11px;">
+    <strong>CONTRATO:</strong> &nbsp;NÚMERO DE CONTRATO
+  </div>
+  <div style="margin-top:6px; font-size:11px;">
+    Fecha Entrega Material &nbsp;
+    <span style="display:inline-block; border-bottom:1px solid black; width:160px;">&nbsp;</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 8: FIRMAS — Elaboro | Autorizo | Aprobo
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-firmas">
+    <tr>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Elaboro
+      </td>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Autorizo
+      </td>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Aprobo
+      </td>
+    </tr>
+  </table>
+
+  <!-- Segunda fila de firmas -->
+  <table class="tbl-firmas" style="margin-top:20px;">
+    <tr>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Nombre completo y cédula<br>
+        Almacenista &nbsp;Cédula No
+        <span style="display:inline-block; border-bottom:1px solid black; width:80px;">&nbsp;</span>
+      </td>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Nombre completo y cédula<br>
+        Supervisor &nbsp;Cédula No
+        <span style="display:inline-block; border-bottom:1px solid black; width:80px;">&nbsp;</span>
+      </td>
+      <td>
+        <div class="linea-firma">&nbsp;</div><br>
+        Nombre completo y cédula<br>
+        Jefe de la Unidad
+        <span style="display:inline-block; border-bottom:1px solid black; width:80px;">&nbsp;</span>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════
+       BLOQUE 9: PIE DE PÁGINA
+  ═══════════════════════════════════════════════ -->
+  <table class="tbl-footer" style="margin-top:16px;">
+    <tr>
+      <td>Fecha y Hora de Impresión: 10/04/2026 12:00:00</td>
+      <td>&nbsp;&nbsp;</td>
+      <td>Impreso por: USUARIO GENÉRICO</td>
+      <td>&nbsp;&nbsp;</td>
+      <td>Estado: <strong>ESTADO GENÉRICO</strong></td>
+    </tr>
+  </table>
+
+</div>
+</body>
+</html>

@@ -77,12 +77,12 @@ export class NotaAjuste {
 
   @ManyToOne(() => MetodoPago)
   @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
-  metodoPagoRelacion: MetodoPago;
-
+  metodoPagoRelacion: MetodoPago; 
+ 
   @Column({ nullable: true })
-  metodoPago: string;
+  metodoPago: string; 
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date' }) 
   fecha: Date;
 
   @OneToMany(() => ItemNotaAjuste, item => item.nota)

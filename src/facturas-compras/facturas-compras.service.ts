@@ -15,6 +15,7 @@ import { CreateFacturaCompraItemDto } from './dto/create-items-factura-compra.dt
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { ComprasFilterDto } from './dto/compras-filter.dto';
 import { MathUtil } from 'src/common/utils/math.util';
+import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
 
 @Injectable()
@@ -74,6 +75,18 @@ export class FacturasComprasService {
                     );
                 }
 
+                if (createFacturaCompraDto.metodoPago) {
+                    const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
+                        where: { id: Number(createFacturaCompraDto.metodoPago) }
+                    });
+
+                    if (!metodoPago) {
+                        throw new NotFoundException('Método de pago no encontrado');
+                    }
+
+                    createFacturaCompraDto.metodoPago = metodoPago.codigo;
+                }
+
                 const unitPrice = itemDto.unitPrice || articulo.precio || 0;
                 const porcentajeIva = itemDto.iva || articulo.porcentajeIva || 0;
 
@@ -106,15 +119,19 @@ export class FacturasComprasService {
             const isDraft = createFacturaCompraDto.isDraft;
             const numero = isDraft ? null : await this.generarNumeroGasto(queryRunner);
 
-            // Crear gasto
+            // Crear gasto - Extraemos datos para evitar pasar el array de items del DTO directamente a la entidad
+            const { items, ...dtoRest } = createFacturaCompraDto;
+            
             const gasto = queryRunner.manager.create(FacturaCompra, {
-                numero: numero || '',
+                ...dtoRest,
+                numero: numero || null,
+                numeroFacturaProveedor: createFacturaCompraDto.numeroFacturaProveedor,
                 fecha: createFacturaCompraDto.fecha,
                 proveedorId: proveedor.id,
                 observaciones: createFacturaCompraDto.observaciones,
-                numeroFacturaProveedor: createFacturaCompraDto.numero,
                 formaPago: createFacturaCompraDto.formaPago,
-                metodoPago: createFacturaCompraDto.metodoPago,
+                metodoPago: createFacturaCompraDto.metodoPago || null,
+                fechaVencimiento: createFacturaCompraDto.fechaVencimiento?.trim() === '' ? null : createFacturaCompraDto.fechaVencimiento,
                 subtotal,
                 iva: totalIva,
                 descuento,
@@ -419,8 +436,9 @@ export class FacturasComprasService {
                 proveedorId: updateFacturaCompraDto.proveedorId,
                 fecha: updateFacturaCompraDto.fecha,
                 formaPago: updateFacturaCompraDto.formaPago,
-                metodoPago: updateFacturaCompraDto.metodoPago,
-                fechaVencimiento: updateFacturaCompraDto.fechaVencimiento,
+                metodoPago: updateFacturaCompraDto.metodoPago || null,
+                fechaVencimiento: updateFacturaCompraDto.fechaVencimiento?.trim() === '' ? null : updateFacturaCompraDto.fechaVencimiento,
+                observaciones: updateFacturaCompraDto.observaciones,
                 subtotal,
                 iva: totalIva,
                 descuento,
@@ -542,5 +560,33 @@ export class FacturasComprasService {
         }
 
         return { subtotal, totalIva, descuento, detalles };
+    }
+
+    async reintentarAsiento(id: string, userId: string): Promise<FacturaCompra> {
+        const gasto = await this.findOne(id);
+
+        if (gasto.estado !== GastoEstado.ERROR_ASIENTO) {
+            throw new BadRequestException('Solo se pueden reintentar facturas con error en el asiento.');
+        }
+
+        try {
+            await this.asientosContablesService.generarAsientoGasto(gasto, userId);
+            
+            // Si tiene éxito
+            gasto.estado = GastoEstado.REGISTRADO;
+            gasto.asientoError = null;
+            gasto.fechaAsientoError = undefined;
+
+            this.logger.log(`Asiento reintentado exitosamente para factura ${gasto.numero}`);
+            return await this.facturaCompraRepository.save(gasto);
+
+        } catch (error) {
+            gasto.asientoError = error.message;
+            gasto.fechaAsientoError = new Date();
+            await this.facturaCompraRepository.save(gasto);
+            
+            this.logger.error(`Fallo reintento de asiento para factura ${gasto.numero}: ${error.message}`);
+            throw new BadRequestException(`El asiento sigue fallando: ${error.message}`);
+        }
     }
 }

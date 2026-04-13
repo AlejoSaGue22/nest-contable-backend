@@ -63,4 +63,11 @@ export class FacturasComprasController {
         await this.facturasComprasService.remove(id);
         return toInvoiceResponse([], 'Factura eliminada exitosamente');
     }
+
+    @Post(':id/reintentar-asiento')
+    @Permissions(Permission.INVOICE_UPDATE)
+    async reintentarAsiento(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+        const invoice = await this.facturasComprasService.reintentarAsiento(id, req.user.sub);
+        return toInvoiceResponse(invoice, 'Reintento de asiento contable exitoso');
+    }
 }

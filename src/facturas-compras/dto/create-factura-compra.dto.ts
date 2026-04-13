@@ -18,7 +18,7 @@ export class CreateFacturaCompraDto {
 
     @IsString()
     @IsNotEmpty()
-    numero: string;
+    numeroFacturaProveedor: string;
 
     @IsString()
     @IsOptional()

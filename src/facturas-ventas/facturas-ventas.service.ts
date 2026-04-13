@@ -13,6 +13,7 @@ import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { MathUtil } from 'src/common/utils/math.util';
+import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -52,12 +53,24 @@ export class FacturasVentasService {
         throw new NotFoundException('Cliente no encontrado');
       }
 
+      if (createFacturasVentaDto.metodoPago) {
+        const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: Number(createFacturasVentaDto.metodoPago) }
+        });
+
+        if (!metodoPago) {
+          throw new NotFoundException('Método de pago no encontrado');
+        }
+
+        createFacturasVentaDto.metodoPago = metodoPago.codigo;
+      }
+
 
       const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
       const numberFactura = await this.generateInvoiceNumber();
-      const prefijo = createFacturasVentaDto.prefijo || (createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FAC');
+      const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FAC';
 
       const { items, ...createDtoRest } = createFacturasVentaDto;
 
@@ -81,7 +94,7 @@ export class FacturasVentasService {
         saldoPendiente: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0,
         totalPagado: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total,
         dianStatus: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED,
-      });
+      }); 
 
       const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
 
@@ -97,6 +110,7 @@ export class FacturasVentasService {
       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD) {
         try {
+          savedInvoice.items = itemsToSave;
           await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
           this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
         } catch (asientoError) {
@@ -578,5 +592,42 @@ export class FacturasVentasService {
     });
     const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante) : 0;
     return (lastNumber + 1).toString().padStart(8, '0');
+  }
+
+  async reintentarAsiento(id: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+
+    if (!factura) {
+      throw new NotFoundException('Factura no encontrada.');
+    }
+
+    if (factura.status !== InvoiceStatus.ERROR_ASIENTO) {
+      throw new BadRequestException('Solo se pueden reintentar facturas con error en el asiento.');
+    }
+
+    try {
+      await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
+
+      // Si tiene éxito, restaurar estado según tipo
+      factura.status = factura.tipoFactura === TipoFactura.ELECTRONICA 
+        ? InvoiceStatus.ACCEPTED 
+        : InvoiceStatus.ISSUED;
+      
+      factura.asientoError = null;
+      factura.fechaAsientoError = undefined;
+
+      this.logger.log(`Asiento reintentado exitosamente para factura ${factura.comprobante_completo}`);
+      return await this.facturaVentaRepository.save(factura);
+
+    } catch (error) {
+      factura.asientoError = error.message;
+
+
+      factura.fechaAsientoError = new Date();
+      await this.facturaVentaRepository.save(factura);
+      
+      this.logger.error(`Fallo reintento de asiento para factura ${factura.comprobante_completo}: ${error.message}`);
+      throw new BadRequestException(`El asiento sigue fallando: ${error.message}`);
+    }
   }
 }

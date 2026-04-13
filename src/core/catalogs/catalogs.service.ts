@@ -173,7 +173,7 @@ export class CatalogsService {
         const data = [
             { codigo: '10', nombre: 'Efectivo', state: true },
             { codigo: '42', nombre: 'Consignación', state: true },
-            { codigo: '20', nombre: 'Cheque', state: true },
+            { codigo: '20', nombre: 'Cheque', state: true }, 
             { codigo: '47', nombre: 'Transferencia', state: true },
             { codigo: '71', nombre: 'Bonos', state: true },
             { codigo: '72', nombre: 'Vales', state: true },
@@ -186,7 +186,7 @@ export class CatalogsService {
         for (const item of data) {
             const exists = await this.metodoPagoRepo.findOne({ where: { codigo: item.codigo } });
             if (!exists) {
-                await this.metodoPagoRepo.save(item);
+                await this.metodoPagoRepo.save(item); 
             }
         }
         this.logger.log('✔ Métodos de pago sincronizados');

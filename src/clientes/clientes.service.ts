@@ -47,7 +47,7 @@ export class ClientesService {
     const clientesMap = clientes.map((cli, indx) => {
       return {
           ...cli,
-          fullName: `${cli.nombre} ${cli.apellido}`,
+          fullName: cli.razonSocial ? cli.razonSocial : `${cli.nombre} ${cli.apellido}`,
           tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
           estado: cli.isActive == true ? 'Activo' : 'Inactivo',
           ind: (indx + 1).toString()

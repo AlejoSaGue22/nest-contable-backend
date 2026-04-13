@@ -1,0 +1,403 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+<style type="text/css">
+  * {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body { font-size: 11px; }
+
+  .page {
+    width: 21cm;
+    min-height: 27.7cm;
+    padding: 10px 14px;
+    page-break-after: always;
+  }
+  @media print { .page { page-break-after: always; } }
+
+  .bold { font-weight: bold; }
+
+  /* ── Caja Numero ── */
+  .numero-box {
+    border: 2px solid black;
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-size: 15px;
+    font-weight: bold;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .numero-box .lbl { font-weight: normal; font-size: 12px; }
+
+  /* ── Título ── */
+  .titulo-acta {
+    font-size: 14px;
+    font-weight: bold;
+    color: #000181;
+    /* text-decoration: underline; */
+    text-align: center;
+    display: block;
+  }
+
+  /* ── Tabla detalle ── */
+  .tbl-detalle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+    margin-top: 15px;
+  }
+  .tbl-detalle thead tr {
+    border-top: 2px solid black;
+    border-bottom: 2px solid black;
+  }
+  .tbl-detalle th {
+    font-weight: bold;
+    padding: 2px 3px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .tbl-detalle td { padding: 2px 3px; vertical-align: middle; }
+  .tr { text-align: right; }
+  .tc { text-align: center; }
+  .tl { text-align: left; }
+
+  /* ── Totales ── */
+  .tbl-totales { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  .tbl-totales td { padding: 0px 3px; line-height: 1.35; }
+  .tl-lbl { text-align: right; font-weight: bold; white-space: nowrap; padding-right: 4px; }
+  .tl-val { text-align: right; width: 120px; border-bottom: 1px solid #aaa; }
+  .tl-val-b { text-align: right; width: 120px; }
+  .tl-val-last { text-align: right; width: 120px; border-bottom: 2px solid black; }
+
+  /* ── Firmas ── */
+  .tbl-firmas { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .tbl-firmas td { text-align: center; padding: 0 6px; vertical-align: bottom; }
+  .linea { border-top: 1px solid black; display: inline-block; width: 170px; height: 1px; margin-bottom: 6px; }
+  .linea-short { border-bottom: 1px solid black; display: inline-block; width: 100px; height: 1px; vertical-align: middle; margin-left: 6px; }
+</style>
+</head>
+<body>
+  <div class="page">
+
+  <!-- ══════════════════════════════════════════════════════════
+      CABECERA: columna izquierda (62%) + columna derecha (38%)
+  ════════════════════════════════════════════════════════════ -->
+  <table style="width:100%; border-collapse:collapse; font-size:11px;">
+    <tr>
+
+      <!-- ── IZQUIERDA ── -->
+      <td style="width:66%; vertical-align:top; padding-right:6px;">
+
+        <!-- Logo + Empresa -->
+        <table style="width:100%; border-collapse:collapse;margin-bottom: 2rem;">
+          <tr>
+            <td style="width:85px; vertical-align:middle;">
+              <img src="data:image/png;base64,PLACEHOLDER_LOGO_BASE64" width="80" height="35" alt="logo">
+            </td>
+            <td style="vertical-align:middle; padding-left:4px; line-height:1.35;">
+              <span style="font-size:13px; font-weight:bold;">PROTEGER EPS SAS</span><br>
+              <span style="font-size:11px;">NIT &nbsp;901.543.211-6</span><br>
+              <span style="font-size:11px;">REGIMEN COMUN</span>
+            </td>
+          </tr>
+        </table>
+
+        <div style="height:5px;"></div>
+
+        <!-- Orden de Compra + Título ACTA (en la misma fila) -->
+        <table style="width:100%; border-collapse:collapse;">
+          <tr>
+            <td style="width:36%; font-style:italic; vertical-align:middle; font-size:11px;">
+              Orden de Compra:
+            </td>
+            <td style="vertical-align:middle;">
+              <span class="titulo-acta">ACTA DE RECIBO DE MERCANCIA</span>
+            </td>
+          </tr>
+        </table>
+
+        <!-- ALMACEN + Loc -->
+        <div style="margin-top:2px;">
+          <span class="bold">ALMACEN:</span>
+          &nbsp;0 &nbsp;INDEFINIDO
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <span class="bold">Loc</span> &nbsp;114345
+        </div>
+
+        <!-- Datos Proveedor -->
+        <div style="margin-top:1px;">
+          <span class="bold">Datos Proveedor:</span>
+          &nbsp;E.S.E HOSPITAL MATERNO INFANTIL CIUDADELA METR
+          &nbsp;<strong>802013023</strong>
+        </div>
+
+        <!-- NIT -->
+        <div style="margin-top:1px;">
+          <span class="bold">NIT:</span> &nbsp;802013023
+          &nbsp;&nbsp;<span class="bold">REGIMEN COMUN</span>
+          &nbsp;&nbsp;<span class="bold">AUTORETENEDOR</span>
+          &nbsp;&nbsp;<span class="bold">GRAN CONTRIBUYENTE</span>
+        </div>
+
+        <!-- COND. DE PAGO -->
+        <div style="margin-top:1px;">
+          <span class="bold">COND. DE PAGO :</span> &nbsp;A PRESENTACION
+        </div>
+
+        <!-- DIRECCIÓN -->
+        <div style="margin-top:1px;">
+          <span class="bold">DIRECCIÓN:</span>
+          &nbsp;CR 40 33 06 BRR COSTA HERMOSA SOLEDAD
+          &nbsp;&nbsp;Tel: 3016184215
+          &nbsp;&nbsp;Fax: 3759400
+        </div>
+
+      </td><!-- /IZQUIERDA -->
+
+      <!-- ── DERECHA ── -->
+      <td style="width:34%; vertical-align:top; padding-left:4rem;">
+
+        <!-- Ciudad / Dirección -->
+        <div style="line-height:1.4; margin-bottom:3px;">
+          SOLEDAD<br>
+          Calle 17 N 17-66 Barrio Centro<br>
+          3245953<br>
+          SOLEDAD
+        </div>
+
+        <!-- Caja Numero -->
+        <div style="margin-bottom:3px;">
+          <span class="numero-box">
+            <span class="lbl">Numero: </span> <span style="color: #000181">614092</span>
+          </span>
+        </div>
+
+        <!-- Fecha -->
+        <div style="margin-top:2px;">
+          Fecha : &nbsp;<strong>01/01/2025</strong>
+        </div>
+
+        <!-- Página -->
+        <div style="margin-top:2px;">
+          Página: &nbsp;1 de 1
+        </div>
+
+        <!-- FACTURA PROV -->
+        <div style="margin-top:2px;">
+          <span class="bold">FACTURA PROV:</span>
+          &nbsp;CJ2025010121
+        </div>
+
+        <!-- FECHA FAC PROV -->
+        <div style="margin-top:2px;">
+          <span class="bold">FECHA FAC PROV:</span>
+          &nbsp;
+        </div>
+
+        <!-- Espacio (alinea con COND. DE PAGO) -->
+        <div style="height:14px;"></div>
+
+        <!-- CONTRATO -->
+        <div>
+          <span class="bold">CONTRATO:</span>
+          &nbsp;
+        </div>
+
+      </td><!-- /DERECHA -->
+
+    </tr>
+  </table>
+  <!-- /CABECERA -->
+
+  <!-- ══════════════════════════════════════════════════════════
+      TABLA DE DETALLE (ancho completo)
+  ════════════════════════════════════════════════════════════ -->
+  <table class="tbl-detalle">
+    <thead>
+      <tr>
+        <th style="width:3%;  text-align:left;">Req</th>
+        <th style="width:4%;  text-align:left;">Solic</th>
+        <th style="width:6%;">Codigo</th>
+        <th style="width:24%; text-align:left;">Descripcion Producto</th>
+        <th style="width:4%;">Uso</th>
+        <th style="width:4%;">Und</th>
+        <th style="width:7%;">Cantidad</th>
+        <th style="width:12%;">Precio</th>
+        <th style="width:4%;">Desc</th>
+        <th style="width:4%;">Imp.</th>
+        <th style="width:4%;">Imp<br>Cons</th>
+        <th style="width:12%; text-align:right;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="tl">0</td>
+        <td class="tl">0</td>
+        <td class="tc">328</td>
+        <td class="tl">CE MEDICINA GENERAL</td>
+        <td class="tc">0</td>
+        <td class="tc">UN</td>
+        <td class="tr">1,00</td>
+        <td class="tr">338.443,00</td>
+        <td class="tc"></td>
+        <td class="tr">0,00</td>
+        <td class="tr"></td>
+        <td class="tr">500.338.443,00</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="border-bottom:1px solid black;margin-top: 15px;width: 70px;margin-left: 25rem;">
+  </div>
+  <span style="margin-left:28rem;">1,00</span>
+
+  <!-- ══════════════════════════════════════════════════════════
+      INFERIOR: izq (OBSERVACIÓN etc.) + der (TOTALES)
+  ════════════════════════════════════════════════════════════ -->
+  <table style="width:100%; border-collapse:collapse; margin-top:3px;">
+    <tr>
+
+      <!-- Izquierda inferior -->
+      <td style="width:60%; vertical-align:bottom; padding-right:8px; font-size:11px;">
+
+        <!-- Suma cantidades (justo bajo la tabla) -->
+        <!-- <div><span>1,00</span></div> -->
+
+        <!-- OBSERVACIÓN (baja para alinearse visualmente con Descuento 2) -->
+        <div style="margin-top:42px;">
+          <span class="bold">OBSERVACIÓN:</span>
+          &nbsp;PREFACTURA correspondiente al mes 1 Año 2025
+        </div>
+
+        <!-- CONTRATO -->
+        <div style="margin-top:54px;">
+          <span class="bold">CONTRATO:</span>
+          &nbsp;12152
+        </div>
+
+        <!-- Fecha Entrega Material -->
+        <div style="margin-top:20px;">
+          Fecha Entrega Material
+          &nbsp;<span style="display:inline-block; border-bottom:1px solid black; width:160px;">&nbsp;</span>
+        </div>
+
+      </td>
+
+      <!-- Derecha inferior: totales -->
+      <td style="width:40%; vertical-align:top;">
+        <table class="tbl-totales">
+          <tr>
+            <td class="tl-lbl">Bruto:</td>
+            <td class="tl-val-b">500.338.443,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Descuento 1:(&nbsp;&nbsp;&nbsp;&nbsp;,00&nbsp;)%</td>
+            <td class="tl-val">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Subtotal:</td>
+            <td class="tl-val-b">500.338.443,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Descuento Item:</td>
+            <td class="tl-val">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Subtotal 1:</td>
+            <td class="tl-val-b">500.338.443,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Descuento 2:(&nbsp;&nbsp;&nbsp;&nbsp;,00&nbsp;)%</td>
+            <td class="tl-val">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Subtotal 2:</td>
+            <td class="tl-val-b">500.338.443,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Impuesto:</td>
+            <td class="tl-val-b">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Ajuste:</td>
+            <td class="tl-val">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Total:</td>
+            <td class="tl-val-b"><strong>500.338.443,00</strong></td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Retenciones:</td>
+            <td class="tl-val-b">0,00</td>
+          </tr>
+          <tr>
+            <td class="tl-lbl">Neto:</td>
+            <td class="tl-val"><strong>500.338.443,00</strong></td>
+          </tr>
+        </table>
+      </td>
+
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════════
+      FIRMAS fila 1: Elaboro | Autorizo | Aprobo
+  ════════════════════════════════════════════════════════════ -->
+  <table class="tbl-firmas" style="margin-top:30px;">
+    <tr>
+      <td>
+        <span class="linea"></span><br>
+        Elaboro
+      </td>
+      <td>
+        <span class="linea"></span><br>
+        Autorizo
+      </td>
+      <td>
+        <span class="linea"></span><br>
+        Aprobo
+      </td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════════
+      FIRMAS fila 2: Almacenista | Supervisor | Jefe Unidad
+  ════════════════════════════════════════════════════════════ -->
+  <table class="tbl-firmas" style="margin-top:20px;">
+    <tr>
+      <td>
+        <span class="linea"></span><br>
+        Nombre completo y cédula<br>
+        Almacenista &nbsp;Cédula No <span class="linea-short"></span>
+      </td>
+      <td>
+        <span class="linea"></span><br>
+        Nombre completo y cédula<br>
+        Supervisor &nbsp;Cédula No <span class="linea-short"></span>
+      </td>
+      <td>
+        <span class="linea"></span><br>
+        Nombre completo y cédula<br>
+        Jefe de la Unidad <span class="linea-short"></span>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════════
+      PIE DE PÁGINA
+  ════════════════════════════════════════════════════════════ -->
+  <div style="font-size:10.5px; margin-top:15rem;">
+    Fecha y Hora de Impresión: 01/01/2025 12:00:00
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Impreso por: USUARIO GENERADO
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    Estado: <strong>ESTADO GENERADO</strong>
+  </div>
+
+  </div><!-- /page -->
+</body>
+</html>

@@ -65,7 +65,7 @@ export class AsientosContablesService {
       // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
       const isContado  = factura.formaPago === FormaPago.CONTADO;
       const codigoDebito = isContado
-        ? this.resolverCuentaContado(factura.metodoPagoRel?.codigo)
+        ? this.resolverCuentaContado(factura.metodoPago || undefined)
         : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
@@ -151,7 +151,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento factura venta: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento contable');
+      throw new InternalServerErrorException(`Error al generar asiento contable de factura de venta: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -218,6 +218,8 @@ export class AsientosContablesService {
 
       // ── Crédito: Caja/Bancos (contado) o Proveedores (crédito) ──────
       const isContado     = gasto.formaPago === FormaPago.CONTADO;
+      console.log('MetodoPago: ', gasto.metodoPago);
+      console.log('MetodoPagoRel: ', gasto.metodoPagoRel);
       const codigoCredito = isContado
         ? this.resolverCuentaContado(gasto.metodoPago ?? undefined)
         : '2205';
@@ -252,7 +254,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento gasto: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento contable de gasto');
+      throw new InternalServerErrorException(`Error al generar asiento contable de gasto: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -273,7 +275,7 @@ export class AsientosContablesService {
       // ── Crédito: reversa de Caja/Bancos / Clientes ──────────────────
       const isContado    = factura.formaPago === FormaPago.CONTADO;
       const codigoDebito = isContado
-        ? this.resolverCuentaContado(factura.metodoPagoRel?.codigo)
+        ? this.resolverCuentaContado(factura.metodoPago!)
         : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
@@ -357,7 +359,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento anulación: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento de anulación');
+      throw new InternalServerErrorException(`Error al generar asiento de anulación: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -390,7 +392,7 @@ export class AsientosContablesService {
       // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
       const isContado     = gasto.formaPago === FormaPago.CONTADO;
       const codigoDebito  = isContado
-        ? this.resolverCuentaContado(gasto.metodoPago)
+        ? this.resolverCuentaContado(gasto.metodoPago!)
         : '2205';
       const descDebito    = isContado
         ? `ANULACIÓN contado - Proveedor: ${gasto.proveedorId}`
@@ -467,7 +469,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento anulación compra: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento de anulación de compra');
+      throw new InternalServerErrorException(`Error al generar asiento de anulación de compra: ${error.message}`  );
     } finally {
       await queryRunner.release();
     }
@@ -539,7 +541,7 @@ export class AsientosContablesService {
       // 4. Contrapartida (Crédito para NC, Débito para ND): Clientes o Caja/Bancos
       const isContado = factura.formaPago === FormaPago.CONTADO;
       const codigoCuentaContra = isContado 
-        ? this.resolverCuentaContado(factura.metodoPagoRel?.codigo) 
+        ? this.resolverCuentaContado(factura.metodoPago!) 
         : '1305';
       
       const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
@@ -570,7 +572,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento nota ajuste: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento contable: ${error.message}`);
+      throw new InternalServerErrorException(`Error al generar asiento contable de nota de ajuste: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -642,7 +644,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento cobro: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento de cobro');
+      throw new InternalServerErrorException(`Error al generar asiento de cobro: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -714,7 +716,7 @@ export class AsientosContablesService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento pago proveedor: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al generar asiento de pago a proveedor');
+      throw new InternalServerErrorException(`Error al generar asiento de pago a proveedor: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -745,6 +747,8 @@ export class AsientosContablesService {
   // HELPERS PRIVADOS
   // ══════════════════════════════════════════════════════════════════════════
 
+
+
   /**
    * Dado el `codigo` del catálogo MetodoPago, retorna el código de cuenta PUC:
    *   - '1105' Caja     → si el pago es en efectivo
@@ -754,23 +758,12 @@ export class AsientosContablesService {
    */
   private resolverCuentaContado(codigoMetodoPago?: string): string {
     if (!codigoMetodoPago) return '1105'; // fallback: efectivo
+    console.log('codigoMetodoPago: ', codigoMetodoPago);
+    const metodoUpper = codigoMetodoPago;
 
-    const metodoUpper = codigoMetodoPago.toUpperCase();
+    const METODOS_BANCO = ['47','42','49','48','20']; // 47: Transferencia, 42: Consignación, 49: Tarjeta Débito, 48: Tarjeta Crédito, 20: Cheque
 
-    // Métodos que van por cuenta bancaria
-    const METODOS_BANCO = [
-      'TRANSFERENCIA',
-      'CONSIGNACION',
-      'TARJETA_DEBITO',
-      'TARJETA_CREDITO',
-      'TARJETA',
-      'CHEQUE',
-      'DAVIPLATA',
-      'NEQUI',
-      'PSE',
-    ];
-
-    if (METODOS_BANCO.some(m => metodoUpper.includes(m))) {
+    if (METODOS_BANCO.some(m => metodoUpper === m)) {
       return '1110'; // Bancos
     }
 

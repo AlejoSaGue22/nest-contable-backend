@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
-import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
-import { Repository, Between } from 'typeorm';
+import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
+import { Repository, Between, Not } from 'typeorm';
 import { ReportesService } from 'src/reportes/reportes-general/reportes.service';
+import { InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 
 // export interface DashboardSummary {
 //     estadoResultados: any;
@@ -50,13 +51,19 @@ export class DashboardService {
             const recentSales = await this.facturaVentaRepository.find({
                 take: 5,
                 order: { fecha: 'DESC', createdAt: 'DESC' },
-                relations: ['client']
+                relations: ['client'],
+                where: {
+                    status: Not(InvoiceStatus.DRAFT)
+                }
             });
 
             const recentPurchases = await this.facturaCompraRepository.find({
                 take: 5,
                 order: { fecha: 'DESC', createdAt: 'DESC' },
-                relations: ['proveedor']
+                relations: ['proveedor'],
+                where: {
+                    estado: Not(GastoEstado.BORRADOR)
+                }
             });
 
             const recentTransactions = [
@@ -83,7 +90,8 @@ export class DashboardService {
             // 3. Totales de Compras (del módulo FacturaCompra para el mes actual)
             const comprasMes = await this.facturaCompraRepository.find({
                 where: {
-                    fecha: Between(firstDayOfMonth, lastDayOfMonth)
+                    fecha: Between(firstDayOfMonth, lastDayOfMonth),
+                    estado: GastoEstado.REGISTRADO
                 }
             });
             const totalCompras = comprasMes.reduce((sum, c) => sum + c.total, 0);

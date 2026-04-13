@@ -11,10 +11,6 @@ export class CreateFacturasVentaDto {
 
     @IsOptional()
     @IsString()
-    prefijo?: string;
-
-    @IsOptional()
-    @IsString()
     vendedor?: string;
 
     @IsNumber()

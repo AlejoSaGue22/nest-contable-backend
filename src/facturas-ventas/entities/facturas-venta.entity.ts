@@ -54,7 +54,7 @@ export class FacturasVenta {
   metodoPagoRel: MetodoPago;
 
   @Column({ nullable: true })
-  metodoPago: string | null;
+  metodoPago: string | null; 
 
   @Column({ type: 'date', nullable: true })
   fechaVencimiento: Date | null;
@@ -62,11 +62,11 @@ export class FacturasVenta {
   @Column({ type: 'date' }) 
   fecha: Date;
 
-  @Column({ nullable: true })
-  asientoError: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  asientoError: string | null;
 
   @Column({ nullable: true })
-  fechaAsientoError: Date;
+  fechaAsientoError?: Date;
 
   // Items de la factura
   @OneToMany(() => ItemsFacturaVenta, item => item.factura)

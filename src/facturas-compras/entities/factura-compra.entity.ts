@@ -38,23 +38,23 @@ export class FacturaCompra {
     observaciones: string;
 
     @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CREDITO })
-    formaPago: FormaPago;
+    formaPago: FormaPago; 
 
     @ManyToOne(() => MetodoPago)
     @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
     metodoPagoRel: MetodoPago;
 
-    @Column({ nullable: true })
-    metodoPago: string;
+    @Column({ nullable: true }) 
+    metodoPago: string | null; 
 
     @Column({ type: 'date', nullable: true })
-    fechaVencimiento: Date;
-
+    fechaVencimiento: Date | null;
+ 
     @Column({ type: 'enum', enum: GastoEstado, default: GastoEstado.BORRADOR })
     estado: GastoEstado;
 
-    @Column({ nullable: true })
-    asientoError?: string;
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    asientoError?: string | null;
 
     @Column({ nullable: true })
     fechaAsientoError?: Date;
