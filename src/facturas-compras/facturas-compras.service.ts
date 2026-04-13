@@ -299,30 +299,39 @@ export class FacturasComprasService {
 
             // Asignar número secuencial
             const numero = await this.generarNumeroGasto(queryRunner);
-            factura.numero = numero;
-            factura.estado = GastoEstado.REGISTRADO;
 
-            const facturaGuardada = await queryRunner.manager.save(FacturaCompra, factura);
+            // ✅ FIX: update() selectivo — no toca campos financieros (subtotal, iva, descuento, total)
+            await queryRunner.manager.update(
+                FacturaCompra,
+                { id },
+                { numero, estado: GastoEstado.REGISTRADO },
+            );
+
+            // Re-fetch con datos frescos desde BD para el asiento contable
+            const facturaActualizada = await queryRunner.manager.findOne(FacturaCompra, {
+                where: { id },
+                relations: ['items', 'items.articulo', 'proveedor']
+            });
 
             // Generar asiento contable
             try {
-                await this.asientosContablesService.generarAsientoGasto(facturaGuardada, userId);
-                this.logger.log(`Asiento contable generado para factura registrada ${facturaGuardada.numero}`);
+                await this.asientosContablesService.generarAsientoGasto(facturaActualizada!, userId);
+                this.logger.log(`Asiento contable generado para factura registrada ${numero}`);
             } catch (asientoError) {
                 await queryRunner.manager.update(
                     FacturaCompra,
-                    { id: facturaGuardada.id },
+                    { id },
                     {
                         estado: GastoEstado.ERROR_ASIENTO,
                         asientoError: asientoError.message,
                         fechaAsientoError: new Date()
                     }
                 );
-                this.logger.error(`Error generando asiento para factura registrada ${facturaGuardada.numero}: ${asientoError.message}`);
+                this.logger.error(`Error generando asiento para factura registrada ${numero}: ${asientoError.message}`);
             }
 
             await queryRunner.commitTransaction();
-            return facturaGuardada;
+            return await this.findOne(id);
 
         } catch (error) {
             await queryRunner.rollbackTransaction();
@@ -346,39 +355,42 @@ export class FacturasComprasService {
 
     async anular(id: string, userId: string): Promise<FacturaCompra> {
         const factura = await this.findOne(id);
-        
+
         if (factura.estado === GastoEstado.ANULADO) {
             throw new BadRequestException('La factura de compra ya está anulada');
         }
-        
+
         // ✅ Validar: no anular si tiene pagos parciales registrados
         if (factura.paymentStatus === PaymentStatus.PARTIAL || factura.paymentStatus === PaymentStatus.PAID) {
             throw new BadRequestException(
                 'No se puede anular una factura de compra con pagos registrados.'
             );
         }
-        
-        factura.estado = GastoEstado.ANULADO;
-        factura.paymentStatus = PaymentStatus.CANCELLED;
-        const facturaAnulada = await this.facturaCompraRepository.save(factura);
-        
+
+        // ✅ FIX: update() selectivo — no toca campos financieros (subtotal, iva, descuento, total)
+        await this.facturaCompraRepository.update(
+            { id },
+            { estado: GastoEstado.ANULADO, paymentStatus: PaymentStatus.CANCELLED },
+        );
+
+        const facturaAnulada = await this.findOne(id);
+
         // ✅ Generar asiento de anulación
         try {
             await this.asientosContablesService.generarAsientoAnulacionFacturaCompra(facturaAnulada, userId);
         } catch (asientoError) {
             await this.facturaCompraRepository.update(
-                { id: facturaAnulada.id },
+                { id },
                 {
                     estado: GastoEstado.ERROR_ASIENTO,
                     asientoError: asientoError.message,
-                    fechaAsientoError: new Date()
-                }
+                    fechaAsientoError: new Date(),
+                },
             );
             this.logger.error(`Error generando asiento anulación compra ${facturaAnulada.numero}: ${asientoError.message}`);
-            // No revertimos: la factura queda anulada pero el asiento falla silencioso
-            // El contador puede crear el asiento manual si es necesario
         }
-        return facturaAnulada;
+
+        return await this.findOne(id);
     }
 
     async update(id: string, updateFacturaCompraDto: UpdateFacturaCompraDto): Promise<FacturaCompra> {
@@ -571,20 +583,21 @@ export class FacturasComprasService {
 
         try {
             await this.asientosContablesService.generarAsientoGasto(gasto, userId);
-            
-            // Si tiene éxito
-            gasto.estado = GastoEstado.REGISTRADO;
-            gasto.asientoError = null;
-            gasto.fechaAsientoError = undefined;
+
+            // ✅ FIX: update() selectivo — restaurar estado sin tocar campos financieros
+            await this.facturaCompraRepository.update(
+                { id },
+                { estado: GastoEstado.REGISTRADO, asientoError: null, fechaAsientoError: undefined },
+            );
 
             this.logger.log(`Asiento reintentado exitosamente para factura ${gasto.numero}`);
-            return await this.facturaCompraRepository.save(gasto);
+            return await this.findOne(id);
 
         } catch (error) {
-            gasto.asientoError = error.message;
-            gasto.fechaAsientoError = new Date();
-            await this.facturaCompraRepository.save(gasto);
-            
+            await this.facturaCompraRepository.update(
+                { id },
+                { asientoError: error.message, fechaAsientoError: new Date() },
+            );
             this.logger.error(`Fallo reintento de asiento para factura ${gasto.numero}: ${error.message}`);
             throw new BadRequestException(`El asiento sigue fallando: ${error.message}`);
         }

@@ -249,25 +249,40 @@ export class MenuService {
     for (const itemData of items) {
       const { children, ...data } = itemData;
 
-      // Buscar si ya existe por título y padre para actualizar permisos/rutas
+      // Buscar si ya existe por título y padre
       let menuItem = await this.menuItemRepository.findOne({
-        where: { 
+        where: {
           title: data.title,
-          parent: parent ? { id: parent.id } : IsNull()
+          parent: parent ? { id: parent.id } : IsNull(),
         },
-        relations: ['parent']
+        relations: ['parent'],
       });
 
       if (menuItem) {
-        // Actualizar existente (permisos, iconos, rutas, etc. desde constantes)
+        // ✅ FIX: Usar update() directo en lugar de save() para NO reconstruir
+        // la closure table y evitar que TypeORM elimine las filas de
+        // ancestor/descendant en menu_items_closure.
         if (!data.requiredPermission && !menuItem.requiredPermission) {
           data.requiredPermission = `menu:auto:${this.generateSlug(data.title ?? '')}`;
         }
-        Object.assign(menuItem, data);
-        menuItem.parent = parent || null;
-        menuItem = await this.menuItemRepository.save(menuItem);
+
+        // Solo actualizar columnas escalares; NO tocar la relación de árbol
+        const { title, icon, route, externalUrl, requiredPermission, order, isActive, isVisible, other, metadata } = {
+          ...menuItem,
+          ...data,
+        };
+
+        await this.menuItemRepository
+          .createQueryBuilder()
+          .update(MenuItem)
+          .set({ title, icon, route, externalUrl, requiredPermission, order, isActive, isVisible, other, metadata })
+          .where('id = :id', { id: menuItem.id })
+          .execute();
+
+        this.logger.debug(`Ítem de menú actualizado (sin tocar closure): ${data.title}`);
       } else {
-        // Crear nuevo
+        // Crear nuevo ítem — el save() aquí es correcto porque crea la relación
+        // desde cero con el padre correcto
         if (!data.requiredPermission) {
           data.requiredPermission = `menu:auto:${this.generateSlug(data.title ?? '')}`;
         }
@@ -276,13 +291,21 @@ export class MenuService {
         this.logger.log(`Ítem de menú creado: ${data.title}`);
       }
 
-      // Asegurar que el permiso existe
-      if (menuItem.requiredPermission) {
-        await this.ensurePermissionExists(menuItem.requiredPermission, menuItem.title);
+      // Asegurar que el permiso existe en la tabla de Permission
+      const targetPermission = data.requiredPermission ?? menuItem.requiredPermission;
+      if (targetPermission) {
+        await this.ensurePermissionExists(targetPermission, data.title ?? menuItem.title);
       }
 
+      // Recorrer hijos usando el menuItem actualizado (refrescar desde BD para tener datos reales)
       if (children?.length) {
-        await this.syncMenuTree(children as Partial<MenuSeedItem>[], menuItem);
+        // Re-fetch para asegurar que el objeto tiene el id correcto tras el update
+        const freshItem = await this.menuItemRepository.findOne({
+          where: { id: menuItem.id },
+        });
+        if (freshItem) {
+          await this.syncMenuTree(children as Partial<MenuSeedItem>[], freshItem);
+        }
       }
     }
   }

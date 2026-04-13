@@ -354,10 +354,9 @@ export class FacturasVentasService {
   /**
    * Emitir factura electrónica (enviar a DIAN vía Factus)
    */
-  async emitir(id: string, userId: string): Promise<FacturasVenta> 
-  {
+  async emitir(id: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
-    
+
     if (!factura.puedeEmitirse()) {
       throw new BadRequestException(
         `No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`
@@ -368,11 +367,16 @@ export class FacturasVentasService {
 
     try {
       // 1. Cambiar estado a "enviando a DIAN"
-      factura.status = InvoiceStatus.PENDING_DIAN;
-      factura.dianStatus = DianStatus.SENT;
-      factura.fechaEnvioDIAN = new Date();
-      factura.intentosEnvio += 1;
-      await this.facturaVentaRepository.save(factura);
+      // ✅ FIX: update() selectivo — NUNCA escribe subtotal/iva/descuento/total
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: InvoiceStatus.PENDING_DIAN,
+          dianStatus: DianStatus.SENT,
+          fechaEnvioDIAN: new Date(),
+          intentosEnvio: (factura.intentosEnvio ?? 0) + 1,
+        },
+      );
 
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
@@ -380,62 +384,82 @@ export class FacturasVentasService {
 
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
-        factura.status = InvoiceStatus.ACCEPTED;
-        factura.dianStatus = DianStatus.ACCEPTED;
-        factura.fechaAceptacionDIAN = new Date();
-        factura.cufe = respuesta.cufe;
-        factura.xmlUrl = respuesta.xmlUrl;
-        factura.pdfUrl = respuesta.pdfUrl;
-        factura.qrCode = respuesta.qrImageBase64;
-        factura.proveedorResponse = respuesta.respuestaCompleta;
+        const updateAceptada: Partial<FacturasVenta> = {
+          status: InvoiceStatus.ACCEPTED,
+          dianStatus: DianStatus.ACCEPTED,
+          fechaAceptacionDIAN: new Date(),
+          cufe: respuesta.cufe,
+          xmlUrl: respuesta.xmlUrl,
+          pdfUrl: respuesta.pdfUrl,
+          qrCode: respuesta.qrImageBase64,
+          proveedorResponse: respuesta.respuestaCompleta,
+        };
 
         if (respuesta.numeroCompleto) {
+          updateAceptada.comprobante_completo = respuesta.numeroCompleto;
           factura.comprobante_completo = respuesta.numeroCompleto;
         }
 
         // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
+        // Re-fetch la factura para tener los valores financieros correctos desde la BD
+        const facturaParaAsiento = await this.findOne(id);
+        if (respuesta.numeroCompleto) {
+          facturaParaAsiento.comprobante_completo = respuesta.numeroCompleto;
+        }
+
         try {
-          await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
-          this.logger.log(`Asiento contable generado para factura electrónica ${factura.comprobante_completo}`);
+          await this.asientosContablesService.generarAsientoFacturaVenta(facturaParaAsiento, userId);
+          this.logger.log(`Asiento contable generado para factura electrónica ${facturaParaAsiento.comprobante_completo}`);
         } catch (asientoError) {
-          factura.status = InvoiceStatus.ERROR_ASIENTO;
-          factura.asientoError = asientoError.message;
-          factura.fechaAsientoError = new Date();
+          updateAceptada.status = InvoiceStatus.ERROR_ASIENTO;
+          updateAceptada.asientoError = asientoError.message;
+          updateAceptada.fechaAsientoError = new Date();
           this.logger.error(`Error generando asiento contable para FE: ${asientoError.message}`);
         }
 
+        await this.facturaVentaRepository.update({ id }, updateAceptada);
         this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
       } else {
-        factura.status = InvoiceStatus.REJECTED;
-        factura.dianStatus = DianStatus.REJECTED;
-        factura.mensajeError = respuesta.mensaje || '';
-        factura.dianResponse = respuesta.respuestaCompleta;
+        // Rechazada
+        await this.facturaVentaRepository.update(
+          { id },
+          {
+            status: InvoiceStatus.REJECTED,
+            dianStatus: DianStatus.REJECTED,
+            mensajeError: respuesta.mensaje || '',
+            dianResponse: respuesta.respuestaCompleta,
+          },
+        );
         this.logger.error(`❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`);
       }
 
-      await this.facturaVentaRepository.save(factura);
-      return factura;
-      //return respuesta;
+      return await this.findOne(id);
 
     } catch (error) {
-      factura.status = InvoiceStatus.DRAFT;
-      factura.dianStatus = DianStatus.PENDING;
-      factura.mensajeError = error.message;
-      await this.facturaVentaRepository.save(factura);
+      // Revertir estado en caso de error
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: InvoiceStatus.DRAFT,
+          dianStatus: DianStatus.PENDING,
+          mensajeError: error.message,
+        },
+      );
       this.logger.error(`Error emitiendo factura: ${error.message}`);
       throw new InternalServerErrorException(`Error al emitir factura electrónica: ${error.message}`);
     }
-  } 
+  }
 
   async reintentarEnvio(id: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
     if (!factura.puedeReintentarse()) {
       throw new BadRequestException('No se puede reintentar el envío.');
     }
-    factura.status = InvoiceStatus.DRAFT;
-    factura.dianStatus = DianStatus.PENDING;
-    factura.mensajeError = '';
-    await this.facturaVentaRepository.save(factura);
+    // ✅ FIX: update() selectivo
+    await this.facturaVentaRepository.update(
+      { id },
+      { status: InvoiceStatus.DRAFT, dianStatus: DianStatus.PENDING, mensajeError: '' },
+    );
     return await this.emitir(id, userId);
   }
 
@@ -444,22 +468,24 @@ export class FacturasVentasService {
     if (!factura.estaAceptada() && factura.tipoFactura === TipoFactura.ELECTRONICA) {
       throw new BadRequestException('Solo se puede registrar pago de facturas aceptadas por DIAN');
     }
-    factura.status = InvoiceStatus.PAID;
-    factura.metodoPago = metodoPago;
-    
-    const savedInvoice = await this.facturaVentaRepository.save(factura);
+
+    // ✅ FIX: update() selectivo — no toca campos financieros
+    await this.facturaVentaRepository.update(
+      { id },
+      { status: InvoiceStatus.PAID, metodoPago },
+    );
+
+    const updatedInvoice = await this.findOne(id);
 
     // Generar asiento contable de pago (Cartera)
     try {
-      await this.asientosContablesService.generarAsientoPagoFacturaVenta(savedInvoice, userId);
-      this.logger.log(`Asiento de pago generado para factura ${savedInvoice.comprobante_completo}`);
+      await this.asientosContablesService.generarAsientoPagoFacturaVenta(updatedInvoice, userId);
+      this.logger.log(`Asiento de pago generado para factura ${updatedInvoice.comprobante_completo}`);
     } catch (error) {
       this.logger.error(`Error generando asiento de pago: ${error.message}`);
-      // No lanzamos excepción para no revertir el estado del pago, 
-      // pero el usuario debería ser notificado de alguna forma (asientoError en factura si aplica)
     }
 
-    return savedInvoice;
+    return updatedInvoice;
   }
 
   async anular(id: string, motivo: string, userId: string): Promise<FacturasVenta> {
@@ -473,32 +499,38 @@ export class FacturasVentasService {
         throw new BadRequestException('No se puede anular esta factura.');
       }
     }
-    
-    try {
-      factura.status = InvoiceStatus.CANCELLED;
-      factura.dianStatus = DianStatus.CANCELLED;
-      factura.paymentStatus = PaymentStatus.CANCELLED;
-      factura.observaciones = `Anulada: ${motivo}`;
 
-      const savedInvoice = await this.facturaVentaRepository.save(factura);
+    try {
+      // ✅ FIX: update() selectivo — no toca campos financieros
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: InvoiceStatus.CANCELLED,
+          dianStatus: DianStatus.CANCELLED,
+          paymentStatus: PaymentStatus.CANCELLED,
+          observaciones: `Anulada: ${motivo}`,
+        },
+      );
+
+      const updatedInvoice = await this.findOne(id);
 
       // Generar asiento contable de anulación
       try {
-        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(savedInvoice, userId);
-        this.logger.log(`Asiento de anulación generado para factura ${savedInvoice.comprobante_completo}`);
+        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(updatedInvoice, userId);
+        this.logger.log(`Asiento de anulación generado para factura ${updatedInvoice.comprobante_completo}`);
       } catch (asientoError) {
         await this.facturaVentaRepository.update(
-          { id: savedInvoice.id },
+          { id },
           {
             status: InvoiceStatus.ERROR_ASIENTO,
             asientoError: asientoError.message,
-            fechaAsientoError: new Date()
-          }
+            fechaAsientoError: new Date(),
+          },
         );
         this.logger.error(`Error generando asiento de anulación: ${asientoError.message}`);
       }
 
-      return savedInvoice;
+      return await this.findOne(id);
     } catch (error) {
       this.logger.error(`Error anulando factura: ${error.message}`);
       throw new InternalServerErrorException('Error al anular factura');
@@ -608,24 +640,24 @@ export class FacturasVentasService {
     try {
       await this.asientosContablesService.generarAsientoFacturaVenta(factura, userId);
 
-      // Si tiene éxito, restaurar estado según tipo
-      factura.status = factura.tipoFactura === TipoFactura.ELECTRONICA 
-        ? InvoiceStatus.ACCEPTED 
+      // ✅ FIX: update() selectivo — restaurar estado sin tocar campos financieros
+      const nuevoStatus = factura.tipoFactura === TipoFactura.ELECTRONICA
+        ? InvoiceStatus.ACCEPTED
         : InvoiceStatus.ISSUED;
-      
-      factura.asientoError = null;
-      factura.fechaAsientoError = undefined;
+
+      await this.facturaVentaRepository.update(
+        { id },
+        { status: nuevoStatus, asientoError: null, fechaAsientoError: undefined },
+      );
 
       this.logger.log(`Asiento reintentado exitosamente para factura ${factura.comprobante_completo}`);
-      return await this.facturaVentaRepository.save(factura);
+      return await this.findOne(id);
 
     } catch (error) {
-      factura.asientoError = error.message;
-
-
-      factura.fechaAsientoError = new Date();
-      await this.facturaVentaRepository.save(factura);
-      
+      await this.facturaVentaRepository.update(
+        { id },
+        { asientoError: error.message, fechaAsientoError: new Date() },
+      );
       this.logger.error(`Fallo reintento de asiento para factura ${factura.comprobante_completo}: ${error.message}`);
       throw new BadRequestException(`El asiento sigue fallando: ${error.message}`);
     }
