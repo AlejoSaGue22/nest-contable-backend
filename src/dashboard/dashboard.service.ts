@@ -71,7 +71,7 @@ export class DashboardService {
                     id: s.id,
                     type: 'venta',
                     numero: s.comprobante_completo,
-                    entidad: s.client?.nombre || 'Cliente Vario',
+                    entidad: s.client.razonSocial || s.client?.nombre + ' ' + s.client?.apellido,
                     total: s.total,
                     fecha: s.fecha,
                     status: s.status
@@ -80,7 +80,7 @@ export class DashboardService {
                     id: p.id,
                     type: 'compra',
                     numero: p.numero,
-                    entidad: p.proveedor?.nombre || 'Proveedor Vario',
+                    entidad: p.proveedor.razonSocial || p.proveedor?.nombre + ' ' + p.proveedor?.apellido,
                     total: p.total,
                     fecha: p.fecha,
                     status: p.estado

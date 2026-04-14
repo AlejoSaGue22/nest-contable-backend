@@ -33,9 +33,9 @@ import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
     imports: [TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3306,
+      port: 3307,
       username: 'root',     
-      password: '',
+      password: 'root',
       database: 'finance_tejo',
       // logging: true,
       autoLoadEntities: true,

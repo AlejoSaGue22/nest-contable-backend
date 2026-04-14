@@ -8,6 +8,8 @@ import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
 import { PagoResponseDto, toPagoResponse } from './dto/pago-response.dto';
+import { Permissions } from 'src/auth/decorators/roles.decorator';
+import { Permission } from 'src/common/constants/roles.constants';
 
 /**
  * ══════════════════════════════════════════════════════════════

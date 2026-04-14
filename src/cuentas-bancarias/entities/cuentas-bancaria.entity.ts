@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { Banco } from '../../bancos/entities/banco.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
@@ -15,17 +16,11 @@ export enum TipoCuentaBancaria {
   AHORRO    = 'ahorro',
 }
 
-/**
- * Cuentas bancarias de la empresa.
- * Cuando se registra un pago en banco, se referencia esta entidad
- * para saber exactamente a qué banco/cuenta ingresó o salió el dinero.
- */
 @Entity('cuentas_bancarias')
 export class CuentasBancarias {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Nombre descriptivo: "Bancolombia Cta. Corriente" */
   @Column({ length: 120 })
   nombre: string;
 
@@ -65,4 +60,7 @@ export class CuentasBancarias {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }

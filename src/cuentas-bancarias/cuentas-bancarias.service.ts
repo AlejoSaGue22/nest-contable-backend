@@ -4,21 +4,30 @@ import { UpdateCuentasBancariaDto } from './dto/update-cuentas-bancaria.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CuentasBancarias } from './entities/cuentas-bancaria.entity';
+import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { Banco } from 'src/bancos/entities/banco.entity';
 
 @Injectable()
 export class CuentasBancariasService {
   constructor(
     @InjectRepository(CuentasBancarias)
     private readonly cuentasBancariasRepository: Repository<CuentasBancarias>,
+    @InjectRepository(Banco)
+    private readonly bancosRepository: Repository<Banco>,
   ) {}
 
   async create(createCuentasBancariaDto: CreateCuentasBancariaDto) {
     try {
       const { bancoId, ...rest } = createCuentasBancariaDto;
       
+      const banco = await this.bancosRepository.findOne({ where: { id: bancoId } });
+      if (!banco) {
+        throw new NotFoundException('Banco no encontrado');
+      }
+      
       const cuentaBancaria = this.cuentasBancariasRepository.create({
         ...rest,
-        banco: { id: bancoId } as any,
+        banco,
       });
 
       await this.cuentasBancariasRepository.save(cuentaBancaria);
@@ -33,18 +42,25 @@ export class CuentasBancariasService {
     }
   }
 
-  async findAll() {
+  async findAll(paginationDto: PaginatioDto) {
     try {
-      const cuentasBancarias = await this.cuentasBancariasRepository.find({
+      const { limit = 10, offset = 0 } = paginationDto;
+
+      const [cuentasBancarias, total] = await this.cuentasBancariasRepository.findAndCount({
         where: { activa: true },
         order: { nombre: 'ASC' },
         relations: ['banco'],
+        take: limit,
+        skip: offset,
       });
 
       return {
         message: 'Cuentas bancarias obtenidas exitosamente',
-        data: cuentasBancarias
+        cuentas: cuentasBancarias,
+        count: total,
+        pages: Math.ceil(total / limit),
       };
+
     } catch (error) {
       throw new InternalServerErrorException('Error al obtener las cuentas bancarias');
     }
@@ -84,15 +100,18 @@ export class CuentasBancariasService {
       const { bancoId, ...rest } = updateCuentasBancariaDto;
 
       if (bancoId) {
-        cuentaBancaria.banco = { id: bancoId } as any;
-        
+        const banco = await this.bancosRepository.findOne({ where: { id: bancoId } });
+        if (!banco) {
+          throw new NotFoundException('Banco no encontrado');
+        }
+        cuentaBancaria.banco = banco;
       }
 
       await this.cuentasBancariasRepository.update(id, rest);
 
       return {
         message: 'Cuenta bancaria actualizada exitosamente',
-        data: cuentaBancaria
+        data: cuentaBancaria,
       };
       
     } catch (error) {
@@ -111,7 +130,7 @@ export class CuentasBancariasService {
         throw new NotFoundException('Cuenta bancaria no encontrada');
       }
 
-      await this.cuentasBancariasRepository.remove(cuentaBancaria);
+      await this.cuentasBancariasRepository.softRemove(cuentaBancaria);
 
       return {
         message: 'Cuenta bancaria eliminada exitosamente'

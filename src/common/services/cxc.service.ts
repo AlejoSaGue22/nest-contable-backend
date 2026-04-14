@@ -60,14 +60,13 @@ export class CxcService {
       const items: CxcItem[] = facturas.map(f => {
         const diasVencida = this.calcularDiasVencida(f.fechaVencimiento, hoy);
 
-        console.log(f.client);
         return {
             facturaId:        f.id,
             numeroFactura:    f.comprobante_completo,
             clienteId:        f.clientId,
-            clienteNombre:    f.client?.nombre + ' ' + f.client?.apellido || f.client.razonSocial,
+            clienteNombre:    f.client.razonSocial || f.client?.nombre + ' ' + f.client?.apellido,
             fechaEmision:     f.fecha,
-            fechaVencimiento: f.fechaVencimiento,
+            fechaVencimiento: f.fechaVencimiento, 
             diasVencida,
             total:            f.total,
             totalPagado:      f.totalPagado,
@@ -79,7 +78,7 @@ export class CxcService {
 
       const resumen = this.calcularResumen(items);
 
-      return { items, resumen };
+      return { items, resumen, meta: { total: items.length, totalPages:  } };
     } catch (error) {
       this.logger.error(`Error obteniendo CxC: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al obtener cuentas por cobrar');

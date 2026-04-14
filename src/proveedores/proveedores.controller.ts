@@ -26,16 +26,19 @@ export class ProveedoresController {
     }
 
     @Get(':id')
+    @Permissions(Permission.PROVIDER_READ)
     findOne(@Param('id') id: string) {
         return this.proveedoresService.findOne(id);
     }
 
     @Patch(':id')
+    @Permissions(Permission.PROVIDER_UPDATE)
     update(@Param('id') id: string, @Body() updateProveedorDto: UpdateProveedorDto) {
         return this.proveedoresService.update(id, updateProveedorDto);
     }
 
     @Delete(':id')
+    @Permissions(Permission.PROVIDER_DELETE)
     remove(@Param('id') id: string) {
         return this.proveedoresService.remove(id);
     }
