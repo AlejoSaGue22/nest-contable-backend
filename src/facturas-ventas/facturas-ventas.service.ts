@@ -53,6 +53,13 @@ export class FacturasVentasService {
         throw new NotFoundException('Cliente no encontrado');
       }
 
+      if(createFacturasVentaDto.fechaVencimiento){
+        const fechaVencimiento = new Date(createFacturasVentaDto.fechaVencimiento);
+        if(fechaVencimiento < new Date()){
+          throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+        }
+      }
+
       if (createFacturasVentaDto.metodoPago) {
         const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
           where: { id: Number(createFacturasVentaDto.metodoPago) }
@@ -79,11 +86,12 @@ export class FacturasVentasService {
 
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
         ...createDtoRest,
+        fechaVencimiento: createFacturasVentaDto.fechaVencimiento || null,
         metodoPago: createFacturasVentaDto.metodoPago || null,
         vendedor: createFacturasVentaDto.vendedor || null,
-        comprobante: numberFactura,
-        comprobante_completo: `${prefijo}-${numberFactura}`,
-        prefijo,
+        comprobante: statusInvoice === InvoiceStatus.DRAFT ? '' : numberFactura,
+        comprobante_completo: statusInvoice === InvoiceStatus.DRAFT ? '' : `${prefijo}-${numberFactura}`,
+        prefijo: statusInvoice === InvoiceStatus.DRAFT ? '' : prefijo,
         createdById: userId,
         subtotal,
         descuento,
@@ -211,6 +219,13 @@ export class FacturasVentasService {
 
     if (updateDto.items && updateDto.items.length === 0) {
       throw new BadRequestException('La factura debe tener al menos un item');
+    }
+
+    if(updateDto.fechaVencimiento){
+      const fechaVencimiento = new Date(updateDto.fechaVencimiento);
+      if(fechaVencimiento < new Date()){
+        throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+      }
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -365,6 +380,8 @@ export class FacturasVentasService {
 
     this.logger.log(`Emitiendo factura electrónica: ${factura.comprobante_completo}`);
 
+    const numberFactura = await this.generateInvoiceNumber();
+
     try {
       // 1. Cambiar estado a "enviando a DIAN"
       // ✅ FIX: update() selectivo — NUNCA escribe subtotal/iva/descuento/total
@@ -393,6 +410,8 @@ export class FacturasVentasService {
           pdfUrl: respuesta.pdfUrl,
           qrCode: respuesta.qrImageBase64,
           proveedorResponse: respuesta.respuestaCompleta,
+          prefijo: 'FE',
+          comprobante: numberFactura,
         };
 
         if (respuesta.numeroCompleto) {

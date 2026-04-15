@@ -21,13 +21,13 @@ export class FacturasVenta {
   })
   tipoFactura: TipoFactura;
 
-  @Column()
+  @Column({ nullable: true })
   prefijo: string;
 
-  @Column()
+  @Column({ nullable: true })
   comprobante: string;
 
-  @Column()
+  @Column({ nullable: true })
   comprobante_completo: string;
 
   @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })
@@ -50,10 +50,10 @@ export class FacturasVenta {
   formaPago: FormaPago;
 
   @ManyToOne(() => MetodoPago)
-  @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
+  @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })
   metodoPagoRel: MetodoPago;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   metodoPago: string | null; 
 
   @Column({ type: 'date', nullable: true })
@@ -231,21 +231,17 @@ export class FacturasVenta {
   }
 
   /**
-   * Verifica si puede ser anulada
+   * Verifica si puede ser anulada electronica
    */
   puedeAnularseElectronica(): boolean {
-    // Solo se pueden anular facturas aceptadas por DIAN
-    // mediante nota crédito electrónica
     return this.status === InvoiceStatus.ACCEPTED && this.tipoFactura === TipoFactura.ELECTRONICA;
   }
 
   /**
-   * Verifica si puede ser anulada
+   * Verifica si puede ser anulada estandar
    */
   puedeAnularseEstandar(): boolean {
-    // Solo se pueden anular facturas aceptadas por DIAN
-    // mediante nota crédito electrónica
-    return this.status === InvoiceStatus.ACCEPTED && this.tipoFactura === TipoFactura.STANDARD;
+    return this.status === InvoiceStatus.ISSUED && this.tipoFactura === TipoFactura.STANDARD;
   }
 
 

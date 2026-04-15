@@ -5,7 +5,7 @@ import { In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { PaymentStatus } from 'src/pagos/enums/pago.enum';
-import { AgingBucket, CxcItem, CxcResumen } from '../dtos/cxc_cxp.dto';
+import { AgingBucket, CxcItem, CxcResumen, CxFiltros } from '../dtos/cxc_cxp.dto';
 
 
 @Injectable()
@@ -21,11 +21,8 @@ export class CxcService {
    * Lista todas las cuentas por cobrar activas (saldo > 0).
    * Filtra solo facturas a CRÉDITO con paymentStatus != PAID.
    */
-  async findAll(filtros?: {
-    clienteId?: string;
-    paymentStatus?: PaymentStatus;
-    soloVencidas?: boolean;
-  }): Promise<{ items: CxcItem[]; resumen: CxcResumen }> {
+  async findAll(filtros?: CxFiltros)
+                : Promise<{ items: CxcItem[]; resumen: CxcResumen, meta: { page: number, total: number, totalPages: number } }> {
     try {
       const queryBuilder = this.facturaVentaRepository
         .createQueryBuilder('f')
@@ -53,7 +50,15 @@ export class CxcService {
 
       queryBuilder.orderBy('f.fechaVencimiento', 'ASC');
 
-      const facturas = await queryBuilder.getMany();
+      const page = filtros?.page || 1;
+      const limit = filtros?.limit || 10;
+      const skip = (page - 1) * limit;
+
+      const [facturas, total] = await queryBuilder
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
+
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
 
@@ -78,7 +83,8 @@ export class CxcService {
 
       const resumen = this.calcularResumen(items);
 
-      return { items, resumen, meta: { total: items.length, totalPages:  } };
+      return { items, resumen, meta: { page, total, totalPages: Math.ceil(total / limit) } };
+
     } catch (error) {
       this.logger.error(`Error obteniendo CxC: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al obtener cuentas por cobrar');

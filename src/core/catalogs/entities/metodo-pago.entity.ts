@@ -5,7 +5,7 @@ export class MetodoPago {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
+    @Column({ unique: true })
     codigo: string;
 
     @Column()

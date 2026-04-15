@@ -69,6 +69,13 @@ export class FacturasComprasService {
                     throw new NotFoundException(`Artículo ${itemDto.articuloId} no encontrado`);
                 }
 
+                if(createFacturaCompraDto.fechaVencimiento){
+                    const fechaVencimiento = new Date(createFacturaCompraDto.fechaVencimiento);
+                    if(fechaVencimiento < new Date()){
+                        throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+                    }
+                }
+
                 if (!articulo.cuentaContable) {
                     throw new BadRequestException(
                         `El artículo ${articulo.nombre} no tiene cuenta contable asignada`
@@ -117,7 +124,7 @@ export class FacturasComprasService {
 
             const total = MathUtil.sum(subtotal, totalIva);
             const isDraft = createFacturaCompraDto.isDraft;
-            const numero = isDraft ? null : await this.generarNumeroGasto(queryRunner);
+            const numero = isDraft == 'draft' ? null : await this.generarNumeroGasto(queryRunner);
 
             // Crear gasto - Extraemos datos para evitar pasar el array de items del DTO directamente a la entidad
             const { items, ...dtoRest } = createFacturaCompraDto;
@@ -136,7 +143,7 @@ export class FacturasComprasService {
                 iva: totalIva,
                 descuento,
                 total,
-                estado: isDraft ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
+                estado: isDraft == 'draft' ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
                 paymentStatus: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
                 saldoPendiente: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0,
                 totalPagado: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total,
@@ -297,7 +304,7 @@ export class FacturasComprasService {
                 throw new BadRequestException('Solo se pueden registrar facturas en estado borrador');
             }
 
-            // Asignar número secuencial
+            
             const numero = await this.generarNumeroGasto(queryRunner);
 
             // ✅ FIX: update() selectivo — no toca campos financieros (subtotal, iva, descuento, total)
@@ -313,7 +320,7 @@ export class FacturasComprasService {
                 relations: ['items', 'items.articulo', 'proveedor']
             });
 
-            // Generar asiento contable
+            
             try {
                 await this.asientosContablesService.generarAsientoGasto(facturaActualizada!, userId);
                 this.logger.log(`Asiento contable generado para factura registrada ${numero}`);
@@ -396,6 +403,13 @@ export class FacturasComprasService {
     async update(id: string, updateFacturaCompraDto: UpdateFacturaCompraDto): Promise<FacturaCompra> {
         if (updateFacturaCompraDto.items && updateFacturaCompraDto.items.length === 0) {
             throw new BadRequestException('La factura debe tener al menos un item');
+        }
+
+        if(updateFacturaCompraDto.fechaVencimiento){
+            const fechaVencimiento = new Date(updateFacturaCompraDto.fechaVencimiento);
+            if(fechaVencimiento < new Date()){
+                throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+            }
         }
 
         const queryRunner = this.dataSource.createQueryRunner();

@@ -4,30 +4,7 @@ import { Repository } from 'typeorm';
 
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
 import { PaymentStatus } from 'src/pagos/enums/pago.enum';
-import { AgingBucket, AgingCxp } from '../dtos/cxc_cxp.dto';
-
-export interface CxpItem {
-  facturaId:        string;
-  numeroFactura:    string | null;
-  proveedorId:      string;
-  proveedorNombre:  string;
-  fechaEmision:     Date;
-  fechaVencimiento: Date | null;
-  diasVencida:      number;
-  total:            number;
-  totalPagado:      number;
-  saldoPendiente:   number;
-  paymentStatus:    PaymentStatus;
-  agingBucket:      keyof AgingBucket;
-}
-
-export interface CxpResumen {
-  totalPorPagar:     number;
-  porVencer:         number;
-  vencida:           number;
-  cantidadPorVencer: number;
-  cantidadVencida:   number;
-}
+import { AgingBucket, AgingCxp, CxFiltros, CxpItem, CxpResumen } from '../dtos/cxc_cxp.dto';
 
 @Injectable()
 export class CxpService {
@@ -42,11 +19,7 @@ export class CxpService {
     * Lista todas las cuentas por pagar activas (saldo > 0).
     * Filtra solo facturas de compra a CRÉDITO con paymentStatus != PAID.
    */
-  async findAll(filtros?: {
-    proveedorId?:  string;
-    paymentStatus?: PaymentStatus;
-    soloVencidas?:  boolean;
-  }): Promise<{ items: CxpItem[]; resumen: CxpResumen }> {
+  async findAll(filtros?: CxFiltros): Promise<{ items: CxpItem[]; resumen: CxpResumen, meta: { page: number, total: number, totalPages: number } }> {
     try {
       const queryBuilder = this.facturaCompraRepository
         .createQueryBuilder('f')
@@ -74,7 +47,15 @@ export class CxpService {
 
       queryBuilder.orderBy('f.fechaVencimiento', 'ASC');
 
-      const facturas = await queryBuilder.getMany();
+      const page = filtros?.page ?? 1;
+      const limit = filtros?.limit ?? 10;
+      const skip = (page - 1) * limit;
+
+      const [facturas, total] = await queryBuilder
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
+
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
 
@@ -98,7 +79,8 @@ export class CxpService {
 
       const resumen = this.calcularResumen(items);
 
-      return { items, resumen };
+      return { items, resumen, meta: { page, total, totalPages: Math.ceil(total / limit) } };
+
     } catch (error) {
       this.logger.error(`Error obteniendo CxP: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al obtener cuentas por pagar');
@@ -174,7 +156,12 @@ export class CxpService {
     if (!fechaVencimiento) return 0;
     const venc = new Date(fechaVencimiento);
     venc.setHours(0, 0, 0, 0);
-    return Math.floor((hoy.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+    console.log('venc',venc);
+    console.log('hoy',hoy);
+    const dias = Math.floor((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+    console.log('dias',dias);
+    console.log('agingBucket',this.calcularAgingBucket(dias));
+    return dias;
   }
 
   private calcularAgingBucket(diasVencida: number): keyof AgingBucket {

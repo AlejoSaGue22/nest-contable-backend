@@ -44,3 +44,35 @@ export interface CxcResumen {
   cantidadPorVencer: number;
   cantidadVencida:   number;
 }
+
+export interface CxpItem {
+  facturaId:        string;
+  numeroFactura:    string | null;
+  proveedorId:      string;
+  proveedorNombre:  string;
+  fechaEmision:     Date;
+  fechaVencimiento: Date | null;
+  diasVencida:      number;
+  total:            number;
+  totalPagado:      number;
+  saldoPendiente:   number;
+  paymentStatus:    PaymentStatus;
+  agingBucket:      keyof AgingBucket;
+}
+
+export interface CxpResumen {
+  totalPorPagar:     number;
+  porVencer:         number;
+  vencida:           number;
+  cantidadPorVencer: number;
+  cantidadVencida:   number;
+}
+
+export interface CxFiltros {
+  clienteId?: string;
+  proveedorId?: string;
+  paymentStatus?: PaymentStatus;
+  soloVencidas?: boolean;
+  page?: number;
+  limit?: number;
+}

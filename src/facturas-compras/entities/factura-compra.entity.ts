@@ -41,10 +41,10 @@ export class FacturaCompra {
     formaPago: FormaPago; 
 
     @ManyToOne(() => MetodoPago)
-    @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
+    @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })
     metodoPagoRel: MetodoPago;
 
-    @Column({ nullable: true }) 
+    @Column({ type: 'varchar', length: 255, nullable: true }) 
     metodoPago: string | null; 
 
     @Column({ type: 'date', nullable: true })
