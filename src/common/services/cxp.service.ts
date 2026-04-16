@@ -152,16 +152,22 @@ export class CxpService {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private calcularDiasVencida(fechaVencimiento: Date | null, hoy: Date): number {
-    if (!fechaVencimiento) return 0;
-    const venc = new Date(fechaVencimiento);
+  private parseFechaLocal(fecha: string): Date {
+    const [year, month, day] = fecha.split('-').map(Number);
+    return new Date(year, month - 1, day); // LOCAL
+  }
+
+  private calcularDiasVencida(fechaVencimiento: Date | null, hoy: Date = new Date()): number {
+     if (!fechaVencimiento) return 0;
+
+    const venc = this.parseFechaLocal(fechaVencimiento.toString());
+    const actual = new Date(hoy);
+
     venc.setHours(0, 0, 0, 0);
-    console.log('venc',venc);
-    console.log('hoy',hoy);
-    const dias = Math.floor((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-    console.log('dias',dias);
-    console.log('agingBucket',this.calcularAgingBucket(dias));
-    return dias;
+    actual.setHours(0, 0, 0, 0);
+
+    const diffMs = venc.getTime() - actual.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   }
 
   private calcularAgingBucket(diasVencida: number): keyof AgingBucket {

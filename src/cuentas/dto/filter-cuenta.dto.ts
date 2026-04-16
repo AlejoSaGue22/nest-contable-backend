@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsDate } from 'class-validator';
 import { TipoCuenta } from '../entities/cuenta.entity';
 
 export class FilterCuentaDto {
@@ -9,4 +9,12 @@ export class FilterCuentaDto {
     @IsOptional()
     @IsEnum(TipoCuenta)
     tipo?: TipoCuenta;
+
+    @IsOptional()
+    @IsString()
+    fechaInicio?: string;
+
+    @IsOptional()
+    @IsString()
+    fechaFin?: string;
 }

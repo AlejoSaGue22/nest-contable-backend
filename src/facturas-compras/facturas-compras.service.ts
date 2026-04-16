@@ -162,7 +162,9 @@ export class FacturasComprasService {
 
 
             // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO
+            console.log('isDraft', isDraft);
             if (!isDraft) {
+                console.log('isDraft2', isDraft);
                 try {
                     await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
                     this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
@@ -177,10 +179,7 @@ export class FacturasComprasService {
                         }
                     );
 
-                    this.logger.error(
-                        `Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`
-);
-
+                    this.logger.error(`Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`);
                 }
             }
 
@@ -268,7 +267,7 @@ export class FacturasComprasService {
         try {
             const factura = await this.facturaCompraRepository.findOne({
                 where: { id },
-                relations: ['proveedor', 'items', 'items.articulo', 'createdBy']
+                relations: ['proveedor', 'items', 'items.articulo', 'metodoPagoRel', 'createdBy']
             });
 
             if (!factura) {
@@ -276,6 +275,7 @@ export class FacturasComprasService {
             }
 
             return factura;
+
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;

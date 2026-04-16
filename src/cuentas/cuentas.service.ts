@@ -18,12 +18,8 @@ export class CuentasService {
     private readonly asientoDetalleRepository: Repository<AsientoDetalle>,
   ) { }
 
-  create(createCuentaDto: CreateCuentaDto) {
-    return 'This action adds a new cuenta';
-  }
-
   async findAll(filterDto?: FilterCuentaDto) {
-    const { search, tipo } = filterDto || {};
+    const { search, tipo, fechaInicio, fechaFin } = filterDto || {};
 
     const query = this.cuentaRepository.createQueryBuilder('cuenta')
       .leftJoinAndSelect('cuenta.cuentaPadre', 'cuentaPadre')
@@ -52,6 +48,13 @@ export class CuentasService {
 
     if (tipo) {
       query.andWhere('cuenta.tipo = :tipo', { tipo });
+    }
+
+    if (fechaInicio && fechaFin) {
+      query.andWhere('detalle.createdAt BETWEEN :fechaInicio AND :fechaFin', {
+        fechaInicio: new Date(fechaInicio),
+        fechaFin: new Date(fechaFin),
+      });
     }
 
     const rawResults = await query.getRawAndEntities();
