@@ -229,11 +229,12 @@ export class NotasAjusteService {
  
     try {
       // 1. Cambiar estado
-      nota.estado = EstadoNota.SENT;
-      nota.estadoDIAN = EstadoDIANNota.ENVIADA;
-      nota.fechaEnvioDIAN = new Date();
-      nota.intentosEnvio += 1;
-      await this.notaRepository.save(nota);
+      await this.notaRepository.update({ id }, {
+        estado: EstadoNota.SENT,
+        estadoDIAN: EstadoDIANNota.ENVIADA,
+        fechaEnvioDIAN: new Date(),
+        intentosEnvio: nota.intentosEnvio + 1
+      });
 
       // 2. Enviar a Factus/DIAN
       let respuesta: any;
