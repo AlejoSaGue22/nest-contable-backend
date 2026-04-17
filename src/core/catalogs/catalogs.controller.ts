@@ -28,8 +28,12 @@ export class CatalogsController {
         return this.catalogsService.findAllUnitsMeasure();
     }
 
-    // Categorias de articulos
+    @Get('concepts-notes')
+    findAllConceptsNotes() {
+        return this.catalogsService.findAllConceptsNotes();
+    }
 
+    // Categorias de articulos
     @Get('categories-articles')
     findAllCategoriesArticles(@Query() pagination: PaginatioDto) {
         return this.catalogsService.findAllCategoriesArticles(pagination);

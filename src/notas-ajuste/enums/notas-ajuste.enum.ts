@@ -47,8 +47,9 @@ export enum ConceptoNotaCredito {
   ANULACION = '2',                 // Anulación de factura
   REBAJA_DESCUENTO = '3',          // Rebaja o descuento
   AJUSTE_PRECIO = '4',             // Ajuste de precio
-  OTROS = '5'                      // Otros conceptos
-}
+  DESCUENTO_PRONTO_PAGO = '5',     // Descuento comercial por pronto pago
+  DESCUENTO_VOLUMEN = '6'          // Descuento comercial por volumen de ventas
+} 
 
 /**
  * Conceptos de notas débito según DIAN

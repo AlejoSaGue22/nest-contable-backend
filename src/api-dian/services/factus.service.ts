@@ -426,8 +426,7 @@ export class FactusService {
         const isNC = tipo === 'credito';
         
         // Obtener el ID de la factura en el sistema de Factus si existe
-        const billId = factura.proveedorResponse?.data?.bill?.id || 
-                       factura.proveedorResponse?.data?.id;
+        const billId = factura.proveedorResponse.data.bill.id || factura.proveedorResponse.data.id;
 
         const payload: any = {
             // ID del rango de numeración para NC o ND

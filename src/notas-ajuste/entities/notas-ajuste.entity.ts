@@ -15,16 +15,12 @@ import { ItemNotaAjuste } from "./items-notas-ajuste.entity";
 import { FacturasVenta } from "src/facturas-ventas/entities/facturas-venta.entity";
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { ConceptoCorreccion } from "src/core/catalogs/entities/concepto-correcion.entity";
 
-/**
- * Entidad para Notas de Ajuste (Crédito y Débito)
- */
 @Entity('notas_ajuste')
 export class NotaAjuste {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  // ========== TIPO Y NÚMERO ==========
 
   @Column({ 
     type: 'enum', 
@@ -58,8 +54,6 @@ export class NotaAjuste {
   @Column()
   facturaOriginalNumero: string;
 
-  // ========== CLIENTE ==========
-
   @ManyToOne(() => Cliente, { eager: true })
   cliente: Cliente;
 
@@ -69,6 +63,10 @@ export class NotaAjuste {
   /**
    * Concepto según DIAN
    */
+  @ManyToOne(() => ConceptoCorreccion)
+  @JoinColumn({ name: 'concepto', referencedColumnName: 'codigo' })
+  conceptoRelacion: ConceptoCorreccion; 
+
   @Column({ nullable: true })
   concepto: string; // ConceptoNotaCredito o ConceptoNotaDebito
 
@@ -76,7 +74,7 @@ export class NotaAjuste {
   motivo: string;
 
   @ManyToOne(() => MetodoPago)
-  @JoinColumn({ name: 'metodoPago', referencedColumnName: 'id' })
+  @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })
   metodoPagoRelacion: MetodoPago; 
  
   @Column({ nullable: true })

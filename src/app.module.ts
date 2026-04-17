@@ -97,7 +97,7 @@ export class AppModule implements OnModuleInit {
     }
 
     // Seed otros catálogos
-    // await this.catalogsService.seedAll();
+    await this.catalogsService.seedAll();
 
     console.log('Sistema inicializado con datos por defecto');
   }

@@ -12,6 +12,7 @@ import { CreateCategoryArticleDto } from './dtos/create-category.dto';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { UpdateCategoryArticleDto } from './dtos/update-category.dto';
 import { NotFoundException } from '@nestjs/common';
+import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
 
 @Injectable()
 export class CatalogsService {
@@ -30,6 +31,8 @@ export class CatalogsService {
         private categoriasArticulosRepo: Repository<CategoriaArticulo>,
         @InjectRepository(CuentaContable)
         private cuentaContableRepo: Repository<CuentaContable>,
+        @InjectRepository(ConceptoCorreccion)
+        private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
     ) { }
 
     async findAllDocumentTypes() {
@@ -46,6 +49,10 @@ export class CatalogsService {
 
     async findAllUnitsMeasure() {
         return this.unidadMedidaRepo.find({ where: { state: true } });
+    }
+
+    async findAllConceptsNotes() {
+        return this.conceptoCorreccionRepo.find({ where: { state: true } });
     }
 
     async findAllCategoriesArticles(pagination: PaginatioDto) {
@@ -142,6 +149,7 @@ export class CatalogsService {
         await this.seedSalesChannels();
         await this.seedUnitsMeasure();
         await this.seedCategoriesArticles();
+        await this.seedConceptsCorrections();
         this.logger.log('✅ Todos los catálogos han sido sincronizados');
     }
 
@@ -209,6 +217,25 @@ export class CatalogsService {
         this.logger.log('✔ Canales de venta sincronizados');
     }
 
+    private async seedConceptsCorrections() {
+        const data = [
+            { codigo: '1', nombre: 'Devolución parcial de los bienes y/o no aceptación parcial del servicio', state: true },
+            { codigo: '2', nombre: 'Anulación de factura electrónica', state: true },
+            { codigo: '3', nombre: 'Rebaja o descuento parcial o total', state: true },
+            { codigo: '4', nombre: 'Ajuste de precio', state: true },
+            { codigo: '5', nombre: 'Descuento comercial por pronto pago', state: true },
+            { codigo: '6', nombre: 'Descuento comercial por volumen de ventas', state: true },
+        ];
+
+        for (const item of data) {
+            const exists = await this.conceptoCorreccionRepo.findOne({ where: { codigo: item.codigo } });
+            if (!exists) {
+                await this.conceptoCorreccionRepo.save(item);
+            }
+        }
+        this.logger.log('✔ Conceptos de corrección sincronizados');
+    }
+
     private async seedUnitsMeasure() {
         const data = [
             { id: '70', codigo: '94', nombre: 'Unidad', state: true },
@@ -230,7 +257,6 @@ export class CatalogsService {
     }
 
     // Categorias de articulos
-
     private async seedCategoriesArticles() {
         const data = Object.values(CATEGORIAS_ARTICULOS);
 

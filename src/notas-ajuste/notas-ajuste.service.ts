@@ -54,9 +54,7 @@ export class NotasAjusteService {
       }
  
       if (!factura.esElectronica()) {
-        throw new BadRequestException(
-          'Solo se pueden crear notas de ajuste para facturas electrónicas'
-        );
+        throw new BadRequestException('Solo se pueden crear notas de ajuste para facturas electrónicas');
       }
  
       if (factura.status !== InvoiceStatus.ACCEPTED) {
@@ -71,9 +69,7 @@ export class NotasAjusteService {
         await this.calcularTotales(queryRunner, createDto.items);
  
       if (total > saldoDisponible) {
-        throw new BadRequestException(
-          `El total de la nota crédito ($${total}) excede el saldo disponible de la factura ($${saldoDisponible})`
-        );
+        throw new BadRequestException(`El total de la nota crédito ($${total}) excede el saldo disponible de la factura ($${saldoDisponible})`);
       }
  
       // 3. Generar número de nota
@@ -151,16 +147,14 @@ export class NotasAjusteService {
       }
  
       if (!factura.esElectronica()) {
-        throw new BadRequestException(
-          'Solo se pueden crear notas de ajuste para facturas electrónicas'
-        );
+        throw new BadRequestException('Solo se pueden crear notas de ajuste para facturas electrónicas');
       }
  
       if (factura.status !== InvoiceStatus.ACCEPTED) {
-        throw new BadRequestException(
-          'Solo se pueden crear notas para facturas aceptadas por DIAN'
-        );
+        throw new BadRequestException('Solo se pueden crear notas para facturas aceptadas por DIAN');
       }
+
+
  
       // 2. Calcular totales
       const { subtotal, iva, total, itemsCalculados } = 

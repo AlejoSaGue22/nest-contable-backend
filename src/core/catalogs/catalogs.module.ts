@@ -8,6 +8,7 @@ import { CanalVenta } from './entities/canal-venta.entity';
 import { UnidadMedida } from './entities/unidad-medida.entity';
 import { CategoriaArticulo } from './entities/categorias-articulos-entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
             UnidadMedida,
             CategoriaArticulo,
             CuentaContable,
+            ConceptoCorreccion,
         ]),
     ],
     providers: [CatalogsService],
