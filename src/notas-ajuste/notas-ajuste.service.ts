@@ -238,18 +238,7 @@ export class NotasAjusteService {
           nota.motivo,
           nota.metodoPago,
           nota.concepto,
-          nota.items.map(item => ({
-            code_reference: item.articulo.codigo,
-            name: item.articulo.nombre,
-            quantity: Number(item.cantidad),
-            discount_rate: 0,
-            price: Number(item.valorUnitario),
-            tax_rate: Number(item.porcentajeIVA),
-            unit_measure_id: Number(item.articulo.unidadmedida),
-            is_excluded: 0,
-            tribute_id: 1,
-            withholding_taxes: []
-          }))
+          nota.items
         );
       } else {
         // Nota débito
@@ -258,18 +247,7 @@ export class NotasAjusteService {
           nota.motivo,
           nota.metodoPago,
           nota.concepto,
-          nota.items.map(item => ({
-            code_reference: item.articulo.codigo,
-            name: item.articulo.nombre,
-            quantity: Number(item.cantidad),
-            discount_rate: 0,
-            price: Number(item.valorUnitario),
-            tax_rate: Number(item.porcentajeIVA),
-            unit_measure_id: Number(item.articulo.unidadmedida),
-            is_excluded: 0,
-            tribute_id: 1,
-            withholding_taxes: []
-          }))
+          nota.items
         );
       }
  

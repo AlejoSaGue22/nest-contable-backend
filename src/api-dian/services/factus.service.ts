@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import * as qs from 'qs';
 import { AllowanceChargesFactus, FacturaDianResponse, FactusPayload, FactusTokenResponse, filtroMunicipios } from '../interfaces/api-dian-interface';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
+import { ItemNotaAjuste } from 'src/notas-ajuste/entities/items-notas-ajuste.entity';
 
 /**
  * Servicio de integración con Factus
@@ -136,18 +137,43 @@ export class FactusService {
         }
     }
 
+
+    async verFacturaByNumero(numeroCompleto: string): Promise<any> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v1/bills/show/${numeroCompleto}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                )
+            );
+
+            if(response.data.status == 'OK'){
+
+            }
+            return response.data;
+
+        } catch (error) {
+            this.logger.error('Error consultando factura:', error.response?.data || error.message);
+            throw new BadRequestException('Error al consultar factura en Factus/DIAN');
+        }
+    }
+
     /**
      * Crear y validar factura en Factus/DIAN
      */
-    async crearYValidarFactura(factura: FacturasVenta): Promise<FacturaDianResponse> {
+    async crearYValidarFactura(factura: FacturasVenta, numero: string): Promise<FacturaDianResponse> {
         try {
             const token = await this.obtenerToken();
-
-            // Validar datos requeridos
             this.validarDatosFactura(factura);
 
-            // Construir payload según estructura de Factus
-            const payload = this.construirPayloadFactus(factura);
+            const payload = this.construirPayloadFactus(factura, numero);
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
@@ -180,22 +206,21 @@ export class FactusService {
             }
 
             if (error.response?.status === 422) {
-                const errors = error.response.data?.errors || {};
+                const errors = error.response.data?.errors || error.response.data?.data.errors || {};
                 const mensajesError = Object.values(errors).flat();
                 throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
             }
 
-            throw new BadRequestException(error.response?.data?.message || 'Error al enviar factura a Factus/DIAN');
+            throw new BadRequestException(error?.message || 'Error al enviar factura a Factus/DIAN');
         }
     }
 
     /**
      * Construir payload para Factus según su estructura exacta
      */
-    private construirPayloadFactus(factura: FacturasVenta) {
-        // Generar código de referencia único (tu sistema)
+    private construirPayloadFactus(factura: FacturasVenta, numero: string) {
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
-
+        const nombreCliente = factura.client.razonSocial || `${factura.client.nombre} ${factura.client.apellido}`;
         const payload = {
             // Código de documento: "01" = Factura de Venta
             document: "01",
@@ -204,16 +229,13 @@ export class FactusService {
             numbering_range_id: this.configService.get<number>('FACTUS_NUMBERING_RANGE_ID')!,
 
             // Código de referencia único (tu sistema)
-            reference_code: referenceCode,
+            reference_code: numero,
 
             // Forma de pago: Contado, Crédito
             payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
 
             // Fecha de vencimiento
             payment_due_date: factura.fechaVencimiento,
-            
-          // Observaciones (opcional)
-            //   observation: factura?.observaciones || "",
 
 
             // Método de pago: "10" = Efectivo
@@ -232,9 +254,9 @@ export class FactusService {
             customer: {
                 identification: factura.client.numeroDocumento,
                 dv: factura.client.dv || null,
-                company: factura.client.razonSocial, // (Opcional) Razón social. Obligatorio si el cliente es persona jurídica.
-                trade_name: factura.client.nombre + " " + factura.client.apellido, // (Opcional) Nombre comercial
-                names: factura.client.nombre + " " + factura.client.apellido, // (Opcional) Nombre del cliente. Solo aplica para los clientes que son personas naturales.
+                company: factura.client.tipoPersona === 'PJ' ? nombreCliente : '', // (Opcional) Razón social. Obligatorio si el cliente es persona jurídica.
+                trade_name: nombreCliente, // (Opcional) Nombre comercial
+                names: factura.client.tipoPersona === 'PN' ? nombreCliente : '', // (Opcional) Nombre del cliente. Solo aplica para los clientes que son personas naturales.
                 address: factura.client.direccion,
                 email: factura.client.email,
                 phone: factura.client.telefono,
@@ -254,7 +276,7 @@ export class FactusService {
                 tax_rate: item.iva.toString(),
                 unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
                 standard_code_id: 1, // 1 = Estándar del contribuyente (999)
-                is_excluded: 0, // 0 = No excluido de IVA
+                is_excluded: item.iva === 0 ? 1 : 0, // 0 = No excluido de IVA
                 tribute_id: 1, // 1 = IVA (código 01)
                 withholding_taxes: [] // Retenciones (opcional)
             })),
@@ -262,7 +284,7 @@ export class FactusService {
             // Cargos adicionales (descuentos globales, recargos)
             ...(this.construirCargosAdicionales(factura).length > 0 ? { allowance_charges: this.construirCargosAdicionales(factura) } : ''),
         };
-
+        console.log('Payload construido para Factus:', payload);
       return payload;
     }
 
@@ -273,15 +295,17 @@ export class FactusService {
         const cargos: AllowanceChargesFactus[] = [];
 
         // Si hay descuento global
-        if (factura.descuento > 0) {
+        if (factura.descuento > 0 && 1 != 1) {
             cargos.push({
-                concept_type: "00", // 00 = Descuento general
+                concept_type: "03", // 03 = Recargo condicionado
                 is_surcharge: false,
                 reason: "Descuento",
                 base_amount: factura.subtotal.toString(),
                 amount: factura.descuento.toString()
             });
         }
+
+
 
         // Aquí podrías agregar otros cargos como propinas, etc.
 
@@ -326,11 +350,10 @@ export class FactusService {
     /**
      * Crear nota crédito (anulación de factura)
      */
-    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: Array<{}>): Promise<any> {
+    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
-            // Construir payload con los datos corregidos para NC
             const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
@@ -373,7 +396,7 @@ export class FactusService {
     /**
      * Crear Nota Débito en DIAN
      */
-    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: Array<{}>) {
+    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
@@ -420,7 +443,7 @@ export class FactusService {
     /**
      * Construir payload Nota Ajuste para Factus (NC o ND)
      */
-    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: any[], tipo: 'credito' | 'debito') {
+    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
 
         const isNC = tipo === 'credito';
@@ -447,8 +470,8 @@ export class FactusService {
 
             // Metadatos de la factura original para facilitar procesamiento
             payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
-            payment_due_date: factura.fechaVencimiento || factura.fecha,
-            payment_method_code: metodoPago || '10',
+            // payment_due_date: factura.fechaVencimiento || factura.fecha,
+            // payment_method_code: metodoPago || '10',
 
             // Datos del establecimiento/sucursal
             establishment: {
@@ -460,12 +483,13 @@ export class FactusService {
             },
 
             // Datos del cliente
+
             customer: {
                 identification: factura.client.numeroDocumento,
                 dv: factura.client.dv || null,
                 company: factura.client.razonSocial || "",
-                trade_name: factura.client.nombre + " " + factura.client.apellido,
-                names: factura.client.nombre + " " + factura.client.apellido,
+                trade_name: factura.client.razonSocial || factura.client.nombre + " " + factura.client.apellido,
+                names: factura.client.razonSocial || factura.client.nombre + " " + factura.client.apellido,
                 address: factura.client.direccion,
                 email: factura.client.email,
                 phone: factura.client.telefono,
@@ -477,15 +501,15 @@ export class FactusService {
 
             // Items de la nota (ya vienen mapeados por el servicio de Notas de Ajuste)
             items: items.map(item => ({
-                code_reference: item.codigo_referencia || 'Generico', // Fallback si no hay código
-                name: item.descripcion,
+                code_reference: item.articulo.codigo || item.articulo.id, // Fallback si no hay código
+                name: item.articulo.nombre,
                 quantity: item.cantidad,
                 discount_rate: 0,
                 price: item.valorUnitario,
                 tax_rate: (item.porcentajeIVA || 0).toString(),
                 unit_measure_id: item.articulo.unidadmedida, // unidad
                 standard_code_id: 1, // estandar
-                is_excluded: 0,
+                is_excluded: item.porcentajeIVA === 0 ? 1 : 0, // Excluido si IVA es 0
                 tribute_id: 1, // IVA
                 withholding_taxes: []
             })),
@@ -764,8 +788,8 @@ export class FactusService {
             errores.push('El cliente debe tener email');
         }
 
-        if (!factura.client.nombre) {
-            errores.push('El cliente debe tener nombre');
+        if (!factura.client.nombre && !factura.client.razonSocial) {
+            errores.push('El cliente debe tener nombre o razón social');
         }
 
         if (!factura.items || factura.items.length === 0) {

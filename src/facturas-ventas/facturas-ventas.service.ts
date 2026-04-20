@@ -373,9 +373,7 @@ export class FacturasVentasService {
     const factura = await this.findOne(id);
 
     if (!factura.puedeEmitirse()) {
-      throw new BadRequestException(
-        `No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`
-      );
+      throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
     }
 
     this.logger.log(`Emitiendo factura electrónica: ${factura.comprobante_completo}`);
@@ -397,7 +395,7 @@ export class FacturasVentasService {
 
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
-      const respuesta = await this.factusService.crearYValidarFactura(factura);
+      const respuesta = await this.factusService.crearYValidarFactura(factura, numberFactura);
 
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
