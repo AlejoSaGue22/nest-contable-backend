@@ -18,7 +18,11 @@ export class CreateNotasAjusteDto {
 
   @IsString()
   @IsNotEmpty()
-  metodoPago: string;
+  formaPago: string;
+
+  @IsString()
+  @IsOptional()
+  metodoPago?: string;
   
   @IsString()
   @IsOptional()

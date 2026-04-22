@@ -61,7 +61,7 @@ export class NotasAjusteService {
         throw new BadRequestException('Solo se pueden crear notas para facturas aceptadas por DIAN');
       }
  
-      // 2. Validar que el total de la NC no exceda el saldo de la factura
+      // 2. Validar que el total de las NC no exceda el saldo de la factura
       const totalNotasCredito = await this.calcularTotalNotasCredito(factura.id);
       const saldoDisponible = Number(factura.total) - totalNotasCredito;
       
@@ -81,6 +81,7 @@ export class NotasAjusteService {
         prefijo: 'NC',
         numero: numeroNota,
         numeroCompleto: `NC-${numeroNota}`,
+        formaPago: createDto.formaPago,
         metodoPago: createDto.metodoPago,
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.comprobante_completo,

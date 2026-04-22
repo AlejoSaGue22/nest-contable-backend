@@ -73,6 +73,9 @@ export class NotaAjuste {
   @Column('text')
   motivo: string;
 
+  @Column()
+  formaPago: string;
+
   @ManyToOne(() => MetodoPago)
   @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })
   metodoPagoRelacion: MetodoPago; 

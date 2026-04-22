@@ -470,8 +470,6 @@ export class FactusService {
 
             // Metadatos de la factura original para facilitar procesamiento
             payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
-            // payment_due_date: factura.fechaVencimiento || factura.fecha,
-            // payment_method_code: metodoPago || '10',
 
             // Datos del establecimiento/sucursal
             establishment: {
@@ -504,7 +502,7 @@ export class FactusService {
                 code_reference: item.articulo.codigo || item.articulo.id, // Fallback si no hay código
                 name: item.articulo.nombre,
                 quantity: item.cantidad,
-                discount_rate: 0,
+                discount_rate: item.discount || 0,
                 price: item.valorUnitario,
                 tax_rate: (item.porcentajeIVA || 0).toString(),
                 unit_measure_id: item.articulo.unidadmedida, // unidad

@@ -509,10 +509,7 @@ export class AsientosContablesService {
         }
 
         const cuentaId = articulo.cuentaContableId;
-        ingresosAgrupados.set(
-          cuentaId,
-          (ingresosAgrupados.get(cuentaId) ?? 0) + Number(item.subtotal),
-        );
+        ingresosAgrupados.set(cuentaId,(ingresosAgrupados.get(cuentaId) ?? 0) + Number(item.subtotal),);
       }
 
       // 2. Procesar líneas de ingresos (Débito para NC, Crédito para ND)
