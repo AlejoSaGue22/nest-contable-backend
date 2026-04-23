@@ -83,6 +83,25 @@ export class FacturasVentasService {
 
       const statusInvoice = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT 
                             : InvoiceStatus.ISSUED;
+      // ⭐ Determinar estado de pago según si es borrador o no
+      let paymentStatus: PaymentStatus;
+      let saldoPendiente: number;
+      let totalPagado: number;
+      let dianStatus: DianStatus;
+
+      if (statusInvoice === InvoiceStatus.DRAFT) {
+        // Para BORRADORES: siempre PENDING con saldo = 0
+        paymentStatus = PaymentStatus.PENDING;
+        saldoPendiente = 0;
+        totalPagado = 0;
+        dianStatus = DianStatus.PENDING;
+      } else {
+        // Para NO-BORRADORES: aplicar lógica de formaPago
+        paymentStatus = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
+        saldoPendiente = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0;
+        totalPagado = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total;
+        dianStatus = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED;
+      }
 
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
         ...createDtoRest,
@@ -98,10 +117,10 @@ export class FacturasVentasService {
         iva,
         total,
         status: statusInvoice,
-        paymentStatus: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
-        saldoPendiente: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0,
-        totalPagado: createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total,
-        dianStatus: createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? DianStatus.PENDING : DianStatus.ACCEPTED,
+        paymentStatus,
+        saldoPendiente,
+        totalPagado,
+        dianStatus,
       }); 
 
       const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
@@ -283,7 +302,7 @@ export class FacturasVentasService {
 
     }
 
-    const updatePayload = {
+    const updatePayload: any = {
           clientId: updateDto.clientId,
           canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
           vendedor: updateDto.vendedor || null,
@@ -297,6 +316,14 @@ export class FacturasVentasService {
           descuento,
           total
     };
+
+    // ⭐ Si la factura sigue siendo DRAFT, resetear estados de pago
+    if (invoice.status === InvoiceStatus.DRAFT) {
+      updatePayload.paymentStatus = PaymentStatus.PENDING;
+      updatePayload.saldoPendiente = 0;
+      updatePayload.totalPagado = 0;
+      updatePayload.dianStatus = DianStatus.PENDING;
+    }
 
     this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
 
@@ -596,16 +623,22 @@ export class FacturasVentasService {
       if (!product.isActive) throw new BadRequestException(`El producto ${product.nombre} no está activo`);
 
       const unitPrice = Number(itemDto.unitPrice) || product.precio || 0;
+      // console.log(`Calculando item: ${product.nombre}, unitPrice: ${unitPrice}`);
       const quantity = Number(itemDto.quantity) || 0;
+      // console.log(`Cantidad: ${quantity}`);
       const itemSubtotal = MathUtil.mul(unitPrice, quantity);
-      
+      // console.log(`Subtotal sin impuestos/descuentos: ${itemSubtotal}`);
       const taxRate = Number(itemDto.iva) || 0;
+      // console.log(`Tasa de impuesto IVA: ${taxRate}`);
       const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
-      
+      //  console.log(`Valor IVA: ${itemIva}`);
       const discountRate = Number(itemDto.discount) || 0;
-      const itemDiscount = MathUtil.percentage(itemSubtotal, discountRate);
+      // console.log(`Tasa de descuento: ${discountRate}`);
+      const itemDiscount = MathUtil.percentage(MathUtil.sum(itemSubtotal, itemIva), discountRate);
+      // console.log(`Valor descuento: ${itemDiscount}`);
       
       const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, itemIva), itemDiscount);
+      // console.log(`Total item: ${itemTotal}`);
 
       itemsCalculados.push({
         articuloId: product.id,
@@ -639,6 +672,9 @@ export class FacturasVentasService {
       where: {},
       order: { createdAt: 'DESC' },
     });
+
+    console.log(`Last Invoice: ${lastInvoice}`);
+    console.log(`Last Number Comprobante: ${parseInt(lastInvoice!.comprobante)}`);
     const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante) : 0;
     return (lastNumber + 1).toString().padStart(8, '0');
   }

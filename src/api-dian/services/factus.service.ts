@@ -502,7 +502,7 @@ export class FactusService {
                 code_reference: item.articulo.codigo || item.articulo.id, // Fallback si no hay código
                 name: item.articulo.nombre,
                 quantity: item.cantidad,
-                discount_rate: item.discount || 0,
+                discount_rate: item.descuento || 0,
                 price: item.valorUnitario,
                 tax_rate: (item.porcentajeIVA || 0).toString(),
                 unit_measure_id: item.articulo.unidadmedida, // unidad

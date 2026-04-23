@@ -126,6 +126,23 @@ export class FacturasComprasService {
             const isDraft = createFacturaCompraDto.isDraft;
             const numero = isDraft == 'draft' ? null : await this.generarNumeroGasto(queryRunner);
 
+            // ⭐ Determinar estado de pago según si es borrador o no
+            let paymentStatus: PaymentStatus;
+            let saldoPendiente: number;
+            let totalPagado: number;
+
+            if (isDraft == 'draft') {
+              // Para BORRADORES: siempre PENDING con saldo = 0
+              paymentStatus = PaymentStatus.PENDING;
+              saldoPendiente = 0;
+              totalPagado = 0;
+            } else {
+              // Para NO-BORRADORES: aplicar lógica de formaPago
+              paymentStatus = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
+              saldoPendiente = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0;
+              totalPagado = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total;
+            }
+
             // Crear gasto - Extraemos datos para evitar pasar el array de items del DTO directamente a la entidad
             const { items, ...dtoRest } = createFacturaCompraDto;
             
@@ -144,9 +161,9 @@ export class FacturasComprasService {
                 descuento,
                 total,
                 estado: isDraft == 'draft' ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
-                paymentStatus: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID,
-                saldoPendiente: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0,
-                totalPagado: createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total,
+                paymentStatus,
+                saldoPendiente,
+                totalPagado,
                 createdById: userId,
             });
 
@@ -458,7 +475,7 @@ export class FacturasComprasService {
                 await queryRunner.manager.save(FacturaCompraDetalle, itemsToSave);
             }
 
-            const updatePayload = {
+            const updatePayload: any = {
                 proveedorId: updateFacturaCompraDto.proveedorId,
                 fecha: updateFacturaCompraDto.fecha,
                 formaPago: updateFacturaCompraDto.formaPago,
@@ -470,6 +487,13 @@ export class FacturasComprasService {
                 descuento,
                 total
             };
+
+            // ⭐ Si la factura sigue siendo BORRADOR, resetear estados de pago
+            if (factura.estado === GastoEstado.BORRADOR) {
+              updatePayload.paymentStatus = PaymentStatus.PENDING;
+              updatePayload.saldoPendiente = 0;
+              updatePayload.totalPagado = 0;
+            }
 
             this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
 
