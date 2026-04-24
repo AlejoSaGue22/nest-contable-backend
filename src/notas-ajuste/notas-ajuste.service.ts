@@ -237,7 +237,7 @@ export class NotasAjusteService {
         respuesta = await this.factusService.crearNotaCredito(
           nota.facturaOriginal,
           nota.motivo,
-          nota.metodoPago,
+          nota.metodoPago || '',
           nota.concepto,
           nota.items
         );
@@ -246,7 +246,7 @@ export class NotasAjusteService {
         respuesta = await this.factusService.crearNotaDebito(
           nota.facturaOriginal,
           nota.motivo,
-          nota.metodoPago,
+          nota.metodoPago || '',
           nota.concepto,
           nota.items
         );

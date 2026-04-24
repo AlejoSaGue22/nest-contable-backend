@@ -40,7 +40,7 @@ export class FacturasComprasService {
     ) { }
 
     async create(createFacturaCompraDto: CreateFacturaCompraDto, userId: string): Promise<FacturaCompra> {
-        const queryRunner = this.dataSource.createQueryRunner();
+        /const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
 
@@ -94,15 +94,28 @@ export class FacturasComprasService {
                     createFacturaCompraDto.metodoPago = metodoPago.codigo;
                 }
 
-                const unitPrice = itemDto.unitPrice || articulo.precio || 0;
-                const porcentajeIva = itemDto.iva || articulo.porcentajeIva || 0;
 
-                const itemSubtotal = MathUtil.mul(itemDto.quantity, unitPrice);
-                const descuentoValor = MathUtil.percentage(itemSubtotal, itemDto.discount || 0);
+
+                const quantity = Number(itemDto.quantity) || 0;
+//7                if (quantity <= 0) {
+                    throw new BadRequestException(`La cantidad del artículo ${articulo.nombre} debe ser mayor a cero`);
+                }
+                const unitPrice = itemDto.unitPrice || articulo.precio || 0;
+                if (unitPrice <= 0) {
+                    throw new BadRequestException(`El precio unitario del artículo ${articulo.nombre} debe ser mayor a cero`);
+                }
+                const totalSinDescuento = MathUtil.mul(itemDto.quantity, unitPrice);
+
+                const descuentoPorcentaje = itemDto.discount || 0;
+                const descuentoValor = MathUtil.percentage(totalSinDescuento, descuentoPorcentaje);
+
+                const itemSubtotal = MathUtil.sub(totalSinDescuento, descuentoValor);
+
+                const porcentajeIva = itemDto.iva || articulo.porcentajeIva;
                 const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
                 
                 // (itemSubtotal - descuentoValor) + valorIva
-                const itemTotal = MathUtil.sum(MathUtil.sub(itemSubtotal, descuentoValor), valorIva);
+                const itemTotal = MathUtil.sum(itemSubtotal, valorIva);
 
                 detalles.push({
                     articuloId: articulo.id,

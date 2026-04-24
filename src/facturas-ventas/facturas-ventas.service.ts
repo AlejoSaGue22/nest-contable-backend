@@ -623,22 +623,23 @@ export class FacturasVentasService {
       if (!product.isActive) throw new BadRequestException(`El producto ${product.nombre} no está activo`);
 
       const unitPrice = Number(itemDto.unitPrice) || product.precio || 0;
-      // console.log(`Calculando item: ${product.nombre}, unitPrice: ${unitPrice}`);
+      if (unitPrice <= 0) {
+        throw new BadRequestException(`El precio unitario del artículo ${product.nombre} debe ser mayor a cero`);
+      }
       const quantity = Number(itemDto.quantity) || 0;
-      // console.log(`Cantidad: ${quantity}`);
-      const itemSubtotal = MathUtil.mul(unitPrice, quantity);
-      // console.log(`Subtotal sin impuestos/descuentos: ${itemSubtotal}`);
-      const taxRate = Number(itemDto.iva) || 0;
-      // console.log(`Tasa de impuesto IVA: ${taxRate}`);
-      const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
-      //  console.log(`Valor IVA: ${itemIva}`);
+      if (quantity <= 0) {
+        throw new BadRequestException(`La cantidad del artículo ${product.nombre} debe ser mayor a cero`);
+      }
+      const totalSinDescuento = MathUtil.mul(unitPrice, quantity);
       const discountRate = Number(itemDto.discount) || 0;
-      // console.log(`Tasa de descuento: ${discountRate}`);
-      const itemDiscount = MathUtil.percentage(MathUtil.sum(itemSubtotal, itemIva), discountRate);
-      // console.log(`Valor descuento: ${itemDiscount}`);
+      const itemDiscount = MathUtil.percentage(totalSinDescuento, discountRate);
+
+      const itemSubtotal = MathUtil.sub(totalSinDescuento, itemDiscount);
+
+      const taxRate = Number(itemDto.iva) || 0;
+      const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
       
-      const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, itemIva), itemDiscount);
-      // console.log(`Total item: ${itemTotal}`);
+      const itemTotal = MathUtil.sum(itemSubtotal, itemIva);
 
       itemsCalculados.push({
         articuloId: product.id,

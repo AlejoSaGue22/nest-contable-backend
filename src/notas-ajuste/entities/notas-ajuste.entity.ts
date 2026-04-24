@@ -80,11 +80,14 @@ export class NotaAjuste {
   @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })
   metodoPagoRelacion: MetodoPago; 
  
-  @Column({ nullable: true })
-  metodoPago: string; 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  metodoPago: string | null; 
 
   @Column({ type: 'date' }) 
   fecha: Date;
+
+  @Column({ type: 'boolean', nullable: true })
+  esReembolsoAbono: boolean; // Solo para Nota Crédito, indica si es un reembolso/abono a favor del cliente
 
   @OneToMany(() => ItemNotaAjuste, item => item.nota)
   items: ItemNotaAjuste[];
