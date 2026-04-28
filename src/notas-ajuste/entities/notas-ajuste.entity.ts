@@ -1,6 +1,7 @@
 import { 
   Column, 
   CreateDateColumn, 
+  DeleteDateColumn, 
   Entity, 
   JoinColumn, 
   ManyToOne, 
@@ -16,6 +17,7 @@ import { FacturasVenta } from "src/facturas-ventas/entities/facturas-venta.entit
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { ConceptoCorreccion } from "src/core/catalogs/entities/concepto-correcion.entity";
+import { Delete } from "@nestjs/common";
 
 @Entity('notas_ajuste')
 export class NotaAjuste {
@@ -31,10 +33,10 @@ export class NotaAjuste {
   @Column()
   prefijo: string;
 
-  @Column()
+  @Column({ nullable: true })
   numero: string;
 
-  @Column()
+  @Column({ nullable: true })
   numeroCompleto: string; // NC-00001234 o ND-00001234
 
   // ========== FACTURA RELACIONADA ==========
@@ -117,6 +119,12 @@ export class NotaAjuste {
   })
   estado: EstadoNota;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  asientoError: string | null;
+
+  @Column({ nullable: true })
+  fechaAsientoError?: Date;
+
   @Column({ 
     type: 'enum', 
     enum: EstadoDIANNota,
@@ -176,6 +184,9 @@ export class NotaAjuste {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  @DeleteDateColumn()
+  deletedAt: Date;
+
   // ========== MÉTODOS HELPER ==========
 
   /**
@@ -198,6 +209,13 @@ export class NotaAjuste {
   puedeEnviarse(): boolean {
     return this.estado === EstadoNota.DRAFT;
   }
+
+  /**
+   * Verifica si puede eliminarse (solo si está en borrador)
+   */
+  puedeEliminarse(): boolean {
+    return this.estado === EstadoNota.DRAFT;
+  }  
 
   /**
    * Verifica si está aceptada por DIAN
@@ -233,6 +251,7 @@ export class NotaAjuste {
   obtenerEstadoLegible(): string {
     const estados = {
       [EstadoNota.DRAFT]: 'Borrador',
+      [EstadoNota.ISSUED]: 'Emitida',
       [EstadoNota.SENT]: 'Enviada a DIAN',
       [EstadoNota.PROCESSING]: 'DIAN Procesando',
       [EstadoNota.ACCEPTED]: 'Aceptada por DIAN',

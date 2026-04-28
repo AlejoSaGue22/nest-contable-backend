@@ -78,7 +78,7 @@ export class FacturasVenta {
   @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   descuento: number;
 
-  @ManyToOne(() => Cliente)
+  @ManyToOne(() => Cliente, { eager: true })
   client: Cliente;
 
   @Column()

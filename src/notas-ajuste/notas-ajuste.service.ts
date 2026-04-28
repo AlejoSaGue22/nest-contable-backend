@@ -6,7 +6,7 @@ import { EstadoDIANNota, EstadoNota, TipoNota } from './enums/notas-ajuste.enum'
 import { ItemNotaAjuste } from './entities/items-notas-ajuste.entity';
 import { NotasAjusteFilterDto } from './dto/nota-ajuste-filter.dto';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
-import { InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
+import { InvoiceStatus, TipoFactura } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FactusService } from 'src/api-dian/services/factus.service';
@@ -53,36 +53,43 @@ export class NotasAjusteService {
         throw new NotFoundException('Factura original no encontrada');
       }
  
-      if (!factura.esElectronica()) {
-        throw new BadRequestException('Solo se pueden crear notas de ajuste para facturas electrónicas');
+      // Validar según tipo de factura
+      if (factura.esElectronica()) {
+        // Para facturas electrónicas: debe estar aceptada por DIAN
+        if (factura.status !== InvoiceStatus.ACCEPTED) {
+          throw new BadRequestException('Solo se pueden crear notas para facturas electrónicas aceptadas por DIAN');
+        }
+      } else {
+        // Para facturas estándar: debe estar emitida
+        if (factura.status !== InvoiceStatus.ISSUED) {
+          throw new BadRequestException('Solo se pueden crear notas para facturas estándar emitidas');
+        }
       }
- 
-      if (factura.status !== InvoiceStatus.ACCEPTED) {
-        throw new BadRequestException('Solo se pueden crear notas para facturas aceptadas por DIAN');
-      }
- 
-      // 2. Validar que el total de las NC no exceda el saldo de la factura
+
+      // 2. Validar que el total de las NC no exceda el saldo de la factura (para electrónicas y estándar)
+      let saldoDisponible = 0;
       const totalNotasCredito = await this.calcularTotalNotasCredito(factura.id);
-      const saldoDisponible = Number(factura.total) - totalNotasCredito;
+      saldoDisponible = Number(factura.total) - totalNotasCredito;
       
       const { subtotal, iva, total, itemsCalculados } = 
         await this.calcularTotales(queryRunner, createDto.items);
- 
+
       if (total > saldoDisponible) {
         throw new BadRequestException(`El total de la nota crédito ($${total}) excede el saldo disponible de la factura ($${saldoDisponible})`);
       }
- 
-      // 3. Generar número de nota
-      const numeroNota = await this.generateNotaNumber(TipoNota.CREDITO);
- 
+
+      // 3. Generar número de nota solo si NO es borrador
+      const isDraft = factura.esElectronica() ? true : createDto.isDraft ? true : false;
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.CREDITO);
+
       // 4. Crear nota crédito
       const notaCredito = queryRunner.manager.create(NotaAjuste, {
         tipo: TipoNota.CREDITO,
-        prefijo: 'NC',
+        prefijo: numeroNota ? 'NC' : '',
         numero: numeroNota,
-        numeroCompleto: `NC-${numeroNota}`,
+        numeroCompleto: numeroNota ? `NC-${numeroNota}` : '',
         formaPago: createDto.formaPago,
-        metodoPago: createDto.metodoPago,
+        metodoPago: createDto.metodoPago || null,
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.comprobante_completo,
         clienteId: factura.clientId,
@@ -90,19 +97,48 @@ export class NotasAjusteService {
         motivo: createDto.motivo,
         fecha: createDto.fecha,
         // fechaVencimiento: createDto.fechaVencimiento,
-        items: itemsCalculados,
+        //items: itemsCalculados,
         subtotal,
         iva,
         descuento: createDto.descuento,
         total,
         saldoPendiente: total,
-        estado: EstadoNota.DRAFT,
-        estadoDIAN: EstadoDIANNota.PENDIENTE,
+        estado: isDraft ? EstadoNota.DRAFT : EstadoNota.ISSUED,
+        estadoDIAN: factura.esElectronica() ? EstadoDIANNota.PENDIENTE : EstadoDIANNota.NO_APLICA,
         observaciones: createDto.observaciones,
         createdById: userId
       });
  
       const notaGuardada = await queryRunner.manager.save(NotaAjuste, notaCredito);
+
+      const itemsToSave = itemsCalculados.map(item => 
+        queryRunner.manager.create(ItemNotaAjuste, {
+          ...item,
+          notaId: notaGuardada.id
+        })
+      );
+
+      await queryRunner.manager.save(ItemNotaAjuste, itemsToSave);
+
+      if(factura.tipoFactura == TipoFactura.STANDARD && isDraft == false){
+        try {
+          notaGuardada.items = itemsToSave;
+          await this.asientosService.generarAsientoNotaAjuste(notaGuardada, notaGuardada.createdById);
+          this.logger.log(`Asiento contable generado automáticamente para nota credito ${notaGuardada.numeroCompleto}`);
+
+        } catch (error) {
+           await queryRunner.manager.update(NotaAjuste, 
+            { id: notaGuardada.id },
+            { 
+              estado: EstadoNota.ERROR_ASIENTO,
+              asientoError: error.message,
+              fechaAsientoError: new Date()
+            }
+          );
+          this.logger.error(`Error generando asiento contable NC: ${error.message}`);
+        }
+      }
+
       await queryRunner.commitTransaction();
  
       this.logger.log(`✅ Nota Crédito ${notaGuardada.numeroCompleto} creada en borrador`);
@@ -112,7 +148,7 @@ export class NotasAjusteService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error creando nota crédito: ${error.message}`, error.stack);
- 
+
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
@@ -147,29 +183,33 @@ export class NotasAjusteService {
         throw new NotFoundException('Factura original no encontrada');
       }
  
-      if (!factura.esElectronica()) {
-        throw new BadRequestException('Solo se pueden crear notas de ajuste para facturas electrónicas');
-      }
- 
-      if (factura.status !== InvoiceStatus.ACCEPTED) {
-        throw new BadRequestException('Solo se pueden crear notas para facturas aceptadas por DIAN');
+      // Validar según tipo de factura
+      if (factura.esElectronica()) {
+        // Para facturas electrónicas: debe estar aceptada por DIAN
+        if (factura.status !== InvoiceStatus.ACCEPTED) {
+          throw new BadRequestException('Solo se pueden crear notas para facturas electrónicas aceptadas por DIAN');
+        }
+      } else {
+        // Para facturas estándar: debe estar emitida
+        if (factura.status !== InvoiceStatus.ISSUED) {
+          throw new BadRequestException('Solo se pueden crear notas para facturas estándar emitidas');
+        }
       }
 
-
- 
       // 2. Calcular totales
       const { subtotal, iva, total, itemsCalculados } = 
         await this.calcularTotales(queryRunner, createDto.items);
- 
-      // 3. Generar número de nota
-      const numeroNota = await this.generateNotaNumber(TipoNota.DEBITO);
- 
+
+      // 3. Generar número de nota solo si NO es borrador
+      const isDraft = createDto.isDraft ?? false;
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.DEBITO);
+
       // 4. Crear nota débito
       const notaDebito = queryRunner.manager.create(NotaAjuste, {
         tipo: TipoNota.DEBITO,
         prefijo: 'ND',
         numero: numeroNota,
-        numeroCompleto: `ND-${numeroNota}`,
+        numeroCompleto: numeroNota ? `ND-${numeroNota}` : '',
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.comprobante_completo,
         clienteId: factura.clientId,
@@ -183,8 +223,8 @@ export class NotasAjusteService {
         descuento: 0,
         total,
         saldoPendiente: total,
-        estado: EstadoNota.DRAFT,
-        estadoDIAN: EstadoDIANNota.PENDIENTE,
+        estado: isDraft ? EstadoNota.DRAFT : EstadoNota.ISSUED,
+        estadoDIAN: factura.esElectronica() ? EstadoDIANNota.PENDIENTE : EstadoDIANNota.NO_APLICA,
         observaciones: createDto.observaciones,
         createdById: userId
       });
@@ -233,7 +273,7 @@ export class NotasAjusteService {
 
       // 2. Enviar a Factus/DIAN
       let respuesta: any;
-      if (nota.esNotaCredito()) {
+      if (nota.esNotaCredito()) { 
         respuesta = await this.factusService.crearNotaCredito(
           nota.facturaOriginal,
           nota.motivo,
@@ -268,36 +308,46 @@ export class NotasAjusteService {
         }
  
         // Generar asiento contable
-        await this.asientosService.generarAsientoNotaAjuste(nota, nota.createdById);
- 
+        try {
+          await this.asientosService.generarAsientoNotaAjuste(nota, nota.createdById);
+          this.logger.log(`Asiento contable generado automáticamente para nota credito ${nota.numeroCompleto}`);
+
+        } catch (error) {
+              nota.estado = EstadoNota.ERROR_ASIENTO;
+              nota.asientoError = error.message;
+              nota.fechaAsientoError = new Date();
+            
+              this.logger.error(`Error generando asiento contable NC: ${error.message}`);
+        }
         // Notificar
         // TODO: await this.notificacionesService.notificarNotaAceptada(nota);
- 
+
+        this.notaRepository.update({ id: nota.id }, nota);
         this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: ${respuesta.cufe}`);
  
       } else {
-        nota.estado = EstadoNota.REJECTED;
-        nota.estadoDIAN = EstadoDIANNota.RECHAZADA;
-        nota.mensajeError = respuesta.mensaje;
-        nota.dianResponse = respuesta.respuestaCompleta;
- 
+        this.notaRepository.update({ id: nota.id }, {
+          estado: EstadoNota.REJECTED,
+          estadoDIAN: EstadoDIANNota.RECHAZADA,
+          mensajeError: respuesta.mensaje,
+          dianResponse: respuesta.respuestaCompleta
+        });
+
         this.logger.error(`❌ ${nota.tipo} RECHAZADA: ${respuesta.mensaje}`);
       }
- 
-      await this.notaRepository.save(nota);
+
       return nota;
  
     } catch (error) {
       // Revertir a borrador
-      nota.estado = EstadoNota.DRAFT;
-      nota.estadoDIAN = EstadoDIANNota.PENDIENTE;
-      nota.mensajeError = error.message;
-      await this.notaRepository.save(nota);
+      this.notaRepository.update({ id }, {
+        estado: EstadoNota.DRAFT,
+        estadoDIAN: EstadoDIANNota.PENDIENTE,
+        mensajeError: error.message
+      });
  
       this.logger.error(`Error emitiendo nota: ${error.message}`);
-      throw new InternalServerErrorException(
-        `Error al emitir la nota de ajuste: ${error.message}`
-      );
+      throw new InternalServerErrorException(`Error al emitir la nota de ajuste: ${error.message}`);
     }
   }
  
@@ -499,6 +549,24 @@ export class NotasAjusteService {
     this.logger.log(`Nota anulada: ${nota.numeroCompleto}`);
     return nota;
   }
+
+  /**
+   * Remover nota
+   */
+  async remove(id: string): Promise<void> {
+    const nota = await this.findOne(id);
+
+    if (!nota.puedeEliminarse()) {
+      throw new BadRequestException(
+        'Solo se pueden eliminar notas en estado borrador'
+      );
+    }
+
+    await this.notaRepository.softDelete({ id });
+    this.logger.log(`Nota eliminada: ${nota.numeroCompleto}`);
+
+  }
+
  
   /**
    * Descargar PDF de nota
@@ -506,8 +574,8 @@ export class NotasAjusteService {
   async descargarPDF(id: string): Promise<{ buffer: Buffer, fileName: string }> {
     const nota = await this.findOne(id);
  
-    if (!nota.cufe) {
-      throw new BadRequestException('Esta nota no tiene CUFE');
+    if (!nota.cufe || !nota.numeroCompleto) {
+      throw new BadRequestException('Esta nota no tiene CUFE o número de documento');
     }
  
     return await this.factusService.descargarPDFNota(nota.numeroCompleto);
@@ -519,8 +587,8 @@ export class NotasAjusteService {
   async descargarXML(id: string): Promise<{ buffer: Buffer, fileName: string }> {
     const nota = await this.findOne(id);
  
-    if (!nota.cufe) {
-      throw new BadRequestException('Esta nota no tiene CUFE');
+    if (!nota.cufe || !nota.numeroCompleto) {
+      throw new BadRequestException('Esta nota no tiene CUFE o número de documento');
     }
  
     return await this.factusService.descargarXMLNota(nota.numeroCompleto);
@@ -615,8 +683,8 @@ export class NotasAjusteService {
       where: { tipo },
       order: { createdAt: 'DESC' }
     });
- 
-    const lastNumber = lastNota ? parseInt(lastNota.numero) : 0;
+
+    const lastNumber = lastNota?.numero ? parseInt(lastNota.numero) : 0;
     return (lastNumber + 1).toString().padStart(8, '0');
   }
 }

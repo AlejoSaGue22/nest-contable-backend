@@ -72,7 +72,6 @@ export class FacturasVentasService {
         createFacturasVentaDto.metodoPago = metodoPago.codigo;
       }
 
-
       const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
@@ -149,7 +148,7 @@ export class FacturasVentasService {
               fechaAsientoError: new Date()
             }
           );
-          this.logger.error(`Error generando asiento contable: ${asientoError.message}`);
+            
         }
       }
 

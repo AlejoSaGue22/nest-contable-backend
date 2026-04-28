@@ -9,6 +9,9 @@ export class CreateNotasAjusteDto {
   @IsEnum(TipoNota)
   @IsNotEmpty()
   tipo: TipoNota;
+
+  @IsNotEmpty()
+  isDraft: boolean; // Indica si la nota de ajuste es un borrador (no se genera número)
  
   // ========== FACTURA RELACIONADA ==========
   

@@ -170,7 +170,7 @@ export class FactusService {
      */
     async crearYValidarFactura(factura: FacturasVenta, numero: string): Promise<FacturaDianResponse> {
         try {
-            const token = await this.obtenerToken();
+            const token = await this.obtenerToken(); 
             this.validarDatosFactura(factura);
 
             const payload = this.construirPayloadFactus(factura, numero);
@@ -353,7 +353,7 @@ export class FactusService {
     async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
-
+            
             const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
@@ -444,7 +444,7 @@ export class FactusService {
      * Construir payload Nota Ajuste para Factus (NC o ND)
      */
     private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
-        const referenceCode = `${factura.comprobante}_${Date.now()}`;
+        const referenceCode = `${factura.comprobante}_${Date.now().toString().slice(-5)}`; // Código de referencia único para la nota de ajuste   
 
         const isNC = tipo === 'credito';
         
@@ -460,16 +460,17 @@ export class FactusService {
             
             // 20 = Nota Crédito que referencia una factura electrónica.
             // 30 = Nota Débito que referencia una factura electrónica.
-            customization_id: isNC ? 20 : 30,
+            customization_id: isNC ? 20 : 30,   
             
             // ID de la factura en Factus
             bill_id: billId,
             
             reference_code: referenceCode,
-            observation: motivo,
 
             // Metadatos de la factura original para facilitar procesamiento
-            payment_form: factura.formaPago == 'CONTADO' ? '1' : '2',
+            payment_method_code: metodoPago || factura.metodoPago || '10', // Método de pago de la nota, o factura, o efectivo
+
+            observation: motivo || '',
 
             // Datos del establecimiento/sucursal
             establishment: {

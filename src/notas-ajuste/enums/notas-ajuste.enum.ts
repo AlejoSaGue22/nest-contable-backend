@@ -19,18 +19,21 @@ export enum TipoNota {
  * Estados de la nota de ajuste
  */
 export enum EstadoNota {
-  DRAFT = 'borrador',               // Creada pero no enviada
+  DRAFT = 'borrador',               // Creada pero no enviada (borrador)
+  ISSUED = 'emitida',               // Emitida (para notas de facturas estándar)
   SENT = 'enviada',                 // Enviada a DIAN
   PROCESSING = 'procesando',        // DIAN procesando
   ACCEPTED = 'aceptada',            // DIAN aceptó
   REJECTED = 'rechazada',           // DIAN rechazó
-  CANCELLED = 'anulada'             // Nota anulada
+  CANCELLED = 'anulada',            // Nota anulada
+  ERROR_ASIENTO = 'error_asiento'   // Error asiento
 }
 
 /**
  * Estados DIAN de la nota
  */
 export enum EstadoDIANNota {
+  NO_APLICA = 'no_aplica',          // No aplica (para facturas estándar)
   PENDIENTE = 'pendiente',
   ENVIADA = 'enviada',
   PROCESANDO = 'procesando',

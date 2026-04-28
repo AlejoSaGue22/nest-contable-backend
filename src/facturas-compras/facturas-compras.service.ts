@@ -40,7 +40,7 @@ export class FacturasComprasService {
     ) { }
 
     async create(createFacturaCompraDto: CreateFacturaCompraDto, userId: string): Promise<FacturaCompra> {
-        /const queryRunner = this.dataSource.createQueryRunner();
+        const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
 
@@ -77,9 +77,7 @@ export class FacturasComprasService {
                 }
 
                 if (!articulo.cuentaContable) {
-                    throw new BadRequestException(
-                        `El artículo ${articulo.nombre} no tiene cuenta contable asignada`
-                    );
+                    throw new BadRequestException(`El artículo ${articulo.nombre} no tiene cuenta contable asignada`);
                 }
 
                 if (createFacturaCompraDto.metodoPago) {
@@ -94,10 +92,8 @@ export class FacturasComprasService {
                     createFacturaCompraDto.metodoPago = metodoPago.codigo;
                 }
 
-
-
                 const quantity = Number(itemDto.quantity) || 0;
-//7                if (quantity <= 0) {
+                if (quantity <= 0) {
                     throw new BadRequestException(`La cantidad del artículo ${articulo.nombre} debe ser mayor a cero`);
                 }
                 const unitPrice = itemDto.unitPrice || articulo.precio || 0;

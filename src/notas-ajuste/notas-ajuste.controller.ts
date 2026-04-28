@@ -193,7 +193,18 @@ export class NotasAjusteController {
     const nota = await this.notasAjusteService.anular(id, body.motivo);
     return toNotaAjusteResponse(nota, 'Nota de ajuste anulada');
   }
- 
+
+  /**
+   * Eliminar nota de ajuste (solo borrador)
+   */
+  @Delete(':id')
+  @Permissions(Permission.INVOICE_DELETE)
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string) {
+    await this.notasAjusteService.remove(id);
+    return toNotaAjusteResponse([], 'Nota de ajuste eliminada');
+  }
+
   // ========== CONSULTAS ESPECIALES ==========
  
   /**

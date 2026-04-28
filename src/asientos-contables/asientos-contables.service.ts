@@ -491,7 +491,7 @@ export class AsientosContablesService {
       const isNotaCredito = nota.tipo === TipoNota.CREDITO;
       const detalles: DetalleAsiento[] = [];
 
-      // 1. Agrupar ingresos por cuenta contable de los artículos
+      // 1. Agrupar ingresos por cuenta contable de los artículos (subtotal menos descuento)
       const ingresosAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
@@ -509,7 +509,9 @@ export class AsientosContablesService {
         }
 
         const cuentaId = articulo.cuentaContableId;
-        ingresosAgrupados.set(cuentaId,(ingresosAgrupados.get(cuentaId) ?? 0) + Number(item.subtotal),);
+        // Para NC: usar subtotal menos descuento aplicado
+        const valorIngreso = Number(item.subtotal) - Number(item.valorDescuento);
+        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso);
       }
 
       // 2. Procesar líneas de ingresos (Débito para NC, Crédito para ND)
