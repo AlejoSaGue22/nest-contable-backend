@@ -9,6 +9,10 @@ export class InvoiceFilterDto {
   status?: InvoiceStatus;
 
   @IsOptional()
+  @IsString()
+  noStatus?: string;
+
+  @IsOptional()
   @IsEnum(TipoFactura)
   tipoFactura?: TipoFactura;
 

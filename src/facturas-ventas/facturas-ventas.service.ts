@@ -186,6 +186,10 @@ export class FacturasVentasService {
         queryBuilder.andWhere('invoice.status = :status', { status: where.status });
       }
 
+      if (where.noStatus) {
+        queryBuilder.andWhere('invoice.status != :noStatus', { noStatus: where.noStatus });
+      }
+
       if (where.dianStatus) {
         queryBuilder.andWhere('invoice.dianStatus = :dianStatus', { dianStatus: where.dianStatus });
       }
