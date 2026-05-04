@@ -155,8 +155,8 @@ export class NotasAjusteController {
   @Patch(':id/emitir')
   @Permissions(Permission.INVOICE_CREATE)
   @HttpCode(HttpStatus.OK)
-  async emitir(@Param('id') id: string) {
-    const nota = await this.notasAjusteService.emitir(id);
+  async emitir(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const nota = await this.notasAjusteService.emitir(id, req.user.sub);
  
     let mensaje: string;
     if (nota.estadoDIAN === 'aceptada') {
@@ -169,6 +169,29 @@ export class NotasAjusteController {
  
     return toNotaAjusteResponse(nota, mensaje);
   }
+
+  /**
+   * Sincronizar estado de la nota con DIAN
+   */
+  @Patch(':id/sincronizar')
+  @Permissions(Permission.INVOICE_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async sincronizar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const nota = await this.notasAjusteService.sincronizarConDIAN(id, req.user.sub);
+    return toNotaAjusteResponse(nota, 'Estado sincronizado con la DIAN exitosamente');
+  }
+
+  /**
+   * Reintentar generación de asiento contable
+   */
+  @Patch(':id/reintentar-asiento')
+  @Permissions(Permission.INVOICE_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async reintentarAsiento(@Param('id') id: string) {
+    const nota = await this.notasAjusteService.reintentarAsiento(id);
+    return toNotaAjusteResponse(nota, 'Asiento contable generado exitosamente');
+  }
+
  
   /**
    * Actualizar nota (solo borrador)

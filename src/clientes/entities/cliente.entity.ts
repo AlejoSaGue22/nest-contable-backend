@@ -17,7 +17,7 @@ export class Cliente {
     @Column()
     tipoDocumento: number;
 
-    @ManyToOne(() => TipoDocumento)
+    @ManyToOne(() => TipoDocumento, { eager: true })
     @JoinColumn({ name: 'tipoDocumento', referencedColumnName: 'id' })
     tipoDocumentoRel: TipoDocumento;
 

@@ -253,7 +253,7 @@ export class NotasAjusteService {
   /**
    * Emitir nota de ajuste (enviar a DIAN vía Factus)
    */
-  async emitir(id: string): Promise<NotaAjuste> {
+  async emitir(id: string, userId: string): Promise<NotaAjuste> {
     const nota = await this.findOne(id);
  
     if (!nota.puedeEnviarse()) {
@@ -261,6 +261,7 @@ export class NotasAjusteService {
     }
  
     this.logger.log(`📤 Emitiendo ${nota.tipo} ${nota.numeroCompleto} a DIAN`);
+    const numeroNota = await this.generateNotaNumber(nota.tipo);
  
     try {
       // 1. Cambiar estado
@@ -275,6 +276,7 @@ export class NotasAjusteService {
       let respuesta: any;
       if (nota.esNotaCredito()) { 
         respuesta = await this.factusService.crearNotaCredito(
+          numeroNota,
           nota.facturaOriginal,
           nota.motivo,
           nota.metodoPago || '',
@@ -284,6 +286,7 @@ export class NotasAjusteService {
       } else {
         // Nota débito
         respuesta = await this.factusService.crearNotaDebito(
+          numeroNota,
           nota.facturaOriginal,
           nota.motivo,
           nota.metodoPago || '',
@@ -294,39 +297,43 @@ export class NotasAjusteService {
  
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
-        nota.estado = EstadoNota.ACCEPTED;
-        nota.estadoDIAN = EstadoDIANNota.ACEPTADA;
-        nota.fechaAceptacionDIAN = new Date();
-        nota.cufe = respuesta.cufe;
-        nota.xmlUrl = respuesta.xmlUrl;
-        nota.pdfUrl = respuesta.pdfUrl;
-        nota.qrCode = respuesta.qrImageBase64;
-        nota.proveedorResponse = respuesta.respuestaCompleta;
+        const updateAceptada: Partial<NotaAjuste> = {
+          estado: EstadoNota.ACCEPTED,
+          estadoDIAN: EstadoDIANNota.ACEPTADA,
+          fechaAceptacionDIAN: new Date(),
+          cufe: respuesta.cufe,
+          cude: respuesta.cude,
+          xmlUrl: respuesta.xmlUrl,
+          pdfUrl: respuesta.pdfUrl,
+          qrCode: respuesta.qrImageBase64,
+          proveedorResponse: respuesta.respuestaCompleta,
+          prefijo: nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND',
+          numero: numeroNota,
+        };
  
         if (respuesta.numeroCompleto) {
-          nota.numeroCompleto = respuesta.numeroCompleto;
+          updateAceptada.numeroCompleto = respuesta.numeroCompleto;
         }
  
         // Generar asiento contable
         try {
-          await this.asientosService.generarAsientoNotaAjuste(nota, nota.createdById);
+          await this.asientosService.generarAsientoNotaAjuste(nota, userId);
           this.logger.log(`Asiento contable generado automáticamente para nota credito ${nota.numeroCompleto}`);
 
         } catch (error) {
-              nota.estado = EstadoNota.ERROR_ASIENTO;
-              nota.asientoError = error.message;
-              nota.fechaAsientoError = new Date();
-            
+              updateAceptada.estado = EstadoNota.ERROR_ASIENTO;
+              updateAceptada.asientoError = error.message;
+              updateAceptada.fechaAsientoError = new Date(); 
               this.logger.error(`Error generando asiento contable NC: ${error.message}`);
         }
         // Notificar
         // TODO: await this.notificacionesService.notificarNotaAceptada(nota);
 
-        this.notaRepository.update({ id: nota.id }, nota);
-        this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: ${respuesta.cufe}`);
+        await this.notaRepository.update({ id }, updateAceptada);
+        this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: CUFE: ${respuesta.cufe} - CUDE: ${respuesta.cude}`);
  
       } else {
-        this.notaRepository.update({ id: nota.id }, {
+        await this.notaRepository.update({ id }, {
           estado: EstadoNota.REJECTED,
           estadoDIAN: EstadoDIANNota.RECHAZADA,
           mensajeError: respuesta.mensaje,
@@ -339,17 +346,116 @@ export class NotasAjusteService {
       return nota;
  
     } catch (error) {
-      // Revertir a borrador
-      this.notaRepository.update({ id }, {
-        estado: EstadoNota.DRAFT,
-        estadoDIAN: EstadoDIANNota.PENDIENTE,
-        mensajeError: error.message
-      });
- 
-      this.logger.error(`Error emitiendo nota: ${error.message}`);
+      // Si el error ocurre después de intentar enviar, lo dejamos en estado SENT
+      // para que el usuario pueda sincronizar y no intente emitir de nuevo (evitando duplicados)
+      this.logger.error(`Error emitiendo nota ${id}: ${error.message}`);
+      
+      // Solo revertimos a borrador si NO se ha intentado enviar o si es un error de validación previo
+      if (error instanceof BadRequestException) {
+         this.notaRepository.update({ id }, {
+          estado: EstadoNota.DRAFT,
+          estadoDIAN: EstadoDIANNota.PENDIENTE,
+          mensajeError: error.message
+        });
+      } else {
+        // En caso de error inesperado/timeout, lo dejamos en SENT con el error registrado
+        this.notaRepository.update({ id }, {
+          mensajeError: `Error durante la emisión: ${error.message}. Por favor sincronice el estado.`
+        });
+      }
+
       throw new InternalServerErrorException(`Error al emitir la nota de ajuste: ${error.message}`);
     }
   }
+
+  /**
+   * Reintentar la generación del asiento contable para una nota ya aceptada
+   */
+  async reintentarAsiento(id: string): Promise<NotaAjuste> {
+    const nota = await this.findOne(id);
+
+    if (nota.estado !== EstadoNota.ERROR_ASIENTO && nota.estado !== EstadoNota.ACCEPTED) {
+       throw new BadRequestException('Solo se puede reintentar el asiento para notas aceptadas o con error de asiento');
+    }
+
+    try {
+      await this.asientosService.generarAsientoNotaAjuste(nota, nota.createdById);
+      
+      await this.notaRepository.update(id, {
+        estado: EstadoNota.ACCEPTED,
+        asientoError: null,
+        fechaAsientoError: ''
+      });
+
+      this.logger.log(`✅ Asiento contable reintentado y generado para nota ${nota.numeroCompleto}`);
+      return await this.findOne(id);
+
+    } catch (error) {
+      await this.notaRepository.update(id, {
+        estado: EstadoNota.ERROR_ASIENTO,
+        asientoError: error.message,
+        fechaAsientoError: new Date()
+      });
+      
+      this.logger.error(`❌ Falló reintento de asiento para nota ${nota.numeroCompleto}: ${error.message}`);
+      throw new BadRequestException(`Error generando asiento: ${error.message}`);
+    }
+  }
+
+  /**
+   * Sincronizar el estado de la nota con la DIAN/Factus
+   */
+  async sincronizarConDIAN(id: string, userId: string): Promise<NotaAjuste> {
+    let nota = await this.findOne(id);
+
+    if (!nota.numeroCompleto && !nota.cufe) {
+       // Si no tiene número ni CUFE, intentamos ver si podemos encontrarla en Factus 
+       // Pero por ahora, requerimos al menos el número si se guardó
+       throw new BadRequestException('No se puede sincronizar una nota que no tiene número asignado');
+    }
+
+    this.logger.log(`🔄 Sincronizando nota ${nota.numeroCompleto} con DIAN...`);
+
+    try {
+      const respuesta = await this.factusService.verNotaByNumero(
+        nota.numeroCompleto, 
+        nota.tipo === TipoNota.CREDITO ? 'credito' : 'debito'
+      );
+
+      if (respuesta.status === 'OK') {
+          const data = nota.tipo === TipoNota.CREDITO ? respuesta.data.credit_note : respuesta.data.debit_note;
+
+          nota.estado = EstadoNota.ACCEPTED;
+          nota.estadoDIAN = EstadoDIANNota.ACEPTADA;
+          nota.cufe = data.cufe;
+          nota.cude = data.cude;
+          nota.xmlUrl = data.qr;
+          nota.pdfUrl = data.qr;
+          nota.fechaAceptacionDIAN = data.created_at ? new Date(data.created_at) : new Date();
+          
+          // Intentar generar asiento si no existe
+          try {
+            await this.asientosService.generarAsientoNotaAjuste(nota, userId);
+          } catch (error) {
+            nota.estado = EstadoNota.ERROR_ASIENTO;
+            nota.asientoError = error.message;
+            nota.fechaAsientoError = new Date();
+          }
+
+          await this.notaRepository.save(nota);
+          this.logger.log(`✅ Nota ${nota.numeroCompleto} sincronizada y actualizada`);
+      } else {
+        this.logger.warn(`La nota ${nota.numeroCompleto} aún no está aceptada en DIAN (Estado: ${respuesta.status})`);
+      }
+
+      return await this.findOne(id);
+
+    } catch (error) {
+      this.logger.error(`Error sincronizando nota ${id}: ${error.message}`);
+      throw new BadRequestException(`Error al sincronizar con Factus: ${error.message}`);
+    }
+  }
+
  
   /**
    * Listar notas de ajuste
@@ -639,12 +745,11 @@ export class NotasAjusteService {
       const porcentajeIVA = Number(itemDto.porcentajeIVA || 0);
       const descuento = Number(itemDto.descuento || 0);
       
-      const itemSubtotal = MathUtil.mul(valorUnitario, cantidad);
+      const itemSubtotalSinDescuento = MathUtil.mul(valorUnitario, cantidad);
+      const valorDescuento = MathUtil.percentage(itemSubtotalSinDescuento, descuento);
+      const itemSubtotal = MathUtil.sub(itemSubtotalSinDescuento, valorDescuento);
       const itemIVA = MathUtil.percentage(itemSubtotal, porcentajeIVA);
-      const valorDescuento = MathUtil.percentage(itemSubtotal, descuento);
-      
-      // itemSubtotal + itemIVA - valorDescuento
-      const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, itemIVA), valorDescuento);
+      const itemTotal = MathUtil.sum(itemSubtotal, itemIVA);
  
       itemsCalculados.push({
         articuloId: itemDto.articuloId,

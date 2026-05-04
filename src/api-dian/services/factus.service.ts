@@ -154,9 +154,6 @@ export class FactusService {
                 )
             );
 
-            if(response.data.status == 'OK'){
-
-            }
             return response.data;
 
         } catch (error) {
@@ -164,6 +161,36 @@ export class FactusService {
             throw new BadRequestException('Error al consultar factura en Factus/DIAN');
         }
     }
+
+    /**
+     * Consultar nota por número (crédito o débito)
+     */
+    async verNotaByNumero(numeroCompleto: string, tipo: 'credito' | 'debito'): Promise<any> {
+        try {
+            const token = await this.obtenerToken();
+            const endpoint = tipo === 'credito' ? 'credit-notes' : 'debit-notes';
+            
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v1/${endpoint}/${numeroCompleto}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                )
+            );
+
+            return response.data;
+
+        } catch (error) {
+            this.logger.error(`Error consultando nota ${tipo}:`, error.response?.data || error.message);
+            throw new BadRequestException(`Error al consultar nota ${tipo} en Factus/DIAN`);
+        }
+    }
+
 
     /**
      * Crear y validar factura en Factus/DIAN
@@ -267,7 +294,8 @@ export class FactusService {
             },
 
             // Items de la factura
-            items: factura.items.map(item => ({
+            items: factura.items.map(
+                item => ({
                 code_reference: item.articulo.codigo,
                 name: item.articulo.nombre,
                 quantity: item.quantity,
@@ -350,11 +378,11 @@ export class FactusService {
     /**
      * Crear nota crédito (anulación de factura)
      */
-    async crearNotaCredito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
+    async crearNotaCredito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
             
-            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
+            const payload = this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -396,11 +424,11 @@ export class FactusService {
     /**
      * Crear Nota Débito en DIAN
      */
-    async crearNotaDebito(facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
+    async crearNotaDebito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
-            const payload = this.construirPayloadNotaAjusteFactus(facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
+            const payload = this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
 
             this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -443,8 +471,8 @@ export class FactusService {
     /**
      * Construir payload Nota Ajuste para Factus (NC o ND)
      */
-    private construirPayloadNotaAjusteFactus(factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
-        const referenceCode = `${factura.comprobante}_${Date.now().toString().slice(-5)}`; // Código de referencia único para la nota de ajuste   
+    private construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
+        const referenceCodeNew = `NC-${referenceCode}_${factura.comprobante_completo}`; // Código de referencia único para la nota de ajuste   
 
         const isNC = tipo === 'credito';
         
@@ -465,7 +493,7 @@ export class FactusService {
             // ID de la factura en Factus
             bill_id: billId,
             
-            reference_code: referenceCode,
+            reference_code: referenceCodeNew, // Código de referencia único para la nota de ajuste
 
             // Metadatos de la factura original para facilitar procesamiento
             payment_method_code: metodoPago || factura.metodoPago || '10', // Método de pago de la nota, o factura, o efectivo
@@ -526,7 +554,8 @@ export class FactusService {
             const nota = tipo === 'credito' ? data.credit_note : data.debit_note;
 
             return {
-                cufe: nota.cude || nota.cufe, // CUDE para notas de ajuste
+                cufe: nota.cufe,
+                cude: nota.cude,
                 xmlUrl: nota.qr,
                 pdfUrl: nota.qr,
                 qrCode: nota.qr,
@@ -540,6 +569,7 @@ export class FactusService {
 
         return {
             cufe: '',
+            cude: '',
             xmlUrl: '',
             pdfUrl: '',
             qrCode: '',

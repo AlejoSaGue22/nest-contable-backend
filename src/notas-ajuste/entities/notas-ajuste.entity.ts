@@ -141,6 +141,9 @@ export class NotaAjuste {
   cufe: string;
 
   @Column({ nullable: true })
+  cude: string;
+  
+  @Column({ nullable: true })
   xmlUrl: string;
 
   @Column({ nullable: true })
