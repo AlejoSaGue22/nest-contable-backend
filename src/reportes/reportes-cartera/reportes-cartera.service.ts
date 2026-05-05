@@ -29,9 +29,9 @@ export class ReportesCarteraService {
   // ══════════════════════════════════════════════════════════════
   // AGING CxC — Antigüedad de cartera por cobrar
   // ══════════════════════════════════════════════════════════════
-  async agingCobrar(): Promise<AgingReporte> {
+  async agingCobrar(fechaInicio?: Date, fechaFin?: Date): Promise<AgingReporte> {
     try {
-      const facturas = await this.facturaVentaRepo
+      const query = this.facturaVentaRepo
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.client', 'c')
         .where('f.formaPago = :fp',       { fp: FormaPago.CREDITO })
@@ -41,7 +41,16 @@ export class ReportesCarteraService {
         })
         .andWhere('f.status NOT IN (:...exc)', {
           exc: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT],
-        })
+        });
+
+      if (fechaInicio && fechaFin) {
+        query.andWhere('f.fecha BETWEEN :inicio AND :fin', {
+          inicio: fechaInicio,
+          fin:    fechaFin,
+        });
+      }
+
+      const facturas = await query
         .orderBy('f.fechaVencimiento', 'ASC')
         .getMany();
 
@@ -68,9 +77,9 @@ export class ReportesCarteraService {
   // ══════════════════════════════════════════════════════════════
   // AGING CxP — Antigüedad de deuda por pagar
   // ══════════════════════════════════════════════════════════════
-  async agingPagar(): Promise<AgingReporte> {
+  async agingPagar(fechaInicio?: Date, fechaFin?: Date): Promise<AgingReporte> {
     try {
-      const facturas = await this.facturaCompraRepo
+      const query = this.facturaCompraRepo
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.proveedor', 'p')
         .where('f.formaPago = :fp',       { fp: 'CREDITO' })
@@ -80,7 +89,16 @@ export class ReportesCarteraService {
         })
         .andWhere('f.estado NOT IN (:...exc)', {
           exc: [GastoEstado.ANULADO, GastoEstado.BORRADOR],
-        })
+        });
+
+      if (fechaInicio && fechaFin) {
+        query.andWhere('f.fecha BETWEEN :inicio AND :fin', {
+          inicio: fechaInicio,
+          fin:    fechaFin,
+        });
+      }
+
+      const facturas = await query
         .orderBy('f.fechaVencimiento', 'ASC')
         .getMany();
 
@@ -136,8 +154,8 @@ export class ReportesCarteraService {
           ? p.facturaVenta?.comprobante_completo  ?? '—'
           : p.facturaCompra?.numero               ?? '—';
         const contraparte = esCobro
-          ? (p.facturaVenta?.client  as any)?.nombre ?? '—'
-          : (p.facturaCompra?.proveedor as any)?.nombre ?? '—';
+          ? p.facturaVenta.client.razonSocial?.trim() || ((p.facturaVenta.client.nombre ?? '') + ' ' + (p.facturaVenta.client.apellido ?? ''))
+          : p.facturaCompra.proveedor.razonSocial?.trim() || ((p.facturaCompra.proveedor?.nombre ?? '') + ' ' + (p.facturaCompra.proveedor?.apellido ?? ''));
 
         if (esCobro) totalCobros += p.monto;
         else         totalPagos  += p.monto;

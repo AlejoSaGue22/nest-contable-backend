@@ -31,6 +31,32 @@ export class ReportesCarteraController {
     return this.service.agingPagar();
   }
 
+  /** GET /reportes/cartera/reporte-aging-cobrar — CxC aging con filtros para reportes */
+  @Get('reporte-aging-cobrar')
+  @Permissions(Permission.REPORT_VIEW)
+  reporteAgingCobrar(
+    @Query('fechaInicio') fechaInicio: string,
+    @Query('fechaFin')    fechaFin:    string,
+  ) {
+    return this.service.agingCobrar(
+      fechaInicio ? new Date(fechaInicio) : undefined,
+      fechaFin    ? new Date(fechaFin)    : undefined
+    );
+  }
+
+  /** GET /reportes/cartera/reporte-aging-pagar — CxP aging con filtros para reportes */
+  @Get('reporte-aging-pagar')
+  @Permissions(Permission.REPORT_VIEW)
+  reporteAgingPagar(
+    @Query('fechaInicio') fechaInicio: string,
+    @Query('fechaFin')    fechaFin:    string,
+  ) {
+    return this.service.agingPagar(
+      fechaInicio ? new Date(fechaInicio) : undefined,
+      fechaFin    ? new Date(fechaFin)    : undefined
+    );
+  }
+
   /**
    * GET /reportes/cartera/historial-pagos
    * ?fechaInicio=2025-01-01&fechaFin=2025-12-31
