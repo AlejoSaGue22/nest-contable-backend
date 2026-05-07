@@ -67,7 +67,7 @@ export class Pago {
    * Si medioPago = BANCO | TRANSFERENCIA | CHEQUE,
    * referencia qué cuenta bancaria se usó.
    */
-  @ManyToOne(() => CuentasBancarias, { nullable: true })
+  @ManyToOne(() => CuentasBancarias, { nullable: true, eager: true })
   @JoinColumn({ name: 'cuentaBancariaId' })
   cuentaBancaria: CuentasBancarias;
 

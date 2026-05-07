@@ -38,9 +38,9 @@ export class ReportesCarteraController {
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin')    fechaFin:    string,
   ) {
-    return this.service.agingCobrar(
-      fechaInicio ? new Date(fechaInicio) : undefined,
-      fechaFin    ? new Date(fechaFin)    : undefined
+    return this.service.reporteAgingCobrar(
+      new Date(fechaInicio),
+      new Date(fechaFin),
     );
   }
 
@@ -51,9 +51,9 @@ export class ReportesCarteraController {
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin')    fechaFin:    string,
   ) {
-    return this.service.agingPagar(
-      fechaInicio ? new Date(fechaInicio) : undefined,
-      fechaFin    ? new Date(fechaFin)    : undefined
+    return this.service.reporteAgingPagar(
+      new Date(fechaInicio),
+      new Date(fechaFin),
     );
   }
 

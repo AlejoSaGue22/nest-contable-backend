@@ -5,6 +5,7 @@ import { ReportesCarteraController } from './reportes-cartera.controller';
 import { Pago } from 'src/pagos/entities/pago.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
+import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
 
 @Module({
     imports: [
@@ -12,6 +13,7 @@ import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.enti
             Pago,
             FacturasVenta,
             FacturaCompra,
+            NotaAjuste,
         ]),
     ],
     providers: [ReportesCarteraService],

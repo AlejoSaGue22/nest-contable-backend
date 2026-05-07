@@ -7,7 +7,9 @@ import { PaymentStatus, TipoPago } from 'src/pagos/enums/pago.enum';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
-import { AgingGroup, AgingReporte, AgingRow, HistorialPagosReporte, ResumenCartera } from './dto/reportes-cartera.dto';
+import { AgingGroup, AgingReporte, AgingRow, HistorialPagosReporte, ReporteAgingAgrupado, ResumenCartera } from './dto/reportes-cartera.dto';
+import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
+import { TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 
 // ─── Servicio ─────────────────────────────────────────────────────────────────
 
@@ -24,14 +26,17 @@ export class ReportesCarteraService {
 
     @InjectRepository(Pago)
     private readonly pagoRepo: Repository<Pago>,
+
+    @InjectRepository(NotaAjuste)
+    private readonly notaAjusteRepo: Repository<NotaAjuste>,
   ) {}
 
   // ══════════════════════════════════════════════════════════════
   // AGING CxC — Antigüedad de cartera por cobrar
   // ══════════════════════════════════════════════════════════════
-  async agingCobrar(fechaInicio?: Date, fechaFin?: Date): Promise<AgingReporte> {
+  async agingCobrar(): Promise<AgingReporte> {
     try {
-      const query = this.facturaVentaRepo
+      const facturas = await this.facturaVentaRepo
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.client', 'c')
         .where('f.formaPago = :fp',       { fp: FormaPago.CREDITO })
@@ -41,16 +46,7 @@ export class ReportesCarteraService {
         })
         .andWhere('f.status NOT IN (:...exc)', {
           exc: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT],
-        });
-
-      if (fechaInicio && fechaFin) {
-        query.andWhere('f.fecha BETWEEN :inicio AND :fin', {
-          inicio: fechaInicio,
-          fin:    fechaFin,
-        });
-      }
-
-      const facturas = await query
+        })
         .orderBy('f.fechaVencimiento', 'ASC')
         .getMany();
 
@@ -59,7 +55,7 @@ export class ReportesCarteraService {
           id:            f.id,
           numero:        f.comprobante_completo,
           contraparteId: f.clientId,
-          contraparte:   f.client?.razonSocial ?? f.client?.nombre ?? f.clientId,
+          contraparte:   f.client?.razonSocial?.trim().length > 0 ? f.client.razonSocial : f.client.nombre + ' ' + f.client.apellido,
           emision:       f.fecha,
           vencimiento:   f.fechaVencimiento,
           total:         f.total,
@@ -77,9 +73,9 @@ export class ReportesCarteraService {
   // ══════════════════════════════════════════════════════════════
   // AGING CxP — Antigüedad de deuda por pagar
   // ══════════════════════════════════════════════════════════════
-  async agingPagar(fechaInicio?: Date, fechaFin?: Date): Promise<AgingReporte> {
+  async agingPagar(): Promise<AgingReporte> {
     try {
-      const query = this.facturaCompraRepo
+      const facturas = await this.facturaCompraRepo
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.proveedor', 'p')
         .where('f.formaPago = :fp',       { fp: 'CREDITO' })
@@ -89,16 +85,7 @@ export class ReportesCarteraService {
         })
         .andWhere('f.estado NOT IN (:...exc)', {
           exc: [GastoEstado.ANULADO, GastoEstado.BORRADOR],
-        });
-
-      if (fechaInicio && fechaFin) {
-        query.andWhere('f.fecha BETWEEN :inicio AND :fin', {
-          inicio: fechaInicio,
-          fin:    fechaFin,
-        });
-      }
-
-      const facturas = await query
+        })
         .orderBy('f.fechaVencimiento', 'ASC')
         .getMany();
 
@@ -107,7 +94,7 @@ export class ReportesCarteraService {
           id:            f.id,
           numero:        f.numero || '—',
           contraparteId: f.proveedorId,
-          contraparte:   f.proveedor?.razonSocial ?? f.proveedor?.nombre ?? f.proveedorId,
+          contraparte:   f.proveedor.razonSocial?.trim() ? f.proveedor.razonSocial.trim() : `${f.proveedor.nombre} ${f.proveedor.apellido}`,
           emision:       f.fecha,
           vencimiento:   f.fechaVencimiento,
           total:         f.total,
@@ -119,6 +106,54 @@ export class ReportesCarteraService {
     } catch (error) {
       this.logger.error(`Error aging CxP: ${error.message}`);
       throw new InternalServerErrorException('Error al generar reporte aging CxP');
+    }
+  }
+
+  async reporteAgingCobrar(fechaInicio: Date, fechaFin: Date): Promise<ReporteAgingAgrupado> {
+    try {
+      const facturas = await this.facturaVentaRepo
+        .createQueryBuilder('f')
+        .leftJoinAndSelect('f.client', 'c')
+        .where('f.formaPago = :fp', { fp: FormaPago.CREDITO })
+        .andWhere('f.saldoPendiente > 0')
+        .andWhere('f.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
+        .andWhere('f.status NOT IN (:...exc)', { exc: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT] })
+        .orderBy('f.fecha', 'DESC')
+        .getMany();
+
+      // Buscar Notas de Crédito con saldo a favor del cliente
+      const notasCredito = await this.notaAjusteRepo
+        .createQueryBuilder('n')
+        .leftJoinAndSelect('n.cliente', 'c')
+        .where('n.tipo = :tipo', { tipo: TipoNota.CREDITO })
+        .andWhere('n.saldoPendiente > 0')
+        .andWhere('n.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
+        .getMany();
+
+      return this.construirReporteAgrupado(facturas, notasCredito, 'client');
+    } catch (error) {
+      this.logger.error(`Error reporte aging CxC: ${error.message}`);
+      throw new InternalServerErrorException('Error al generar reporte de antigüedad');
+    }
+  }
+
+  async reporteAgingPagar(fechaInicio: Date, fechaFin: Date): Promise<ReporteAgingAgrupado> {
+    try {
+      const facturas = await this.facturaCompraRepo
+        .createQueryBuilder('f')
+        .leftJoinAndSelect('f.proveedor', 'p')
+        .where('f.formaPago = :fp', { fp: 'CREDITO' })
+        .andWhere('f.saldoPendiente > 0')
+        .andWhere('f.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
+        .andWhere('f.estado NOT IN (:...exc)', { exc: [GastoEstado.ANULADO, GastoEstado.BORRADOR] })
+        .orderBy('f.fecha', 'DESC')
+        .getMany();
+
+      // Por ahora no hay notas de ajuste mapeadas para proveedores en este módulo
+      return this.construirReporteAgrupado(facturas, [], 'proveedor');
+    } catch (error) {
+      this.logger.error(`Error reporte aging CxP: ${error.message}`);
+      throw new InternalServerErrorException('Error al generar reporte de antigüedad');
     }
   }
 
@@ -160,15 +195,22 @@ export class ReportesCarteraService {
         if (esCobro) totalCobros += p.monto;
         else         totalPagos  += p.monto;
 
+        console.log(p);
+
         return {
           id:              p.id,
           tipo:            p.tipo,
           fecha:           p.fecha,
           monto:           p.monto,
           medioPago:       p.medioPago,
+          banco:           p.medioPago != 'caja' ? p.cuentaBancaria?.nombre : '',
+          tipoCuenta:      p.medioPago != 'caja' ? p.cuentaBancaria?.tipoCuenta : '',
+          numeroCuenta:    p.medioPago != 'caja' ? p.cuentaBancaria?.numeroCuenta : '',
           referencia:      p.referencia,
-          numeroDocumento: documento,
+          numeroFactura: documento,
           contraparte,
+          numeroContraparte: esCobro ? p.facturaVenta.client.numeroDocumento : p.facturaCompra.proveedor.identificacion,
+          creadoPor:       p.creadoPor?.fullName || p.creadoPor?.email,
           asientoId:       p.asientoId,
         };
       });
@@ -299,6 +341,91 @@ export class ReportesCarteraService {
       grupos:     Array.from(mapaGrupos.values()),
       totales,
       generadoEn: new Date(),
+    };
+  }
+
+  private construirReporteAgrupado(facturas: any[], notas: NotaAjuste[], tipo: 'client' | 'proveedor'): ReporteAgingAgrupado {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const mapaGrupos = new Map<string, any>();
+
+    // 1. Procesar Facturas (Deuda)
+    for (const f of facturas) {
+      const contraparte = tipo === 'client' ? f.client : f.proveedor;
+      const id = contraparte.id;
+      const identificacion = tipo === 'client' ? f.client.numeroDocumento : f.proveedor.identificacion;
+      const nombre = tipo === 'client' 
+        ? (f.client.razonSocial?.trim() || `${f.client.nombre ?? ''} ${f.client.apellido ?? ''}`.trim())
+        : (f.proveedor.razonSocial?.trim() || `${f.proveedor.nombre ?? ''} ${f.proveedor.apellido ?? ''}`.trim());
+
+      if (!mapaGrupos.has(id)) {
+        mapaGrupos.set(id, {
+          identificacion,
+          sucursal: '0', // Valor por defecto o '—'
+          nombre,
+          deuda: 0,
+          saldoFavor: 0,
+          saldoCartera: 0,
+          facturas: []
+        });
+      }
+
+      const grupo = mapaGrupos.get(id);
+      const saldo = Number(f.saldoPendiente);
+      grupo.deuda += saldo;
+
+      const venc = f.fechaVencimiento ? new Date(f.fechaVencimiento) : null;
+      const esVencido = venc && venc < hoy;
+      const dias = this.calcularDias(f.fechaVencimiento, hoy);
+
+      grupo.facturas.push({
+        id: f.id,
+        fecha: f.fecha,
+        vencimiento: f.fechaVencimiento,
+        numeroFactura: f.comprobante_completo || f.numero || '—',
+        saldo: saldo,
+        diasVencidos: dias > 0 ? dias : 0,
+        estado: esVencido ? 'Vencido' : 'Por Vencer'
+      });
+    }
+
+    // 2. Procesar Notas (Saldo a favor)
+    for (const n of notas) {
+      const id = n.clienteId;
+      if (!mapaGrupos.has(id)) {
+        // Si el cliente no tiene facturas pero sí notas a favor
+        const nombre = n.cliente.razonSocial?.trim() || `${n.cliente.nombre ?? ''} ${n.cliente.apellido ?? ''}`.trim();
+        mapaGrupos.set(id, {
+          identificacion: n.cliente.numeroDocumento,
+          sucursal: '0',
+          nombre,
+          deuda: 0,
+          saldoFavor: 0,
+          saldoCartera: 0,
+          facturas: []
+        });
+      }
+      const grupo = mapaGrupos.get(id);
+      grupo.saldoFavor += Number(n.saldoPendiente);
+    }
+
+    // 3. Finalizar cálculos y totales
+    let totalDeuda = 0, totalSaldoFavor = 0, totalCartera = 0;
+    const items = Array.from(mapaGrupos.values()).map(g => {
+      g.saldoCartera = g.deuda - g.saldoFavor;
+      
+      totalDeuda += g.deuda;
+      totalSaldoFavor += g.saldoFavor;
+      totalCartera += g.saldoCartera;
+
+      return g;
+    });
+
+    return {
+      items,
+      totales: { totalDeuda, totalSaldoFavor, totalCartera },
+      generadoEn: new Date()
     };
   }
 

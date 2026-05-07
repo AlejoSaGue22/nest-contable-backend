@@ -46,9 +46,14 @@ export interface HistorialPagosReporte {
     fecha:        Date;
     monto:        number;
     medioPago:    string;
+    banco:        string | null;
+    tipoCuenta:       string | null;
+    numeroCuenta: string | null;
     referencia:   string | null;
-    numeroDocumento: string;
+    numeroFactura: string;
     contraparte:  string;
+    numeroContraparte: string;
+    creadoPor:    string;
     asientoId:    string | null;
   }>;
   totalCobros: number;
@@ -69,4 +74,32 @@ export interface ResumenCartera {
     vencida:           number;
     cantidadFacturas:  number;
   };
+}
+
+export interface ReporteAgingItemAgrupado {
+  identificacion: string;
+  sucursal: string;
+  nombre: string;
+  deuda: number;        // Deuda por cobrar / pagar
+  saldoFavor: number;   // Saldo a favor
+  saldoCartera: number; // Saldo cartera (Deuda - Saldo a favor)
+  facturas: Array<{
+    id: string;
+    fecha: Date;
+    vencimiento: Date | null;
+    numeroFactura: string;
+    saldo: number;
+    diasVencidos: number;
+    estado: string;
+  }>;
+}
+
+export interface ReporteAgingAgrupado {
+  items: ReporteAgingItemAgrupado[];
+  totales: {
+    totalDeuda: number;
+    totalSaldoFavor: number;
+    totalCartera: number;
+  };
+  generadoEn: Date;
 }
