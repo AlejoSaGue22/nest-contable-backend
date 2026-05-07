@@ -59,6 +59,12 @@ export interface HistorialPagosReporte {
   totalCobros: number;
   totalPagos:  number;
   neto:        number;
+  meta?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export interface ResumenCartera {
@@ -80,14 +86,16 @@ export interface ReporteAgingItemAgrupado {
   identificacion: string;
   sucursal: string;
   nombre: string;
-  deuda: number;        // Deuda por cobrar / pagar
-  saldoFavor: number;   // Saldo a favor
-  saldoCartera: number; // Saldo cartera (Deuda - Saldo a favor)
+  saldoCartera: number; // Total Facturado (Bruto)
+  saldoFavor: number;   // Total Pagado + Notas
+  deuda: number;        // Saldo Restante (Cartera - Favor)
   facturas: Array<{
     id: string;
     fecha: Date;
     vencimiento: Date | null;
     numeroFactura: string;
+    totalFacturado: number;
+    totalPagado: number;
     saldo: number;
     diasVencidos: number;
     estado: string;
@@ -96,10 +104,16 @@ export interface ReporteAgingItemAgrupado {
 
 export interface ReporteAgingAgrupado {
   items: ReporteAgingItemAgrupado[];
-  totales: {
-    totalDeuda: number;
-    totalSaldoFavor: number;
-    totalCartera: number;
+  totales: { 
+    totalCartera: number;   // Suma de todos los valores de facturas
+    totalSaldoFavor: number; // Suma de pagos y notas
+    totalDeuda: number;     // Suma de saldos restantes
+  };
+  meta?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   };
   generadoEn: Date;
 }

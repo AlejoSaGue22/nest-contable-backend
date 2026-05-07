@@ -37,10 +37,14 @@ export class ReportesCarteraController {
   reporteAgingCobrar(
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin')    fechaFin:    string,
+    @Query('page')        page?:       number,
+    @Query('limit')       limit?:      number,
   ) {
     return this.service.reporteAgingCobrar(
       new Date(fechaInicio),
       new Date(fechaFin),
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
     );
   }
 
@@ -50,10 +54,14 @@ export class ReportesCarteraController {
   reporteAgingPagar(
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin')    fechaFin:    string,
+    @Query('page')        page?:       number,
+    @Query('limit')       limit?:      number,
   ) {
     return this.service.reporteAgingPagar(
       new Date(fechaInicio),
       new Date(fechaFin),
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
     );
   }
 
@@ -66,10 +74,14 @@ export class ReportesCarteraController {
   historialPagos(
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin')    fechaFin:    string,
+    @Query('page')        page?:       number,
+    @Query('limit')       limit?:      number,
   ) {
     return this.service.historialPagos(
       new Date(fechaInicio),
       new Date(fechaFin),
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
     );
   }
 }

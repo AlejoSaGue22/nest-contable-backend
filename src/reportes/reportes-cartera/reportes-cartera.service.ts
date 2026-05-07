@@ -9,7 +9,7 @@ import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factur
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { AgingGroup, AgingReporte, AgingRow, HistorialPagosReporte, ReporteAgingAgrupado, ResumenCartera } from './dto/reportes-cartera.dto';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
-import { TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
+import { EstadoNota, TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 
 // ─── Servicio ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ export class ReportesCarteraService {
     }
   }
 
-  async reporteAgingCobrar(fechaInicio: Date, fechaFin: Date): Promise<ReporteAgingAgrupado> {
+  async reporteAgingCobrar(fechaInicio: Date, fechaFin: Date, page: number = 1, limit: number = 10): Promise<ReporteAgingAgrupado> {
     try {
       const facturas = await this.facturaVentaRepo
         .createQueryBuilder('f')
@@ -117,7 +117,9 @@ export class ReportesCarteraService {
         .where('f.formaPago = :fp', { fp: FormaPago.CREDITO })
         .andWhere('f.saldoPendiente > 0')
         .andWhere('f.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
-        .andWhere('f.status NOT IN (:...exc)', { exc: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT] })
+        .andWhere('f.status NOT IN (:...exc)', { exc: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT, 
+                                                        InvoiceStatus.ERROR_ASIENTO,
+                                                        InvoiceStatus.REJECTED] })
         .orderBy('f.fecha', 'DESC')
         .getMany();
 
@@ -128,16 +130,17 @@ export class ReportesCarteraService {
         .where('n.tipo = :tipo', { tipo: TipoNota.CREDITO })
         .andWhere('n.saldoPendiente > 0')
         .andWhere('n.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
+        .andWhere('n.estado NOT IN (:...exc)', { exc: [EstadoNota.DRAFT, EstadoNota.CANCELLED, EstadoNota.REJECTED] })
         .getMany();
 
-      return this.construirReporteAgrupado(facturas, notasCredito, 'client');
+      return this.construirReporteAgrupado(facturas, notasCredito, 'client', page, limit);
     } catch (error) {
       this.logger.error(`Error reporte aging CxC: ${error.message}`);
       throw new InternalServerErrorException('Error al generar reporte de antigüedad');
     }
   }
 
-  async reporteAgingPagar(fechaInicio: Date, fechaFin: Date): Promise<ReporteAgingAgrupado> {
+  async reporteAgingPagar(fechaInicio: Date, fechaFin: Date, page: number = 1, limit: number = 10): Promise<ReporteAgingAgrupado> {
     try {
       const facturas = await this.facturaCompraRepo
         .createQueryBuilder('f')
@@ -145,12 +148,14 @@ export class ReportesCarteraService {
         .where('f.formaPago = :fp', { fp: 'CREDITO' })
         .andWhere('f.saldoPendiente > 0')
         .andWhere('f.fecha BETWEEN :inicio AND :fin', { inicio: fechaInicio, fin: fechaFin })
-        .andWhere('f.estado NOT IN (:...exc)', { exc: [GastoEstado.ANULADO, GastoEstado.BORRADOR] })
+        .andWhere('f.estado NOT IN (:...exc)', { exc: [GastoEstado.ANULADO, 
+                                                        GastoEstado.BORRADOR,
+                                                        GastoEstado.ERROR_ASIENTO] })
         .orderBy('f.fecha', 'DESC')
         .getMany();
 
       // Por ahora no hay notas de ajuste mapeadas para proveedores en este módulo
-      return this.construirReporteAgrupado(facturas, [], 'proveedor');
+      return this.construirReporteAgrupado(facturas, [], 'proveedor', page, limit);
     } catch (error) {
       this.logger.error(`Error reporte aging CxP: ${error.message}`);
       throw new InternalServerErrorException('Error al generar reporte de antigüedad');
@@ -163,6 +168,8 @@ export class ReportesCarteraService {
   async historialPagos(
     fechaInicio: Date,
     fechaFin:    Date,
+    page: number = 1,
+    limit: number = 10
   ): Promise<HistorialPagosReporte> {
     try {
       const pagos = await this.pagoRepo
@@ -215,11 +222,21 @@ export class ReportesCarteraService {
         };
       });
 
+      const total = items.length;
+      const skip = (page - 1) * limit;
+      const itemsPaginados = items.slice(skip, skip + limit);
+
       return {
-        pagos: items,
+        pagos: itemsPaginados,
         totalCobros,
         totalPagos,
         neto: totalCobros - totalPagos,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
       };
     } catch (error) {
       this.logger.error(`Error historial pagos: ${error.message}`);
@@ -344,7 +361,13 @@ export class ReportesCarteraService {
     };
   }
 
-  private construirReporteAgrupado(facturas: any[], notas: NotaAjuste[], tipo: 'client' | 'proveedor'): ReporteAgingAgrupado {
+  private construirReporteAgrupado(
+    facturas: any[], 
+    notas: NotaAjuste[], 
+    tipo: 'client' | 'proveedor',
+    page: number = 1,
+    limit: number = 10
+  ): ReporteAgingAgrupado {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -362,18 +385,22 @@ export class ReportesCarteraService {
       if (!mapaGrupos.has(id)) {
         mapaGrupos.set(id, {
           identificacion,
-          sucursal: '0', // Valor por defecto o '—'
+          sucursal: '0', 
           nombre,
-          deuda: 0,
-          saldoFavor: 0,
-          saldoCartera: 0,
+          saldoCartera: 0, // Total Facturado (Bruto)
+          saldoFavor: 0,   // Total Pagado + Notas
+          deuda: 0,        // Saldo Restante
           facturas: []
         });
       }
 
       const grupo = mapaGrupos.get(id);
+      const total = Number(f.total);
+      const pagado = Number(f.totalPagado);
       const saldo = Number(f.saldoPendiente);
-      grupo.deuda += saldo;
+
+      grupo.saldoCartera += total;
+      grupo.saldoFavor += pagado;
 
       const venc = f.fechaVencimiento ? new Date(f.fechaVencimiento) : null;
       const esVencido = venc && venc < hoy;
@@ -384,13 +411,15 @@ export class ReportesCarteraService {
         fecha: f.fecha,
         vencimiento: f.fechaVencimiento,
         numeroFactura: f.comprobante_completo || f.numero || '—',
+        totalFacturado: total,
+        totalPagado: pagado,
         saldo: saldo,
         diasVencidos: dias > 0 ? dias : 0,
         estado: esVencido ? 'Vencido' : 'Por Vencer'
       });
     }
 
-    // 2. Procesar Notas (Saldo a favor)
+    // 2. Procesar Notas (Saldo a favor / Abonos por Nota Crédito)
     for (const n of notas) {
       const id = n.clienteId;
       if (!mapaGrupos.has(id)) {
@@ -400,31 +429,48 @@ export class ReportesCarteraService {
           identificacion: n.cliente.numeroDocumento,
           sucursal: '0',
           nombre,
-          deuda: 0,
-          saldoFavor: 0,
           saldoCartera: 0,
+          saldoFavor: 0,
+          deuda: 0,
           facturas: []
         });
       }
       const grupo = mapaGrupos.get(id);
-      grupo.saldoFavor += Number(n.saldoPendiente);
+      // El total de la nota crédito se considera un abono a favor
+      grupo.saldoFavor += Number(n.total);
     }
 
     // 3. Finalizar cálculos y totales
-    let totalDeuda = 0, totalSaldoFavor = 0, totalCartera = 0;
-    const items = Array.from(mapaGrupos.values()).map(g => {
-      g.saldoCartera = g.deuda - g.saldoFavor;
+    let totalCarteraGlobal = 0, totalSaldoFavorGlobal = 0, totalDeudaGlobal = 0;
+    const todosLosItems = Array.from(mapaGrupos.values()).map(g => {
+      // Deuda = Cartera - (Pagado + Notas)
+      g.deuda = g.saldoCartera - g.saldoFavor;
       
-      totalDeuda += g.deuda;
-      totalSaldoFavor += g.saldoFavor;
-      totalCartera += g.saldoCartera;
+      totalCarteraGlobal += g.saldoCartera;
+      totalSaldoFavorGlobal += g.saldoFavor;
+      totalDeudaGlobal += g.deuda;
 
       return g;
     });
 
+    // 4. Aplicar paginación sobre los grupos resultantes
+    const total = todosLosItems.length;
+    const skip = (page - 1) * limit;
+    const itemsPaginados = todosLosItems.slice(skip, skip + limit);
+
     return {
-      items,
-      totales: { totalDeuda, totalSaldoFavor, totalCartera },
+      items: itemsPaginados,
+      totales: { 
+        totalCartera: totalCarteraGlobal, 
+        totalSaldoFavor: totalSaldoFavorGlobal, 
+        totalDeuda: totalDeudaGlobal 
+      },
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      },
       generadoEn: new Date()
     };
   }
