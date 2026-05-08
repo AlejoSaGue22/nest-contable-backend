@@ -390,7 +390,7 @@ export class ReportesService {
     const clientesMap = new Map<string, { nombre: string; cant: number; monto: number }>();
     facturas.forEach(f => {
       const key = f.clientId;
-      const data = clientesMap.get(key) || { nombre: f.client?.nombre || 'Desconocido', cant: 0, monto: 0 };
+      const data = clientesMap.get(key) || { nombre: f.client?.razonSocial || (f.client.nombre + " " + f.client.apellido), cant: 0, monto: 0 };
       data.cant++;
       data.monto += Number(f.total);
       clientesMap.set(key, data);
@@ -447,6 +447,7 @@ export class ReportesService {
       },
       standard: {
         emitidas: standard.length,
+        anuladas: standard.filter(f => f.status === InvoiceStatus.CANCELLED).length,
         montoPromedio: standard.length > 0 ? standard.reduce((s, f) => s + Number(f.total), 0) / standard.length : 0,
         totalPagado: standard.reduce((s, f) => s + Number(f.totalPagado), 0),
         saldoPendiente: standard.reduce((s, f) => s + Number(f.saldoPendiente), 0)

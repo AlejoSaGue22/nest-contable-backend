@@ -8,7 +8,7 @@ import { Permission } from 'src/common/constants/roles.constants';
 @UseGuards(AuthGuard)
 export class DashboardController {
     constructor(private readonly dashboardService: DashboardService) { }
-
+    
     @Get('summary')
     @Permissions(Permission.DASHBOARD_VIEW)
     async getSummary() {
