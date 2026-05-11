@@ -7,7 +7,7 @@ import { ItemNotaAjuste } from './entities/items-notas-ajuste.entity';
 import { NotasAjusteFilterDto } from './dto/nota-ajuste-filter.dto';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { InvoiceStatus, TipoFactura } from 'src/facturas-ventas/enums/factura-venta.enum';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -54,16 +54,13 @@ export class NotasAjusteService {
       }
  
       // Validar según tipo de factura
-      if (factura.esElectronica()) {
-        // Para facturas electrónicas: debe estar aceptada por DIAN
-        if (factura.status !== InvoiceStatus.ACCEPTED) {
+      if (factura.esElectronica() && factura.status !== InvoiceStatus.ACCEPTED) {
           throw new BadRequestException('Solo se pueden crear notas para facturas electrónicas aceptadas por DIAN');
-        }
-      } else {
+      }
+      
+      if (!factura.esElectronica() && factura.status !== InvoiceStatus.ISSUED) {
         // Para facturas estándar: debe estar emitida
-        if (factura.status !== InvoiceStatus.ISSUED) {
           throw new BadRequestException('Solo se pueden crear notas para facturas estándar emitidas');
-        }
       }
 
       // 2. Validar que el total de las NC no exceda el saldo de la factura (para electrónicas y estándar)
@@ -258,6 +255,19 @@ export class NotasAjusteService {
  
     if (!nota.puedeEnviarse()) {
       throw new BadRequestException(`No se puede emitir una nota en estado ${nota.obtenerEstadoLegible()}`);
+    }
+
+    const factura = await this.facturaRepository.findOne({ where: { id: nota.facturaOriginalId } });
+    if (!factura) throw new NotFoundException('Factura original no encontrada');
+
+    // Validación específica para Nota Crédito: no exceder saldo de la factura original
+    if (nota.esNotaCredito()) {
+      const totalNotasCredito = await this.calcularTotalNotasCredito(nota.facturaOriginalId);
+      const nuevoTotalConEstaNota = MathUtil.sum(totalNotasCredito, Number(nota.total));
+      
+      if (nuevoTotalConEstaNota > Number(factura.total)) {
+        throw new BadRequestException(`Esta Nota Crédito excede el saldo disponible de la factura original.`);
+      }
     }
  
     this.logger.log(`📤 Emitiendo ${nota.tipo} ${nota.numeroCompleto} a DIAN`);
@@ -776,11 +786,13 @@ export class NotasAjusteService {
       where: {
         facturaOriginalId: facturaId,
         tipo: TipoNota.CREDITO,
-        estado: EstadoNota.ACCEPTED
+        estado: In([EstadoNota.ACCEPTED, EstadoNota.ISSUED]) 
       }
     });
  
-    return notasCredito.reduce((sum, nota) => MathUtil.sum(sum, Number(nota.total)), 0);
+    const total = notasCredito.reduce((sum, nota) => MathUtil.sum(sum, Number(nota.total)), 0);
+
+    return total;
   }
  
   private async generateNotaNumber(tipo: TipoNota): Promise<string> {

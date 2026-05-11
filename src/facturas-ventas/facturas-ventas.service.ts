@@ -76,7 +76,7 @@ export class FacturasVentasService {
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
       const numberFactura = await this.generateInvoiceNumber();
-      const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FAC';
+      const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? 'FE' : 'FV';
 
       const { items, ...createDtoRest } = createFacturasVentaDto;
 

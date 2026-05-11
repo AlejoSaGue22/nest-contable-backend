@@ -496,7 +496,7 @@ export class FactusService {
             reference_code: referenceCodeNew, // Código de referencia único para la nota de ajuste
 
             // Metadatos de la factura original para facilitar procesamiento
-            payment_method_code: metodoPago || factura.metodoPago || '10', // Método de pago de la nota, o factura, o efectivo
+            payment_method_code: factura.metodoPago || metodoPago || '10', // Método de pago de la nota, o factura, o efectivo
 
             observation: motivo || '',
 

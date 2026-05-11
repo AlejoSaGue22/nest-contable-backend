@@ -330,7 +330,7 @@ export class ReportesService {
    * Calcula el saldo de una cuenta en un período
    * considerando su naturaleza (débito o crédito)
    */
-  private async calcularSaldoCuenta(cuentaId: string, fechaInicio: Date, fechaFin: Date): Promise<number> {
+  async calcularSaldoCuenta(cuentaId: string, fechaInicio: Date, fechaFin: Date): Promise<number> {
     const cuenta = await this.cuentaRepository.findOne({
       where: { id: cuentaId }
     });

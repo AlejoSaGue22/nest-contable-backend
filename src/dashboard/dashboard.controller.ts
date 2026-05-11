@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
@@ -11,7 +11,7 @@ export class DashboardController {
     
     @Get('summary')
     @Permissions(Permission.DASHBOARD_VIEW)
-    async getSummary() {
-        return await this.dashboardService.getSummary();
+    async getSummary(@Query('period') period?: string) {
+        return await this.dashboardService.getSummary(period);
     }
 }
