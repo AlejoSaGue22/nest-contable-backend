@@ -137,7 +137,6 @@ export class FactusService {
         }
     }
 
-
     async verFacturaByNumero(numeroCompleto: string): Promise<any> {
         try {
             const token = await this.obtenerToken();
@@ -579,6 +578,35 @@ export class FactusService {
             mensaje: responseData.message || 'Nota rechazada',
             respuestaCompleta: responseData
         };
+    }
+
+    async sendEmail(numberFull: string, email: string, pdfBase64?: string): Promise<void> {
+        try {
+            const token = await this.obtenerToken();
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v1/bills/send-email/${numberFull}`,
+                    {
+                        email: email,
+                        pdf_base_64_encoded: pdfBase64
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                )
+            );
+
+            this.logger.log(`📧 Email factura ${numberFull} enviado exitosamente: ${email}`);
+
+        } catch (error) {
+            this.logger.error(`❌ Error enviando email factura ${numberFull}:`, error.response?.data || error.message);
+            throw error;
+        }
     }
 
     

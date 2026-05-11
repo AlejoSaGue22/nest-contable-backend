@@ -106,4 +106,10 @@ export class FacturasVentasController {
     const invoice = await this.facturasVentasService.reintentarAsiento(id, req.user.sub);
     return toInvoiceResponse(invoice, 'Reintento de asiento contable exitoso');
   }
+
+  @Post(':id/enviar-email')
+  async enviarEmail(@Param('id') id: string, @Body('email') email: string, @Req() req: AuthenticatedRequest) {
+    const invoice = await this.facturasVentasService.enviarEmail(id, email, req.user.sub);
+    return toInvoiceResponse(invoice, 'Email enviado exitosamente');
+  }
 }

@@ -719,4 +719,30 @@ export class FacturasVentasService {
       throw new BadRequestException(`El asiento sigue fallando: ${error.message}`);
     }
   }
+
+  async enviarEmail(id: string, email: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    
+    if (!factura) {
+      throw new NotFoundException('Factura no encontrada.');
+    }
+
+    if(factura.status !== InvoiceStatus.ACCEPTED){
+      throw new BadRequestException('Solo se pueden enviar facturas aceptadas.');
+    }
+
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException('Email inválido.');
+    }
+
+    // ✅ Usar factusService para envío
+    try {
+      await this.factusService.sendEmail(factura.comprobante_completo, email);
+    } catch (error) {
+      this.logger.error(`Fallo envío email factura ${factura.comprobante_completo}: ${error.message}`);
+      throw new BadRequestException(`El envío de email sigue fallando: ${error.message}`);
+    }
+
+    return factura;
+  }
 }
