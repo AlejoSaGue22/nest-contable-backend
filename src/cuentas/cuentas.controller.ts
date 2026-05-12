@@ -13,4 +13,13 @@ export class CuentasController {
     return this.cuentasService.findAll(filterDto);
   }
 
+  @Post()
+  create(@Body() createCuentaDto: CreateCuentaDto) {
+    return this.cuentasService.create(createCuentaDto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateCuentaDto: UpdateCuentaDto) {
+    return this.cuentasService.update(id, updateCuentaDto);
+  }
 }

@@ -50,6 +50,9 @@ export class CuentaContable {
     @Column({ default: true })
     isActive: boolean;
 
+    @Column({ default: false })
+    isSystemAccount: boolean;
+
     @CreateDateColumn()
     createdAt: Date;
 

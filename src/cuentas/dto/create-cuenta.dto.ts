@@ -1,27 +1,23 @@
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class CreateCuentaDto {
     @IsString()
     @IsNotEmpty()
-    codigo: string
+    codigo: string;
 
     @IsString()
     @IsNotEmpty()
-    nombre: string
+    nombre: string;
 
     @IsString()
-    @IsNotEmpty()
-    tipo: string
+    @IsOptional()
+    descripcion?: string;
 
-    @IsString()
-    @IsNotEmpty()
-    naturaleza: string
+    @IsBoolean()
+    @IsOptional()
+    aceptaMovimiento?: boolean;
 
-    @IsString()
-    @IsNotEmpty()
-    balance: string
-
-    @IsString()
-    @IsNotEmpty()
-    isActive: boolean
+    @IsBoolean()
+    @IsOptional()
+    isActive?: boolean;
 }

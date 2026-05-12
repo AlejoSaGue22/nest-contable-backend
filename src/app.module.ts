@@ -31,15 +31,15 @@ import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',     
-      password: '',
-      database: 'finance_tejo',
-      // logging: true,
-      autoLoadEntities: true,
-      synchronize: true // ⚠️ nunca true en producción
+        type: 'mysql',
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT) || 3306,
+        username: process.env.DB_USERNAME || 'root',     
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_DATABASE || 'finance_tejo',
+        // logging: true,
+        autoLoadEntities: true,
+        synchronize: true // ⚠️ nunca true en producción
     }),
     ConfigModule.forRoot({
       isGlobal: true,
