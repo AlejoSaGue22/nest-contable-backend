@@ -13,6 +13,10 @@ export class CreateCuentaDto {
     @IsOptional()
     descripcion?: string;
 
+    @IsString()
+    @IsOptional()
+    parentCode?: string;
+
     @IsBoolean()
     @IsOptional()
     aceptaMovimiento?: boolean;

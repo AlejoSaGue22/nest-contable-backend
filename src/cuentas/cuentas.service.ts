@@ -100,7 +100,12 @@ export class CuentasService {
   async create(createCuentaDto: CreateCuentaDto) {
     const { codigo } = createCuentaDto;
 
-    // Determine parent code based on standard PUC lengths
+    const cuentaExists = await this.cuentaRepository.findOne({ where: { codigo } });
+    if (cuentaExists) {
+      throw new BadRequestException(`La cuenta con código ${codigo} ya existe`);
+    }
+
+    // Determine parent code based on standard PUC length
     let parentCode = '';
     if (codigo.length === 2) parentCode = codigo.substring(0, 1);
     else if (codigo.length === 4) parentCode = codigo.substring(0, 2);

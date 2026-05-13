@@ -235,7 +235,7 @@ export const DEFAULT_MENU_ITEMS = [
   },
   {
     title: 'Contabilidad',
-    icon: '<i class="fa-solid fa-chart-line"></i>',
+    icon: '<i class="fa-solid fa-book"></i>',
     route: '/panel/contabilidad',
     requiredPermission: Permission.ACCOUNTING_VIEW,
     order: 4,
@@ -246,7 +246,7 @@ export const DEFAULT_MENU_ITEMS = [
     children: [
       {
         title: 'Cuentas Contables',
-        icon: '',
+        icon: '<i class="fa-solid fa-book-open"></i>',
         route: '/panel/contabilidad/cuentas-contables',
         requiredPermission: Permission.ACCOUNTING_VIEW,
         order: 0,
@@ -256,7 +256,7 @@ export const DEFAULT_MENU_ITEMS = [
       },
       {
         title: 'Bancos',
-        icon: '',
+        icon: '<i class="fa-solid fa-building-columns"></i>',
         route: '/panel/contabilidad/bancos',
         requiredPermission: Permission.ACCOUNTING_VIEW,
         order: 1,
