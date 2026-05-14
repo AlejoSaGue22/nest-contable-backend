@@ -28,14 +28,15 @@ import { ReportesModule } from './reportes/reportes-general/reportes.module';
 import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cartera.module';
 import { BancosModule } from './bancos/bancos.module';
 import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
+import { ImpuestosModule } from './settings/impuestos/impuestos.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
         type: 'mysql',
         host: process.env.DB_HOST || 'localhost',
-        port: Number(process.env.DB_PORT) || 3307,
+        port: Number(process.env.DB_PORT) || 3306,
         username: process.env.DB_USERNAME || 'root',     
-        password: process.env.DB_PASSWORD || 'root',
+        password: process.env.DB_PASSWORD || '',
         database: process.env.DB_DATABASE || 'finance_tejo',
         // logging: true,
         autoLoadEntities: true,
@@ -64,7 +65,8 @@ import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
     PagosModule,
     CuentasBancariasModule,
     BancosModule,
-    NotasAjusteModule
+    NotasAjusteModule,
+    ImpuestosModule
   ],
   controllers: [],
 })
