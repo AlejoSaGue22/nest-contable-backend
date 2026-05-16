@@ -21,9 +21,6 @@ export class Impuesto {
   @Column({ default: true })
   activo: boolean;
 
-  @Column({ default: false })
-  isAcreditable: boolean;
-
   // Cuentas contables para el mapeo automático
   @ManyToOne(() => CuentaContable, { nullable: true })
   @JoinColumn({ name: 'cuentaVentasId' })

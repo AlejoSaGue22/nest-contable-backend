@@ -10,6 +10,7 @@ import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.enti
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
 import { TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 
 interface DetalleAsiento {
   cuentaId: string;
@@ -31,6 +32,9 @@ export class AsientosContablesService {
 
     @InjectRepository(CuentaContable)
     private cuentaRepository: Repository<CuentaContable>,
+
+    @InjectRepository(Impuesto)
+    private impuestoRepository: Repository<Impuesto>,
 
     private dataSource: DataSource,
   ) {}
@@ -112,7 +116,10 @@ export class AsientosContablesService {
 
       // ── Crédito: IVA por Pagar ────────────────────────────────────────
       if (factura.iva > 0) {
-        const cuentaIva = await this.obtenerCuentaPorCodigo('2408');
+        // Buscar el impuesto correspondiente (usamos el primer item como referencia o un promedio)
+        const primerIva = factura.items.find(i => i.iva > 0)?.iva || 0;
+        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'ventas');
+        
         detalles.push({
           cuentaId:    cuentaIva.id,
           debito:      0,
@@ -207,7 +214,9 @@ export class AsientosContablesService {
 
       // ── Débito: IVA Descontable ───────────────────────────────────────
       if (gasto.iva > 0) {
-        const cuentaIva = await this.obtenerCuentaPorCodigo('1355');
+        const primerIva = gasto.items.find(i => i.porcentajeIva > 0)?.porcentajeIva || 0;
+        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'compras');
+
         detalles.push({
           cuentaId:    cuentaIva.id,
           debito:      gasto.iva,
@@ -216,16 +225,32 @@ export class AsientosContablesService {
         });
       }
 
-      // ── Crédito: Caja/Bancos (contado) o Proveedores (crédito) ──────
+      // ── Crédito: Caja/Bancos (contado) o Proveedores/Gastos (crédito) ──────
       const isContado     = gasto.formaPago === FormaPago.CONTADO;
-      console.log('MetodoPago: ', gasto.metodoPago);
-      console.log('MetodoPagoRel: ', gasto.metodoPagoRel);
+      
+      // Lógica de Diferenciación CxP:
+      // Si el gasto tiene cuentas que empiezan por '5' (Gastos), usamos '2335'
+      // Si tiene cuentas que empiezan por '14' (Inventarios) o '6' (Costos), usamos '2205'
+      let codigoCxP = '2205'; // Default
+      const hasGasto = Array.from(gastosAgrupados.keys()).some(async (cid) => {
+        const c = await queryRunner.manager.findOne(CuentaContable, { where: { id: cid } });
+        return c?.codigo.startsWith('5');
+      });
+      // Nota: asíncrono arriba es complicado en simple find, mejor buscar los objetos primero
+      const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
+        where: { id: Array.from(gastosAgrupados.keys()) }
+      });
+      if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+        codigoCxP = '2335';
+      }
+
       const codigoCredito = isContado
         ? this.resolverCuentaContado(gasto.metodoPago ?? undefined)
-        : '2205';
+        : codigoCxP;
+
       const descCredito   = isContado
         ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedorId}`
-        : `Deuda con proveedor - Compra: ${gasto.numero}`;
+        : `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCredito);
       detalles.push({
@@ -320,7 +345,9 @@ export class AsientosContablesService {
 
       // ── Débito: reversa de IVA por Pagar ────────────────────────────
       if (factura.iva > 0) {
-        const cuentaIva = await this.obtenerCuentaPorCodigo('2408');
+        const primerIva = factura.items.find(i => i.iva > 0)?.iva || 0;
+        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'ventas');
+        
         detalles.push({
           cuentaId:    cuentaIva.id,
           debito:      factura.iva,
@@ -391,12 +418,23 @@ export class AsientosContablesService {
 
       // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
       const isContado     = gasto.formaPago === FormaPago.CONTADO;
+      
+      // Lógica de Diferenciación CxP:
+      let codigoCxP = '2205';
+      const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
+        where: { id: Array.from(gastosAgrupados.keys()) }
+      });
+      if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+        codigoCxP = '2335';
+      }
+
       const codigoDebito  = isContado
         ? this.resolverCuentaContado(gasto.metodoPago!)
-        : '2205';
+        : codigoCxP;
+
       const descDebito    = isContado
         ? `ANULACIÓN contado - Proveedor: ${gasto.proveedorId}`
-        : `ANULACIÓN deuda con proveedor - Compra: ${gasto.numero}`;
+        : `ANULACIÓN ${codigoCxP === '2335' ? 'gasto por pagar' : 'deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
       detalles.push({
@@ -441,7 +479,9 @@ export class AsientosContablesService {
 
       // ── Crédito: reversa de IVA Descontable ──────────────────────────
       if (gasto.iva > 0) {
-        const cuentaIva = await this.obtenerCuentaPorCodigo('1355');
+        const primerIva = gasto.items.find(i => i.porcentajeIva > 0)?.porcentajeIva || 0;
+        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'compras');
+
         detalles.push({
           cuentaId:    cuentaIva.id,
           debito:      0,
@@ -827,6 +867,30 @@ export class AsientosContablesService {
     }
     return cuenta;
   }
+
+  /**
+   * Busca la cuenta contable configurada para un impuesto según su tarifa y tipo.
+   */
+  private async obtenerCuentaImpuesto(tarifa: number, tipo: string, operacion: 'ventas' | 'compras'): Promise<CuentaContable> {
+    const impuesto = await this.impuestoRepository.findOne({
+      where: { tarifa, tipo, activo: true },
+      relations: ['cuentaVentas', 'cuentaCompras']
+    });
+
+    if (operacion === 'ventas' && impuesto?.cuentaVentas) {
+      return impuesto.cuentaVentas;
+    }
+
+    if (operacion === 'compras' && impuesto?.cuentaCompras) {
+      return impuesto.cuentaCompras;
+    }
+
+    // Fallback a cuentas estándar si no se encuentra configuración específica
+    const fallbackCodigo = operacion === 'ventas' ? '2408' : '1355';
+    this.logger.warn(`No se encontró configuración de cuenta para impuesto ${tipo} ${tarifa}%. Usando fallback ${fallbackCodigo}`);
+    return this.obtenerCuentaPorCodigo(fallbackCodigo);
+  }
+
 
   private async generarNumeroAsiento(queryRunner: any): Promise<string> {
     const ultimoAsiento = await queryRunner.manager.findOne(AsientoContable, {

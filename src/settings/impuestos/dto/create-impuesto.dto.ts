@@ -20,10 +20,6 @@ export class CreateImpuestoDto {
   activo?: boolean;
 
   @IsOptional()
-  @IsBoolean()
-  isAcreditable?: boolean;
-
-  @IsOptional()
   @IsUUID()
   cuentaVentasId?: string;
 
