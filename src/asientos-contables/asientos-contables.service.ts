@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
@@ -232,16 +232,14 @@ export class AsientosContablesService {
       // Si el gasto tiene cuentas que empiezan por '5' (Gastos), usamos '2335'
       // Si tiene cuentas que empiezan por '14' (Inventarios) o '6' (Costos), usamos '2205'
       let codigoCxP = '2205'; // Default
-      const hasGasto = Array.from(gastosAgrupados.keys()).some(async (cid) => {
-        const c = await queryRunner.manager.findOne(CuentaContable, { where: { id: cid } });
-        return c?.codigo.startsWith('5');
-      });
-      // Nota: asíncrono arriba es complicado en simple find, mejor buscar los objetos primero
-      const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
-        where: { id: Array.from(gastosAgrupados.keys()) }
-      });
-      if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
-        codigoCxP = '2335';
+      
+      if (gastosAgrupados.size > 0) {
+        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
+          where: { id: In(Array.from(gastosAgrupados.keys())) }
+        });
+        if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+          codigoCxP = '2335';
+        }
       }
 
       const codigoCredito = isContado
@@ -416,16 +414,38 @@ export class AsientosContablesService {
     try {
       const detalles: DetalleAsiento[] = [];
 
+      // ── Agrupar Gastos por artículo (se necesita para determinar la cuenta de CxP y para las líneas de crédito) ──
+      const gastosAgrupados = new Map<string, number>();
+
+      for (const item of gasto.items) {
+        const articulo = await queryRunner.manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: ['cuentaContable'],
+        });
+
+        if (!articulo?.cuentaContable) {
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        }
+
+        const cuentaId = articulo.cuentaContableId;
+        gastosAgrupados.set(
+          cuentaId,
+          (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
+        );
+      }
+
       // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
       const isContado     = gasto.formaPago === FormaPago.CONTADO;
       
       // Lógica de Diferenciación CxP:
       let codigoCxP = '2205';
-      const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
-        where: { id: Array.from(gastosAgrupados.keys()) }
-      });
-      if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
-        codigoCxP = '2335';
+      if (gastosAgrupados.size > 0) {
+        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
+          where: { id: In(Array.from(gastosAgrupados.keys())) }
+        });
+        if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+          codigoCxP = '2335';
+        }
       }
 
       const codigoDebito  = isContado
@@ -446,25 +466,6 @@ export class AsientosContablesService {
 
       // ── Crédito: reversa de Gastos agrupados por artículo ────────────
       // Lo que originalmente fue DÉBITO ahora es CRÉDITO
-      const gastosAgrupados = new Map<string, number>();
-
-      for (const item of gasto.items) {
-        const articulo = await queryRunner.manager.findOne(Articulo, {
-          where: { id: item.articuloId },
-          relations: ['cuentaContable'],
-        });
-
-        if (!articulo?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
-        }
-
-        const cuentaId = articulo.cuentaContableId;
-        gastosAgrupados.set(
-          cuentaId,
-          (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
-        );
-      }
-
       for (const [cuentaId, valor] of gastosAgrupados) {
         const cuenta = await queryRunner.manager.findOne(CuentaContable, {
           where: { id: cuentaId },

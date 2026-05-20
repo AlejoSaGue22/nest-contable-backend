@@ -29,14 +29,15 @@ import { ReportesCarteraModule } from './reportes/reportes-cartera/reportes-cart
 import { BancosModule } from './bancos/bancos.module';
 import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
 import { ImpuestosModule } from './settings/impuestos/impuestos.module';
+import { ImpuestosService } from './settings/impuestos/impuestos.service';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
         type: 'mysql',
         host: process.env.DB_HOST || 'localhost',
-        port: Number(process.env.DB_PORT) || 3306,
+        port: Number(process.env.DB_PORT) || 3307,
         username: process.env.DB_USERNAME || 'root',     
-        password: process.env.DB_PASSWORD || '',
+        password: process.env.DB_PASSWORD || 'root',
         database: process.env.DB_DATABASE || 'finance_tejo',
         // logging: true,
         autoLoadEntities: true,
@@ -79,6 +80,7 @@ export class AppModule implements OnModuleInit {
     private readonly cuentasService: CuentasService,
     private readonly municipalitiesService: MunicipalitiesService,
     private readonly catalogsService: CatalogsService,
+    private readonly impuestosService: ImpuestosService,
     private datasource: DataSource
   ) { }
 
@@ -89,7 +91,10 @@ export class AppModule implements OnModuleInit {
     // Seed menu por defecto
     // await this.menuService.seedDefaultMenu();
 
-    await this.cuentasService.seedCuentasBasicas(this.datasource)
+    await this.cuentasService.seedCuentasBasicasSincronizacion(this.datasource)
+
+    // Seed impuestos por defecto
+    await this.impuestosService.seedDefaultTaxes();
 
     // Seed municipios si está vacío
     const municipiosCount = (await this.municipalitiesService.findAll()).length;

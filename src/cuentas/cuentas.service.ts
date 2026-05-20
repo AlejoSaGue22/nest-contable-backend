@@ -162,58 +162,47 @@ export class CuentasService {
 
   async seedCuentasBasicasSincronizacion(dataSource: DataSource) {
     const repository = dataSource.getRepository(CuentaContable);
-
     console.log('📊 Sincronizando plan de cuentas básico...');
 
     const cuentasMap = new Map<string, CuentaContable>();
 
-    // 1️⃣ Sincronizar clases (Nivel 1)
-    const clasesData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1);
-    for (const data of PLAN_CUENTAS_MINIMO) {
+    // Ordenar por nivel ascendente: padres primero, hijos después
+    const ordenadas = [...PLAN_CUENTAS_MINIMO].sort((a, b) => a.nivel - b.nivel);
+
+    for (const data of ordenadas) {
+      const { cuentaPadreId: codigoPadre, ...rest } = data;
+
+      // Resolver la cuenta padre desde el mapa (garantizado porque se procesa en orden de nivel)
+      const cuentaPadre = codigoPadre ? cuentasMap.get(codigoPadre) : undefined;
+
       let cuenta = await repository.findOne({ where: { codigo: data.codigo } });
-      
+
       if (cuenta) {
-        // Actualizar si existe (especialmente aceptaMovimiento)
-        await repository.update({ id: cuenta.id }, { 
-          aceptaMovimiento: data.aceptaMovimiento,
+        // Actualizar campos relevantes, mapeando cuentaPadreId al UUID real de la BD
+        await repository.update({ id: cuenta.id }, {
           nombre: data.nombre,
           nivel: data.nivel,
-          isSystemAccount: true
-        });
-        cuenta = await repository.findOne({ where: { id: cuenta.id } });
-      } else {
-        cuenta = repository.create({ ...data, isSystemAccount: true });
-        await repository.save(cuenta);
-      }
-      cuentasMap.set(data.codigo, cuenta!);
-    }
-
-    // 2️⃣ Sincronizar grupos e hijas (Nivel > 1)
-    const hijasData = PLAN_CUENTAS_MINIMO.filter(c => c.nivel > 1);
-    for (const data of hijasData) {
-      const { cuentaPadreId, ...rest } = data;
-      let cuenta = await repository.findOne({ where: { codigo: data.codigo } });
-
-      if (cuenta) {
-        // Actualizar valores clave
-        await repository.update({ id: cuenta.id }, { 
           aceptaMovimiento: data.aceptaMovimiento,
-          nombre: data.nombre,
-          descripcion: data.descripcion,
-          isSystemAccount: true 
+          descripcion: data.descripcion ?? cuenta.descripcion,
+          isSystemAccount: true,
+          ...(cuentaPadre ? { cuentaPadreId: cuentaPadre.id } : {}),
         });
+        // Recargar para tener el estado actualizado en el mapa
+        cuenta = await repository.findOne({ where: { codigo: data.codigo } });
       } else {
+        // Insertar cuenta nueva con relación de padre correcta
         cuenta = repository.create({
           ...rest,
-          cuentaPadre: cuentasMap.get(cuentaPadreId!),
-          isSystemAccount: true
+          isSystemAccount: true,
+          ...(cuentaPadre ? { cuentaPadre } : {}),
         });
         await repository.save(cuenta);
       }
+
       cuentasMap.set(data.codigo, cuenta!);
     }
 
-    console.log('✅ Plan de cuentas básico sincronizado');
+    console.log(`✅ Plan de cuentas sincronizado (${cuentasMap.size} cuentas procesadas)`);
   }
 
   async seedCuentasBasicas(dataSource: DataSource) {
