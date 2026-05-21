@@ -61,6 +61,8 @@ export class ArticulosService {
     // Crear artículo con cuentas automáticas
     const articulo = this.articulosRepository.create({
       ...createArticuloDto,
+      isInventariable: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
+      afectaInventario: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
       tipo: categoria.tipo,
       tipoCodigo: categoria.codigo,
       fullNameTipo: categoria.nombre,
@@ -190,6 +192,10 @@ export class ArticulosService {
       articulo.cuentaIvaId = cuentaIva.id;
     }
 
+    if (updateArticuloDto.isInventariable !== undefined) {
+      articulo.afectaInventario = updateArticuloDto.isInventariable;
+    }
+
     const updatedArticulo = this.articulosRepository.merge(articulo, updateArticuloDto);
     return await this.articulosRepository.save(updatedArticulo);
   }
@@ -201,18 +207,18 @@ export class ArticulosService {
   }
 
   async generateCodigo(tipo: 'venta' | 'compra' | 'gasto'): Promise<string> {
-      const lastArticulo = await this.articulosRepository.find({
-        order: { createdAt: 'DESC' },
-        take: 1,  
-      });
+    const lastArticulo = await this.articulosRepository.find({
+      order: { createdAt: 'DESC' },
+      take: 1,
+    });
 
-      console.log(lastArticulo);
+    console.log(lastArticulo);
 
-      const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
-      const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
-      const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'compra' ? 'C' : 'G';
-      
-      return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
+    const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
+    const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
+    const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'compra' ? 'C' : 'G';
+
+    return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
   }
 
 }

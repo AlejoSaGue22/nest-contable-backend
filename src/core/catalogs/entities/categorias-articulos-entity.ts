@@ -16,15 +16,28 @@ export class CategoriaArticulo {
     tipo: string;
 
     @ManyToOne(() => CuentaContable)
-    @JoinColumn({ name: 'cuentaContableCodigo', referencedColumnName: 'codigo' })
-    cuentaContable: CuentaContable;
+    @JoinColumn({ name: 'cuentaPrincipalId' })
+    cuentaPrincipal: CuentaContable;
 
-    @ManyToOne(() => CuentaContable)
-    @JoinColumn({ name: 'cuentaIvaCodigo', referencedColumnName: 'codigo' })
-    cuentaIva: CuentaContable;
+    @Column({ nullable: true })
+    cuentaPrincipalId: string;
 
-    @Column()
-    cuentaIvaCodigo: string;
+    @ManyToOne(() => CuentaContable, { nullable: true })
+    @JoinColumn({ name: 'cuentaCostoId' })
+    cuentaCosto: CuentaContable;
+
+    @Column({ nullable: true })
+    cuentaCostoId: string;
+
+    @ManyToOne(() => CuentaContable, { nullable: true })
+    @JoinColumn({ name: 'cuentaInventarioId' })
+    cuentaInventario: CuentaContable;
+
+    @Column({ nullable: true })
+    cuentaInventarioId: string;
+
+    @Column({ default: false })
+    manejaInventario: boolean;
 
     @Column()
     descripcion: string;

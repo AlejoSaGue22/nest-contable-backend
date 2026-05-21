@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
 
 export class CreateCategoryArticleDto {
 
@@ -12,11 +12,19 @@ export class CreateCategoryArticleDto {
 
     @IsString()
     @IsNotEmpty()
-    cuentaContableId: string;
+    cuentaPrincipalId: string;
 
     @IsString()
-    @IsNotEmpty()
-    cuentaIvaId: string;
+    @IsOptional()
+    cuentaCostoId?: string;
+
+    @IsString()
+    @IsOptional()
+    cuentaInventarioId?: string;
+
+    @IsBoolean()
+    @IsOptional()
+    manejaInventario?: boolean;
 
     @IsString()
     @IsOptional()

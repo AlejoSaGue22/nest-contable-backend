@@ -60,7 +60,7 @@ export class CatalogsService {
 
         const data = await this.categoriasArticulosRepo.find({
             where: { state: true },
-            relations: ['cuentaContable', 'cuentaIva'],
+            relations: ['cuentaPrincipal', 'cuentaCosto', 'cuentaInventario'],
             order: { nombre: 'ASC' },
             take: limit,
             skip: offset,
@@ -78,7 +78,7 @@ export class CatalogsService {
     async findCategoryArticleById(id: string) {
         const category = await this.categoriasArticulosRepo.findOne({
             where: { id, state: true },
-            relations: ['cuentaContable', 'cuentaIva']
+            relations: ['cuentaPrincipal', 'cuentaCosto', 'cuentaInventario']
         });
 
         if (!category) {
@@ -89,16 +89,25 @@ export class CatalogsService {
     }
 
     async createCategoryArticle(createCategoryArticleDto: CreateCategoryArticleDto) {
-        const { nombre, cuentaContableId, cuentaIvaId, ...rest } = createCategoryArticleDto;
+        const { nombre, cuentaPrincipalId, cuentaCostoId, cuentaInventarioId, ...rest } = createCategoryArticleDto;
 
         const category = await this.categoriasArticulosRepo.findOne({ where: { nombre } });
         if (category) throw new BadRequestException(`Categoría ${nombre} ya existe`);   
 
-        const cContable = await this.cuentaContableRepo.findOne({ where: { id: cuentaContableId } });
-        if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContableId} no encontrada`);
+        const cPrincipal = await this.cuentaContableRepo.findOne({ where: { id: cuentaPrincipalId } });
+        if (!cPrincipal) throw new BadRequestException(`Cuenta principal ${cuentaPrincipalId} no encontrada`);
 
-        const cIva = await this.cuentaContableRepo.findOne({ where: { id: cuentaIvaId } });
-        if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIvaId} no encontrada`);
+        let cCosto = null;
+        if (cuentaCostoId) {
+            cCosto = await this.cuentaContableRepo.findOne({ where: { id: cuentaCostoId } });
+            if (!cCosto) throw new BadRequestException(`Cuenta de costo ${cuentaCostoId} no encontrada`);
+        }
+
+        let cInventario = null;
+        if (cuentaInventarioId) {
+            cInventario = await this.cuentaContableRepo.findOne({ where: { id: cuentaInventarioId } });
+            if (!cInventario) throw new BadRequestException(`Cuenta de inventario ${cuentaInventarioId} no encontrada`);
+        }
 
         const codigo = this.generarCodigo(nombre);
 
@@ -106,19 +115,30 @@ export class CatalogsService {
             ...rest,
             nombre,
             codigo,
-            cuentaContable: cContable,
-            cuentaIva: cIva,
-            state: true
-        });
+            cuentaPrincipal: cPrincipal,
+            cuentaCosto: cCosto,
+            cuentaInvePrincipalId, cuentaCostoId, cuentaInventarioId, ...rest } = updateCategoryArticleDto;
 
-        return await this.categoriasArticulosRepo.save(newCategory);
-    }
+        if (cuentaPrincipalId) {
+            const cPrincipal = await this.cuentaContableRepo.findOne({ where: { id: cuentaPrincipalId } });
+            if (!cPrincipal) throw new BadRequestException(`Cuenta principal ${cuentaPrincipalId} no encontrada`);
+            category.cuentaPrincipal = cPrincipal;
+        }
 
-    async updateCategoryArticle(id: string, updateCategoryArticleDto: UpdateCategoryArticleDto) {
-        const category = await this.findCategoryArticleById(id);
+        if (cuentaCostoId) {
+            const cCosto = await this.cuentaContableRepo.findOne({ where: { id: cuentaCostoId } });
+            if (!cCosto) throw new BadRequestException(`Cuenta de costo ${cuentaCostoId} no encontrada`);
+            category.cuentaCosto = cCosto;
+        } else if (cuentaCostoId === null) {
+            category.cuentaCosto = null;
+        }
 
-        const { cuentaContableId, cuentaIvaId, ...rest } = updateCategoryArticleDto;
-
+        if (cuentaInventarioId) {
+            const cInventario = await this.cuentaContableRepo.findOne({ where: { id: cuentaInventarioId } });
+            if (!cInventario) throw new BadRequestException(`Cuenta de inventario ${cuentaInventarioId} no encontrada`);
+            category.cuentaInventario = cInventario;
+        } else if (cuentaInventarioId === null) {
+            category.cuentaInventario = null
         if (cuentaContableId) {
             const cContable = await this.cuentaContableRepo.findOne({ where: { id: cuentaContableId } });
             if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContableId} no encontrada`);

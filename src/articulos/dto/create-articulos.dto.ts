@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateArticuloDto {
 
@@ -36,6 +36,10 @@ export class CreateArticuloDto {
     @IsString()
     @IsOptional()
     observacion?: string
+
+    @IsBoolean()
+    @IsOptional()
+    isInventariable?: boolean
 
 }
 

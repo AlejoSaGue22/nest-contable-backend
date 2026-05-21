@@ -56,6 +56,9 @@ export class Articulo {
     afectaInventario: boolean;
 
     @Column({ default: true })
+    isInventariable: boolean;
+
+    @Column({ default: true })
     isActive: boolean;
 
     @ManyToOne(() => CuentaContable)
