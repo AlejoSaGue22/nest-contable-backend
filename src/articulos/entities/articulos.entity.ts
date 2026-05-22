@@ -9,7 +9,7 @@ export enum ArticuloTipo {
     INVENTARIO = 'inventario'
 }
 
-@Entity({ name: 'articulos' })
+@Entity({ name: 'articulos' })  
 export class Articulo {
 
     @PrimaryGeneratedColumn('uuid')

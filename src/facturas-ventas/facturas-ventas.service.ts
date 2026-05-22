@@ -238,7 +238,6 @@ export class FacturasVentasService {
   }
 
   async update(id: string, updateDto: UpdateFacturasVentaDto): Promise<FacturasVenta> {
-
     if (updateDto.items && updateDto.items.length === 0) {
       throw new BadRequestException('La factura debe tener al menos un item');
     }
@@ -251,110 +250,109 @@ export class FacturasVentasService {
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
-
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-  try {
+    try {
 
-    const invoice = await queryRunner.manager.findOne(FacturasVenta, {
-      where: { id },
-      relations: ['items']
-    });
+      const invoice = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items']
+      });
 
-    if (!invoice) {
-      throw new NotFoundException(`Factura con ID ${id} no encontrada`);
-    }
+      if (!invoice) {
+        throw new NotFoundException(`Factura con ID ${id} no encontrada`);
+      }
 
-    if (!invoice.puedeEditarse()) {
-      throw new BadRequestException(
-        `No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`
+      if (!invoice.puedeEditarse()) {
+        throw new BadRequestException(
+          `No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`
+        );
+      }
+
+      let subtotal = invoice.subtotal;
+      let iva = invoice.iva;
+      let descuento = invoice.descuento;
+      let total = invoice.total;
+
+      // =========================
+      // Recalcular items si vienen
+      // =========================
+
+      if (updateDto.items && updateDto.items.length > 0) {
+
+        const calc = await this.calcularTotales(queryRunner, updateDto.items);
+
+        subtotal = calc.subtotal;
+        iva = calc.iva;
+        descuento = calc.descuento;
+        total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
+
+        // eliminar items actuales
+        await queryRunner.manager.delete(ItemsFacturaVenta, { facturaId: id });
+
+        // crear nuevos
+        const newItems = calc.itemsCalculados.map(item =>
+          queryRunner.manager.create(ItemsFacturaVenta, {
+            ...item,
+            facturaId: id
+          })
+        );
+
+        await queryRunner.manager.save(ItemsFacturaVenta, newItems);
+
+      }
+
+      const updatePayload: any = {
+            clientId: updateDto.clientId,
+            canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
+            vendedor: updateDto.vendedor || null,
+            fecha: updateDto.fecha,
+            formaPago: updateDto.formaPago,
+            metodoPago: updateDto.metodoPago || null,
+            fechaVencimiento: updateDto.fechaVencimiento || null,
+            tipoFactura: updateDto.tipoFactura,
+            subtotal,
+            iva,
+            descuento,
+            total
+      };
+
+      // ⭐ Si la factura sigue siendo DRAFT, resetear estados de pago
+      if (invoice.status === InvoiceStatus.DRAFT) {
+        updatePayload.paymentStatus = PaymentStatus.PENDING;
+        updatePayload.saldoPendiente = 0;
+        updatePayload.totalPagado = 0;
+        updatePayload.dianStatus = DianStatus.PENDING;
+      }
+
+      this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
+
+      // update directo (más rápido que save)
+      await queryRunner.manager.update(
+        FacturasVenta,
+        { id },
+        updatePayload
       );
-    }
 
-    let subtotal = invoice.subtotal;
-    let iva = invoice.iva;
-    let descuento = invoice.descuento;
-    let total = invoice.total;
+      await queryRunner.commitTransaction();
 
-    // =========================
-    // Recalcular items si vienen
-    // =========================
+      return await this.findOne(id);
 
-    if (updateDto.items && updateDto.items.length > 0) {
-
-      const calc = await this.calcularTotales(queryRunner, updateDto.items);
-
-      subtotal = calc.subtotal;
-      iva = calc.iva;
-      descuento = calc.descuento;
-      total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
-
-      // eliminar items actuales
-      await queryRunner.manager.delete(ItemsFacturaVenta, { facturaId: id });
-
-      // crear nuevos
-      const newItems = calc.itemsCalculados.map(item =>
-        queryRunner.manager.create(ItemsFacturaVenta, {
-          ...item,
-          facturaId: id
-        })
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        `Error actualizando factura ${id}: ${error.message}`,
+        error.stack
       );
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al actualizar la factura');
 
-      await queryRunner.manager.save(ItemsFacturaVenta, newItems);
-
+    } finally {
+      await queryRunner.release();
     }
-
-    const updatePayload: any = {
-          clientId: updateDto.clientId,
-          canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
-          vendedor: updateDto.vendedor || null,
-          fecha: updateDto.fecha,
-          formaPago: updateDto.formaPago,
-          metodoPago: updateDto.metodoPago || null,
-          fechaVencimiento: updateDto.fechaVencimiento || null,
-          tipoFactura: updateDto.tipoFactura,
-          subtotal,
-          iva,
-          descuento,
-          total
-    };
-
-    // ⭐ Si la factura sigue siendo DRAFT, resetear estados de pago
-    if (invoice.status === InvoiceStatus.DRAFT) {
-      updatePayload.paymentStatus = PaymentStatus.PENDING;
-      updatePayload.saldoPendiente = 0;
-      updatePayload.totalPagado = 0;
-      updatePayload.dianStatus = DianStatus.PENDING;
-    }
-
-    this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
-
-    // update directo (más rápido que save)
-    await queryRunner.manager.update(
-      FacturasVenta,
-      { id },
-      updatePayload
-    );
-
-    await queryRunner.commitTransaction();
-
-    return await this.findOne(id);
-
-  } catch (error) {
-    await queryRunner.rollbackTransaction();
-    this.logger.error(
-      `Error actualizando factura ${id}: ${error.message}`,
-      error.stack
-    );
-    if (error instanceof NotFoundException || error instanceof BadRequestException) {
-      throw error;
-    }
-    throw new InternalServerErrorException('Error al actualizar la factura');
-
-  } finally {
-    await queryRunner.release();
-  }
 
   }
 

@@ -97,13 +97,13 @@ export class CatalogsService {
         const cPrincipal = await this.cuentaContableRepo.findOne({ where: { id: cuentaPrincipalId } });
         if (!cPrincipal) throw new BadRequestException(`Cuenta principal ${cuentaPrincipalId} no encontrada`);
 
-        let cCosto = null;
+        let cCosto: CuentaContable | null = null;
         if (cuentaCostoId) {
             cCosto = await this.cuentaContableRepo.findOne({ where: { id: cuentaCostoId } });
             if (!cCosto) throw new BadRequestException(`Cuenta de costo ${cuentaCostoId} no encontrada`);
         }
 
-        let cInventario = null;
+        let cInventario: CuentaContable | null = null;
         if (cuentaInventarioId) {
             cInventario = await this.cuentaContableRepo.findOne({ where: { id: cuentaInventarioId } });
             if (!cInventario) throw new BadRequestException(`Cuenta de inventario ${cuentaInventarioId} no encontrada`);
@@ -117,7 +117,8 @@ export class CatalogsService {
             codigo,
             cuentaPrincipal: cPrincipal,
             cuentaCosto: cCosto,
-            cuentaInvePrincipalId, cuentaCostoId, cuentaInventarioId, ...rest } = updateCategoryArticleDto;
+            cuentaInventarioId,
+        });
 
         if (cuentaPrincipalId) {
             const cPrincipal = await this.cuentaContableRepo.findOne({ where: { id: cuentaPrincipalId } });
@@ -139,16 +140,6 @@ export class CatalogsService {
             category.cuentaInventario = cInventario;
         } else if (cuentaInventarioId === null) {
             category.cuentaInventario = null
-        if (cuentaContableId) {
-            const cContable = await this.cuentaContableRepo.findOne({ where: { id: cuentaContableId } });
-            if (!cContable) throw new BadRequestException(`Cuenta contable ${cuentaContableId} no encontrada`);
-            category.cuentaContable = cContable;
-        }
-
-        if (cuentaIvaId) {
-            const cIva = await this.cuentaContableRepo.findOne({ where: { id: cuentaIvaId } });
-            if (!cIva) throw new BadRequestException(`Cuenta IVA ${cuentaIvaId} no encontrada`);
-            category.cuentaIva = cIva;
         }
 
         Object.assign(category, rest);
