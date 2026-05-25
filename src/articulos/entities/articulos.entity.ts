@@ -1,12 +1,14 @@
+import { CategoriaArticulo } from "src/core/catalogs/entities/categorias-articulos-entity";
 import { UnidadMedida } from "src/core/catalogs/entities/unidad-medida.entity";
 import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
+import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export enum ArticuloTipo {
     VENTA = 'venta',
     GASTO = 'gasto',
-    COMPRA = 'compra',
-    INVENTARIO = 'inventario'
+    COSTO = 'costo',
+    SERVICIO = 'servicio'
 }
 
 @Entity({ name: 'articulos' })  
@@ -28,10 +30,14 @@ export class Articulo {
     tipo: string;
 
     @Column()
-    tipoCodigo: string;
+    fullNameCategoria: string;
+
+    @ManyToOne(() => CategoriaArticulo)
+    @JoinColumn({ name: 'categoriaArticuloId' })
+    categoriaArticulo: CategoriaArticulo;
 
     @Column()
-    fullNameTipo: string;
+    categoriaArticuloId: string;  
 
     @ManyToOne(() => UnidadMedida)
     @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'id' })
@@ -40,6 +46,10 @@ export class Articulo {
     @Column()
     unidadmedida: string;
 
+    @ManyToOne(() => Impuesto)
+    @JoinColumn({ name: 'impuestoId' })
+    impuestoRel: Impuesto;
+    
     @Column()
     impuesto: number;
 
@@ -60,18 +70,6 @@ export class Articulo {
 
     @Column({ default: true })
     isActive: boolean;
-
-    @ManyToOne(() => CuentaContable)
-    cuentaContable: CuentaContable;
-
-    @Column()
-    cuentaContableId: string;
-
-    @ManyToOne(() => CuentaContable, { nullable: true })
-    cuentaIva: CuentaContable;
-
-    @Column({ nullable: true })
-    cuentaIvaId: string;
 
     @Column('int', { default: 0 })
     porcentajeIva: number;

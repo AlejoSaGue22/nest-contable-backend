@@ -1,5 +1,6 @@
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { tipoCategoria } from 'src/common/constants/categorias-articulos.config';
 
 @Entity('categorias_articulos')
 export class CategoriaArticulo {
@@ -13,7 +14,7 @@ export class CategoriaArticulo {
     nombre: string;
 
     @Column()
-    tipo: string;
+    tipo: tipoCategoria;
 
     @ManyToOne(() => CuentaContable)
     @JoinColumn({ name: 'cuentaPrincipalId' })

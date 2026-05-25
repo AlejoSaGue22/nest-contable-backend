@@ -1,4 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
+import { tipoCategoria } from "src/common/constants/categorias-articulos.config";
 
 export class CreateCategoryArticleDto {
 
@@ -8,7 +9,7 @@ export class CreateCategoryArticleDto {
 
     @IsString()
     @IsNotEmpty()
-    tipo: string;
+    tipo: tipoCategoria;
 
     @IsString()
     @IsNotEmpty()

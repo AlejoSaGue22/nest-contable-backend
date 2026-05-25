@@ -9,6 +9,7 @@ import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.
 import { InternalServerErrorException } from '@nestjs/common';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { UnidadMedida } from 'src/core/catalogs/entities/unidad-medida.entity';
+import { CategoriaArticulo } from 'src/core/catalogs/entities/categorias-articulos-entity';
 
 @Injectable()
 export class ArticulosService {
@@ -20,14 +21,19 @@ export class ArticulosService {
     private readonly unidadesRepository: Repository<UnidadMedida>,
 
     @InjectRepository(CuentaContable)
-    private readonly cuentasRepository: Repository<CuentaContable>
+    private readonly cuentasRepository: Repository<CuentaContable>,
+
+    @InjectRepository(CategoriaArticulo)
+    private readonly categoriasRepository: Repository<CategoriaArticulo>
   ) { }
 
   async createConCuentas(createArticuloDto: CreateArticuloDto, userId: string) {
-    const categoria = CATEGORIAS_ARTICULOS[createArticuloDto.categoria];
+    const categoria = await this.categoriasRepository.findOne({
+      where: { id: createArticuloDto.categoria }  //cambiar para recibir el ID de la categoria
+    });
 
     if (!categoria) {
-      throw new BadRequestException('Categoría inválida');
+      throw new BadRequestException('No existe la categoria especificada');
     }
 
     const unidadmedida = await this.unidadesRepository.findOne({
@@ -35,22 +41,7 @@ export class ArticulosService {
     });
 
     if (!unidadmedida) {
-      throw new BadRequestException('Unidad de medida no encontrada');
-    }
-
-    // Buscar cuentas por código
-    const cuentaContable = await this.cuentasRepository.findOne({
-      where: { codigo: categoria.cuentaContableCodigo }
-    });
-
-    const cuentaIva = await this.cuentasRepository.findOne({
-      where: { codigo: categoria.cuentaIvaCodigo }
-    });
-
-    if (!cuentaContable || !cuentaIva) {
-      throw new InternalServerErrorException(
-        'No se encontraron las cuentas contables configuradas'
-      );
+      throw new BadRequestException('No existe la unidad de medida especificada');
     }
 
     if (!createArticuloDto.codigo) {
@@ -64,12 +55,10 @@ export class ArticulosService {
       isInventariable: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
       afectaInventario: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
       tipo: categoria.tipo,
-      tipoCodigo: categoria.codigo,
-      fullNameTipo: categoria.nombre,
-      cuentaContableId: cuentaContable.id,
+      fullNameCategoria: categoria.nombre,
+      categoriaArticuloId: categoria.id,
       unidadmedida: unidadmedida.id,
       unidadmedidaRel: unidadmedida,
-      cuentaIvaId: cuentaIva.id,
       createdById: userId
     });
 
@@ -164,32 +153,17 @@ export class ArticulosService {
   async update(id: string, updateArticuloDto: UpdateArticuloDto) {
     const articulo = await this.findOne(id);
 
-    if (updateArticuloDto.categoria && updateArticuloDto.categoria !== articulo.tipoCodigo) {
-      const categoria = CATEGORIAS_ARTICULOS[updateArticuloDto.categoria];
+    if (updateArticuloDto.categoria && updateArticuloDto.categoria !== articulo.categoriaArticuloId) {
+      const categoria = await this.categoriasRepository.findOne({
+        where: { id: updateArticuloDto.categoria }
+      });
 
       if (!categoria) {
         throw new BadRequestException('Categoría inválida');
       }
 
-      const cuentaContable = await this.cuentasRepository.findOne({
-        where: { codigo: categoria.cuentaContableCodigo }
-      });
-
-      const cuentaIva = await this.cuentasRepository.findOne({
-        where: { codigo: categoria.cuentaIvaCodigo }
-      });
-
-      if (!cuentaContable || !cuentaIva) {
-        throw new InternalServerErrorException(
-          'No se encontraron las cuentas contables configuradas'
-        );
-      }
-
       articulo.tipo = categoria.tipo;
-      articulo.tipoCodigo = categoria.codigo;
-      articulo.fullNameTipo = categoria.nombre;
-      articulo.cuentaContableId = cuentaContable.id;
-      articulo.cuentaIvaId = cuentaIva.id;
+      articulo.fullNameCategoria = categoria.nombre;
     }
 
     if (updateArticuloDto.isInventariable !== undefined) {
@@ -206,7 +180,7 @@ export class ArticulosService {
     return await this.articulosRepository.softDelete({ id });
   }
 
-  async generateCodigo(tipo: 'venta' | 'compra' | 'gasto'): Promise<string> {
+  async generateCodigo(tipo: 'venta' | 'costo' | 'gasto' | 'servicio'): Promise<string> {
     const lastArticulo = await this.articulosRepository.find({
       order: { createdAt: 'DESC' },
       take: 1,
@@ -216,7 +190,7 @@ export class ArticulosService {
 
     const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
     const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
-    const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'compra' ? 'C' : 'G';
+    const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'costo' ? 'C' : tipo === 'gasto' ? 'G' : 'S';
 
     return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
   }
