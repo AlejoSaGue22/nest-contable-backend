@@ -62,7 +62,7 @@ export class FacturasComprasService {
             for (const itemDto of createFacturaCompraDto.items) {
                 const articulo = await queryRunner.manager.findOne(Articulo, {
                     where: { id: itemDto.articuloId },
-                    relations: ['cuentaContable', 'cuentaIva']
+                    relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel']
                 });
 
                 if (!articulo) {
@@ -76,8 +76,8 @@ export class FacturasComprasService {
                     }
                 }
 
-                if (!articulo.cuentaContable) {
-                    throw new BadRequestException(`El artículo ${articulo.nombre} no tiene cuenta contable asignada`);
+                if (!articulo.categoriaArticulo?.cuentaPrincipal) {
+                    throw new BadRequestException(`El artículo ${articulo.nombre} no tiene cuenta contable principal asignada en su categoría`);
                 }
 
                 if (createFacturaCompraDto.metodoPago) {
@@ -582,7 +582,7 @@ export class FacturasComprasService {
         for (const item of items) {
             const articulo = await queryRunner.manager.findOne(Articulo, {
                 where: { id: item.articuloId },
-                relations: ['cuentaContable', 'cuentaIva']
+                relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel']
             });
 
             if (!articulo) throw new NotFoundException(`Producto no encontrado: ${item.articuloId}`);

@@ -37,7 +37,7 @@ export class Articulo {
     categoriaArticulo: CategoriaArticulo;
 
     @Column()
-    categoriaArticuloId: string;  
+    categoriaArticuloId: string;          
 
     @ManyToOne(() => UnidadMedida)
     @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'id' })
@@ -47,11 +47,11 @@ export class Articulo {
     unidadmedida: string;
 
     @ManyToOne(() => Impuesto)
-    @JoinColumn({ name: 'impuestoId' })
+    @JoinColumn({ name: 'impuestoId', referencedColumnName: 'id' })
     impuestoRel: Impuesto;
     
     @Column()
-    impuesto: number;
+    impuesto: string;
 
     @Column({ default: 0 }) // 0% por defecto -- RETENCION PENDIENTE SI SE AGREGA AL SISTEMA 
     retencion: number;

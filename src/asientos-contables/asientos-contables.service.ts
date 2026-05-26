@@ -1,6 +1,13 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entity';
+import {
+  AsientoContable,
+  TipoAsiento,
+} from './entities/asientos-contable.entity';
 import { DataSource, In, Repository } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
@@ -67,63 +74,83 @@ export class AsientosContablesService {
       const detalles: DetalleAsiento[] = [];
 
       // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
-      const isContado  = factura.formaPago === FormaPago.CONTADO;
+      const isContado = factura.formaPago === FormaPago.CONTADO;
       const codigoDebito = isContado
         ? this.resolverCuentaContado(factura.metodoPago || undefined)
         : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
-        cuentaId:    cuentaDebito.id,
-        debito:      factura.total,
-        credito:     0,
+        cuentaId: cuentaDebito.id,
+        debito: factura.total,
+        credito: 0,
         descripcion: `Factura venta ${factura.comprobante_completo} - ${factura.metodoPagoRel?.nombre ?? factura.formaPago}`,
       });
 
       // ── Crédito: Ingresos agrupados por cuenta del artículo ──────────
       const ingresosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
 
       for (const item of factura.items) {
         const producto = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['cuentaContable'],
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
         });
 
-        if (!producto?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        if (!producto?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
-        const cuentaId = producto.cuentaContableId;
+        const cuentaId = producto.categoriaArticulo.cuentaPrincipalId;
         ingresosAgrupados.set(
           cuentaId,
           (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,
         );
+
+        const valorIva = (item as any).valor_iva || 0;
+        if (valorIva > 0) {
+          let cuentaIvaId: string;
+          if (producto.impuestoRel?.cuentaVentasId) {
+            cuentaIvaId = producto.impuestoRel.cuentaVentasId;
+          } else {
+            const ivaPorcentaje = item.iva || 0;
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
+              ivaPorcentaje,
+              'IVA',
+              'ventas',
+            );
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
+        }
       }
 
       for (const [cuentaId, valor] of ingresosAgrupados) {
         const cuenta = await queryRunner.manager.findOne(CuentaContable, {
           where: { id: cuentaId },
         });
-        if (!cuenta) throw new Error(`Cuenta contable ${cuentaId} no encontrada`);
+        if (!cuenta)
+          throw new Error(`Cuenta contable ${cuentaId} no encontrada`);
 
         detalles.push({
           cuentaId,
-          debito:      0,
-          credito:     valor,
+          debito: 0,
+          credito: valor,
           descripcion: `Ingreso por ${cuenta.nombre}`,
         });
       }
 
       // ── Crédito: IVA por Pagar ────────────────────────────────────────
-      if (factura.iva > 0) {
-        // Buscar el impuesto correspondiente (usamos el primer item como referencia o un promedio)
-        const primerIva = factura.items.find(i => i.iva > 0)?.iva || 0;
-        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'ventas');
-        
+      for (const [cuentaId, valor] of ivaAgrupados) {
         detalles.push({
-          cuentaId:    cuentaIva.id,
-          debito:      0,
-          credito:     factura.iva,
+          cuentaId: cuentaId,
+          debito: 0,
+          credito: valor,
           descripcion: 'IVA generado en venta',
         });
       }
@@ -132,18 +159,18 @@ export class AsientosContablesService {
       if (factura.descuento > 0) {
         const cuentaDescuento = await this.obtenerCuentaPorCodigo('5305');
         detalles.push({
-          cuentaId:    cuentaDescuento.id,
-          debito:      factura.descuento,
-          credito:     0,
+          cuentaId: cuentaDescuento.id,
+          debito: factura.descuento,
+          credito: 0,
           descripcion: 'Descuento otorgado en venta',
         });
       }
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        TipoAsiento.FACTURA_VENTA,
-          fecha:       factura.fecha,
-          referencia:  factura.comprobante_completo,
+          tipo: TipoAsiento.FACTURA_VENTA,
+          fecha: factura.fecha,
+          referencia: factura.comprobante_completo,
           descripcion: `Asiento automático - Factura ${factura.comprobante_completo}`,
           detalles,
           userId,
@@ -154,11 +181,15 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento FACTURA_VENTA generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento factura venta: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento contable de factura de venta: ${error.message}`);
+      this.logger.error(
+        `Error asiento factura venta: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento contable de factura de venta: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -172,7 +203,10 @@ export class AsientosContablesService {
   // TARJETA/OTROS: DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Bancos 1110
   // CRÉDITO:       DÉBITO Gastos (x artículo) + IVA 1355  |  CRÉDITO Proveedores 2205
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoGasto(gasto: FacturaCompra, userId: string): Promise<AsientoContable> {
+  async generarAsientoGasto(
+    gasto: FacturaCompra,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -182,22 +216,44 @@ export class AsientosContablesService {
 
       // ── Débito: Cuentas de gasto agrupadas por artículo ──────────────
       const gastosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
 
       for (const item of gasto.items) {
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['cuentaContable'],
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
         });
 
-        if (!articulo?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
-        const cuentaId = articulo.cuentaContableId;
+        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         gastosAgrupados.set(
           cuentaId,
           (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
         );
+
+        if (item.valorIva > 0) {
+          let cuentaIvaId: string;
+          if (articulo.impuestoRel?.cuentaComprasId) {
+            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else {
+            const ivaPorcentaje = item.porcentajeIva || 0;
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
+              ivaPorcentaje,
+              'IVA',
+              'compras',
+            );
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + item.valorIva,
+          );
+        }
       }
 
       for (const [cuentaId, valor] of gastosAgrupados) {
@@ -206,38 +262,38 @@ export class AsientosContablesService {
         });
         detalles.push({
           cuentaId,
-          debito:      valor,
-          credito:     0,
+          debito: valor,
+          credito: 0,
           descripcion: `Gasto - ${cuenta?.nombre}`,
         });
       }
 
       // ── Débito: IVA Descontable ───────────────────────────────────────
-      if (gasto.iva > 0) {
-        const primerIva = gasto.items.find(i => i.porcentajeIva > 0)?.porcentajeIva || 0;
-        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'compras');
-
+      for (const [cuentaId, valor] of ivaAgrupados) {
         detalles.push({
-          cuentaId:    cuentaIva.id,
-          debito:      gasto.iva,
-          credito:     0,
+          cuentaId: cuentaId,
+          debito: valor,
+          credito: 0,
           descripcion: 'IVA descontable en compra',
         });
       }
 
       // ── Crédito: Caja/Bancos (contado) o Proveedores/Gastos (crédito) ──────
-      const isContado     = gasto.formaPago === FormaPago.CONTADO;
-      
+      const isContado = gasto.formaPago === FormaPago.CONTADO;
+
       // Lógica de Diferenciación CxP:
       // Si el gasto tiene cuentas que empiezan por '5' (Gastos), usamos '2335'
       // Si tiene cuentas que empiezan por '14' (Inventarios) o '6' (Costos), usamos '2205'
       let codigoCxP = '2205'; // Default
-      
+
       if (gastosAgrupados.size > 0) {
-        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
-          where: { id: In(Array.from(gastosAgrupados.keys())) }
-        });
-        if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+        const cuentasInvolucradas = await queryRunner.manager.find(
+          CuentaContable,
+          {
+            where: { id: In(Array.from(gastosAgrupados.keys())) },
+          },
+        );
+        if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
           codigoCxP = '2335';
         }
       }
@@ -246,23 +302,23 @@ export class AsientosContablesService {
         ? this.resolverCuentaContado(gasto.metodoPago ?? undefined)
         : codigoCxP;
 
-      const descCredito   = isContado
+      const descCredito = isContado
         ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedorId}`
         : `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCredito);
       detalles.push({
-        cuentaId:    cuentaCredito.id,
-        debito:      0,
-        credito:     gasto.total,
+        cuentaId: cuentaCredito.id,
+        debito: 0,
+        credito: gasto.total,
         descripcion: descCredito,
       });
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        TipoAsiento.GASTO,
-          fecha:       gasto.fecha,
-          referencia:  gasto.numero!,
+          tipo: TipoAsiento.GASTO,
+          fecha: gasto.fecha,
+          referencia: gasto.numero!,
           descripcion: `Asiento automático - Gasto ${gasto.numero}`,
           detalles,
           userId,
@@ -273,21 +329,24 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento GASTO generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento gasto: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento contable de gasto: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error al generar asiento contable de gasto: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
   }
 
-
   // ══════════════════════════════════════════════════════════════════════════
   // 3. ANULACIÓN FACTURA DE VENTA  (reversa exacta del asiento original)
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoAnulacionFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+  async generarAsientoAnulacionFacturaVenta(
+    factura: FacturasVenta,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -296,60 +355,83 @@ export class AsientosContablesService {
       const detalles: DetalleAsiento[] = [];
 
       // ── Crédito: reversa de Caja/Bancos / Clientes ──────────────────
-      const isContado    = factura.formaPago === FormaPago.CONTADO;
+      const isContado = factura.formaPago === FormaPago.CONTADO;
       const codigoDebito = isContado
         ? this.resolverCuentaContado(factura.metodoPago!)
         : '1305';
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
-        cuentaId:    cuentaDebito.id,
-        debito:      0,
-        credito:     factura.total,
+        cuentaId: cuentaDebito.id,
+        debito: 0,
+        credito: factura.total,
         descripcion: `ANULACIÓN - Factura ${factura.comprobante_completo}`,
       });
 
       // ── Débito: reversa de Ingresos ───────────────────────────────────
       const ingresosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
 
       for (const item of factura.items) {
         const producto = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['cuentaContable'],
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
         });
 
-        if (!producto?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        if (!producto?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
-        const cuentaId = producto.cuentaContableId;
+        const cuentaId = producto.categoriaArticulo.cuentaPrincipalId;
         ingresosAgrupados.set(
           cuentaId,
           (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,
         );
+
+        const valorIva = (item as any).valor_iva || 0;
+        if (valorIva > 0) {
+          let cuentaIvaId: string;
+          if (producto.impuestoRel?.cuentaVentasId) {
+            cuentaIvaId = producto.impuestoRel.cuentaVentasId;
+          } else {
+            const ivaPorcentaje = item.iva || 0;
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
+              ivaPorcentaje,
+              'IVA',
+              'ventas',
+            );
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
+        }
       }
 
       for (const [cuentaId, valor] of ingresosAgrupados) {
-        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
-        if (!cuenta) throw new Error(`Cuenta contable ${cuentaId} no encontrada`);
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
+        if (!cuenta)
+          throw new Error(`Cuenta contable ${cuentaId} no encontrada`);
 
         detalles.push({
           cuentaId,
-          debito:      valor,
-          credito:     0,
+          debito: valor,
+          credito: 0,
           descripcion: `ANULACIÓN - Ingreso por ${cuenta.nombre}`,
         });
       }
 
       // ── Débito: reversa de IVA por Pagar ────────────────────────────
-      if (factura.iva > 0) {
-        const primerIva = factura.items.find(i => i.iva > 0)?.iva || 0;
-        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'ventas');
-        
+      for (const [cuentaId, valor] of ivaAgrupados) {
         detalles.push({
-          cuentaId:    cuentaIva.id,
-          debito:      factura.iva,
-          credito:     0,
+          cuentaId: cuentaId,
+          debito: valor,
+          credito: 0,
           descripcion: 'ANULACIÓN - IVA generado en venta',
         });
       }
@@ -358,18 +440,18 @@ export class AsientosContablesService {
       if (factura.descuento > 0) {
         const cuentaDescuento = await this.obtenerCuentaPorCodigo('5305');
         detalles.push({
-          cuentaId:    cuentaDescuento.id,
-          debito:      0,
-          credito:     factura.descuento,
+          cuentaId: cuentaDescuento.id,
+          debito: 0,
+          credito: factura.descuento,
           descripcion: 'ANULACIÓN - Descuento otorgado en venta',
         });
       }
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        TipoAsiento.ANULACION_FACTURA_VENTA,
-          fecha:       new Date(),
-          referencia:  factura.comprobante_completo,
+          tipo: TipoAsiento.ANULACION_FACTURA_VENTA,
+          fecha: new Date(),
+          referencia: factura.comprobante_completo,
           descripcion: `Asiento ANULACIÓN - Factura ${factura.comprobante_completo}`,
           detalles,
           userId,
@@ -380,11 +462,15 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento ANULACION generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento anulación: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de anulación: ${error.message}`);
+      this.logger.error(
+        `Error asiento anulación: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de anulación: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -406,7 +492,10 @@ export class AsientosContablesService {
   //   DÉBITO:  Proveedores 2205 / Caja 1105   (lo que era crédito)
   //   CRÉDITO: Gastos (xArt) + IVA 1355       (lo que era débito)
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoAnulacionFacturaCompra(gasto: FacturaCompra, userId: string): Promise<AsientoContable> {
+  async generarAsientoAnulacionFacturaCompra(
+    gasto: FacturaCompra,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -416,51 +505,76 @@ export class AsientosContablesService {
 
       // ── Agrupar Gastos por artículo (se necesita para determinar la cuenta de CxP y para las líneas de crédito) ──
       const gastosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
 
       for (const item of gasto.items) {
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['cuentaContable'],
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
         });
 
-        if (!articulo?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
-        const cuentaId = articulo.cuentaContableId;
+        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         gastosAgrupados.set(
           cuentaId,
           (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
         );
+
+        if (item.valorIva > 0) {
+          let cuentaIvaId: string;
+          if (articulo.impuestoRel?.cuentaComprasId) {
+            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else {
+            const ivaPorcentaje = item.porcentajeIva || 0;
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
+              ivaPorcentaje,
+              'IVA',
+              'compras',
+            );
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + item.valorIva,
+          );
+        }
       }
 
       // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
-      const isContado     = gasto.formaPago === FormaPago.CONTADO;
-      
+      const isContado = gasto.formaPago === FormaPago.CONTADO;
+
       // Lógica de Diferenciación CxP:
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
-        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, {
-          where: { id: In(Array.from(gastosAgrupados.keys())) }
-        });
-        if (cuentasInvolucradas.some(c => c.codigo.startsWith('5'))) {
+        const cuentasInvolucradas = await queryRunner.manager.find(
+          CuentaContable,
+          {
+            where: { id: In(Array.from(gastosAgrupados.keys())) },
+          },
+        );
+        if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
           codigoCxP = '2335';
         }
       }
 
-      const codigoDebito  = isContado
+      const codigoDebito = isContado
         ? this.resolverCuentaContado(gasto.metodoPago!)
         : codigoCxP;
 
-      const descDebito    = isContado
+      const descDebito = isContado
         ? `ANULACIÓN contado - Proveedor: ${gasto.proveedorId}`
         : `ANULACIÓN ${codigoCxP === '2335' ? 'gasto por pagar' : 'deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
       detalles.push({
-        cuentaId:    cuentaDebito.id,
-        debito:      gasto.total,
-        credito:     0,
+        cuentaId: cuentaDebito.id,
+        debito: gasto.total,
+        credito: 0,
         descripcion: descDebito,
       });
 
@@ -472,30 +586,27 @@ export class AsientosContablesService {
         });
         detalles.push({
           cuentaId,
-          debito:      0,
-          credito:     valor,
+          debito: 0,
+          credito: valor,
           descripcion: `ANULACIÓN - Gasto ${cuenta?.nombre}`,
         });
       }
 
       // ── Crédito: reversa de IVA Descontable ──────────────────────────
-      if (gasto.iva > 0) {
-        const primerIva = gasto.items.find(i => i.porcentajeIva > 0)?.porcentajeIva || 0;
-        const cuentaIva = await this.obtenerCuentaImpuesto(primerIva, 'IVA', 'compras');
-
+      for (const [cuentaId, valor] of ivaAgrupados) {
         detalles.push({
-          cuentaId:    cuentaIva.id,
-          debito:      0,
-          credito:     gasto.iva,
+          cuentaId: cuentaId,
+          debito: 0,
+          credito: valor,
           descripcion: 'ANULACIÓN - IVA descontable en compra',
         });
       }
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        TipoAsiento.ANULACION_FACTURA_COMPRA,
-          fecha:       new Date(),
-          referencia:  gasto.numero!,
+          tipo: TipoAsiento.ANULACION_FACTURA_COMPRA,
+          fecha: new Date(),
+          referencia: gasto.numero!,
           descripcion: `Asiento ANULACIÓN - Compra ${gasto.numero}`,
           detalles,
           userId,
@@ -506,11 +617,15 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento ANULACION_COMPRA generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento anulación compra: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de anulación de compra: ${error.message}`  );
+      this.logger.error(
+        `Error asiento anulación compra: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de anulación de compra: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -522,7 +637,10 @@ export class AsientosContablesService {
   // NC (CRÉDITO): DÉBITO Ingresos (xArt) + IVA 2408 | CRÉDITO Clientes 1305 / Caja-Bancos
   // ND (DÉBITO):  DÉBITO Clientes 1305 / Caja-Bancos | CRÉDITO Ingresos (xArt) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoNotaAjuste(nota: NotaAjuste, userId: string): Promise<AsientoContable> {
+  async generarAsientoNotaAjuste(
+    nota: NotaAjuste,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -534,70 +652,103 @@ export class AsientosContablesService {
 
       // 1. Agrupar ingresos por cuenta contable de los artículos (subtotal menos descuento)
       const ingresosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
         if (!item.articuloId) {
-          throw new Error('El item de la nota no tiene un artículo vinculado (articuloId)');
+          throw new Error(
+            'El item de la nota no tiene un artículo vinculado (articuloId)',
+          );
         }
 
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['cuentaContable'],
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
         });
 
-        if (!articulo?.cuentaContable) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable configurada`);
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
-        const cuentaId = articulo.cuentaContableId;
+        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         // Para NC: usar subtotal menos descuento aplicado
-        const valorIngreso = Number(item.subtotal) - Number(item.valorDescuento);
-        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso);
+        const valorIngreso =
+          Number(item.subtotal) - Number(item.valorDescuento);
+        ingresosAgrupados.set(
+          cuentaId,
+          (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso,
+        );
+
+        const valorIva = Number(item.valorIVA) || 0;
+        if (valorIva > 0) {
+          let cuentaIvaId: string;
+          if (articulo.impuestoRel?.cuentaVentasId) {
+            cuentaIvaId = articulo.impuestoRel.cuentaVentasId;
+          } else {
+            const ivaPorcentaje = item.porcentajeIVA || 0;
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
+              ivaPorcentaje,
+              'IVA',
+              'ventas',
+            );
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
+        }
       }
 
       // 2. Procesar líneas de ingresos (Débito para NC, Crédito para ND)
       for (const [cuentaId, valor] of ingresosAgrupados) {
-        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
-        
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
+
         detalles.push({
           cuentaId,
-          debito:  isNotaCredito ? valor : 0,
+          debito: isNotaCredito ? valor : 0,
           credito: isNotaCredito ? 0 : valor,
           descripcion: `${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} Ingreso - ${cuenta?.nombre} | Nota: ${nota.numeroCompleto}`,
         });
       }
 
       // 3. IVA (Débito para NC, Crédito para ND)
-      if (nota.iva > 0) {
-        const cuentaIva = await this.obtenerCuentaPorCodigo('2408');
+      for (const [cuentaId, valor] of ivaAgrupados) {
         detalles.push({
-          cuentaId: cuentaIva.id,
-          debito:  isNotaCredito ? Number(nota.iva) : 0,
-          credito: isNotaCredito ? 0 : Number(nota.iva),
+          cuentaId: cuentaId,
+          debito: isNotaCredito ? valor : 0,
+          credito: isNotaCredito ? 0 : valor,
           descripcion: `${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} IVA | Nota: ${nota.numeroCompleto}`,
         });
       }
 
       // 4. Contrapartida (Crédito para NC, Débito para ND): Clientes o Caja/Bancos
       const isContado = factura.formaPago === FormaPago.CONTADO;
-      const codigoCuentaContra = isContado 
-        ? this.resolverCuentaContado(factura.metodoPago!) 
+      const codigoCuentaContra = isContado
+        ? this.resolverCuentaContado(factura.metodoPago!)
         : '1305';
-      
-      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
-      
+
+      const cuentaContra =
+        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+
       detalles.push({
         cuentaId: cuentaContra.id,
-        debito:  isNotaCredito ? 0 : Number(nota.total),
+        debito: isNotaCredito ? 0 : Number(nota.total),
         credito: isNotaCredito ? Number(nota.total) : 0,
         descripcion: `${isNotaCredito ? 'CRÉDITO' : 'DÉBITO'} Fact: ${factura.comprobante_completo} | Nota: ${nota.numeroCompleto}`,
       });
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        isNotaCredito ? TipoAsiento.NOTA_CREDITO : TipoAsiento.NOTA_DEBITO,
-          fecha:       nota.fecha,
-          referencia:  nota.numeroCompleto,
+          tipo: isNotaCredito
+            ? TipoAsiento.NOTA_CREDITO
+            : TipoAsiento.NOTA_DEBITO,
+          fecha: nota.fecha,
+          referencia: nota.numeroCompleto,
           descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} ${nota.numeroCompleto}`,
           detalles,
           userId,
@@ -608,11 +759,15 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento ${asiento.tipo} generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento nota ajuste: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento contable de nota de ajuste: ${error.message}`);
+      this.logger.error(
+        `Error asiento nota ajuste: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento contable de nota de ajuste: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -631,11 +786,11 @@ export class AsientosContablesService {
   // Llamado desde: PagosService.registrarCobro()
   // ══════════════════════════════════════════════════════════════════════════
   async generarAsientoCobro(params: {
-    facturaVenta:       FacturasVenta;
-    monto:              number;
-    fecha:              Date;
+    facturaVenta: FacturasVenta;
+    monto: number;
+    fecha: Date;
     cuentaDebitoCodigo: string; // '1105' | '1110'
-    userId:             string;
+    userId: string;
   }): Promise<AsientoContable> {
     const { facturaVenta, monto, fecha, cuentaDebitoCodigo, userId } = params;
 
@@ -644,30 +799,31 @@ export class AsientosContablesService {
     await queryRunner.startTransaction();
 
     try {
-      const cuentaDebito  = await this.obtenerCuentaPorCodigo(cuentaDebitoCodigo);
+      const cuentaDebito =
+        await this.obtenerCuentaPorCodigo(cuentaDebitoCodigo);
       const cuentaCredito = await this.obtenerCuentaPorCodigo('1305');
       const medioPagoLabel = cuentaDebitoCodigo === '1105' ? 'Caja' : 'Banco';
 
       const detalles: DetalleAsiento[] = [
         {
-          cuentaId:    cuentaDebito.id,
-          debito:      monto,
-          credito:     0,
+          cuentaId: cuentaDebito.id,
+          debito: monto,
+          credito: 0,
           descripcion: `Cobro en ${medioPagoLabel} - Fact: ${facturaVenta.comprobante_completo}`,
         },
         {
-          cuentaId:    cuentaCredito.id,
-          debito:      0,
-          credito:     monto,
+          cuentaId: cuentaCredito.id,
+          debito: 0,
+          credito: monto,
           descripcion: `Abono CxC - Fact: ${facturaVenta.comprobante_completo} | Cliente: ${facturaVenta.clientId}`,
         },
       ];
 
       const asiento = await this.crearAsiento(
         {
-          tipo:        TipoAsiento.COBRO,
+          tipo: TipoAsiento.COBRO,
           fecha,
-          referencia:  facturaVenta.comprobante_completo,
+          referencia: facturaVenta.comprobante_completo,
           descripcion: `Cobro $${monto.toLocaleString('es-CO')} - Factura ${facturaVenta.comprobante_completo}`,
           detalles,
           userId,
@@ -680,11 +836,12 @@ export class AsientosContablesService {
         `Asiento COBRO generado: ${asiento.numero} | $${monto} | Fact: ${facturaVenta.comprobante_completo}`,
       );
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento cobro: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de cobro: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de cobro: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -703,11 +860,11 @@ export class AsientosContablesService {
   // Llamado desde: PagosService.registrarPago()
   // ══════════════════════════════════════════════════════════════════════════
   async generarAsientoPagoCompra(params: {
-    facturaCompra:       FacturaCompra;
-    monto:               number;
-    fecha:               Date;
+    facturaCompra: FacturaCompra;
+    monto: number;
+    fecha: Date;
     cuentaCreditoCodigo: string; // '1105' | '1110'
-    userId:              string;
+    userId: string;
   }): Promise<AsientoContable> {
     const { facturaCompra, monto, fecha, cuentaCreditoCodigo, userId } = params;
 
@@ -716,21 +873,22 @@ export class AsientosContablesService {
     await queryRunner.startTransaction();
 
     try {
-      const cuentaDebito  = await this.obtenerCuentaPorCodigo('2205');
-      const cuentaCredito = await this.obtenerCuentaPorCodigo(cuentaCreditoCodigo);
+      const cuentaDebito = await this.obtenerCuentaPorCodigo('2205');
+      const cuentaCredito =
+        await this.obtenerCuentaPorCodigo(cuentaCreditoCodigo);
       const medioPagoLabel = cuentaCreditoCodigo === '1105' ? 'Caja' : 'Banco';
 
       const detalles: DetalleAsiento[] = [
         {
-          cuentaId:    cuentaDebito.id,
-          debito:      monto,
-          credito:     0,
+          cuentaId: cuentaDebito.id,
+          debito: monto,
+          credito: 0,
           descripcion: `Pago CxP - Compra: ${facturaCompra.numero} | Proveedor: ${facturaCompra.proveedorId}`,
         },
         {
-          cuentaId:    cuentaCredito.id,
-          debito:      0,
-          credito:     monto,
+          cuentaId: cuentaCredito.id,
+          debito: 0,
+          credito: monto,
           descripcion: `Pago desde ${medioPagoLabel} - Compra: ${facturaCompra.numero}`,
         },
       ];
@@ -739,7 +897,7 @@ export class AsientosContablesService {
         {
           tipo: TipoAsiento.PAGO_PROVEEDOR,
           fecha,
-          referencia:  facturaCompra.numero!,
+          referencia: facturaCompra.numero!,
           descripcion: `Pago $${monto.toLocaleString('es-CO')} a proveedor - Compra ${facturaCompra.numero}`,
           detalles,
           userId,
@@ -752,11 +910,15 @@ export class AsientosContablesService {
         `Asiento PAGO_PROVEEDOR generado: ${asiento.numero} | $${monto} | Compra: ${facturaCompra.numero}`,
       );
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento pago proveedor: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de pago a proveedor: ${error.message}`);
+      this.logger.error(
+        `Error asiento pago proveedor: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de pago a proveedor: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -772,12 +934,12 @@ export class AsientosContablesService {
   ): Promise<AsientoContable> {
     this.logger.warn(
       `[DEPRECATED] generarAsientoPagoFacturaVenta() → ` +
-      `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
+        `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
     );
     return this.generarAsientoCobro({
-      facturaVenta:       factura,
-      monto:              factura.total,
-      fecha:              new Date(),
+      facturaVenta: factura,
+      monto: factura.total,
+      fecha: new Date(),
       cuentaDebitoCodigo: '1110',
       userId,
     });
@@ -786,8 +948,6 @@ export class AsientosContablesService {
   // ══════════════════════════════════════════════════════════════════════════
   // HELPERS PRIVADOS
   // ══════════════════════════════════════════════════════════════════════════
-
-
 
   /**
    * Dado el `codigo` del catálogo MetodoPago, retorna el código de cuenta PUC:
@@ -801,9 +961,9 @@ export class AsientosContablesService {
     console.log('codigoMetodoPago: ', codigoMetodoPago);
     const metodoUpper = codigoMetodoPago;
 
-    const METODOS_BANCO = ['47','42','49','48','20']; // 47: Transferencia, 42: Consignación, 49: Tarjeta Débito, 48: Tarjeta Crédito, 20: Cheque
+    const METODOS_BANCO = ['47', '42', '49', '48', '20']; // 47: Transferencia, 42: Consignación, 49: Tarjeta Débito, 48: Tarjeta Crédito, 20: Cheque
 
-    if (METODOS_BANCO.some(m => metodoUpper === m)) {
+    if (METODOS_BANCO.some((m) => metodoUpper === m)) {
       return '1110'; // Bancos
     }
 
@@ -812,16 +972,16 @@ export class AsientosContablesService {
 
   private async crearAsiento(
     data: {
-      tipo:        TipoAsiento;
-      fecha:       Date;
-      referencia:  string;
+      tipo: TipoAsiento;
+      fecha: Date;
+      referencia: string;
       descripcion: string;
-      detalles:    DetalleAsiento[];
-      userId:      string;
+      detalles: DetalleAsiento[];
+      userId: string;
     },
     queryRunner: any,
   ): Promise<AsientoContable> {
-    const totalDebito  = data.detalles.reduce((s, d) => s + d.debito,  0);
+    const totalDebito = data.detalles.reduce((s, d) => s + d.debito, 0);
     const totalCredito = data.detalles.reduce((s, d) => s + d.credito, 0);
 
     if (Math.abs(totalDebito - totalCredito) > 0.01) {
@@ -834,23 +994,26 @@ export class AsientosContablesService {
 
     const asiento = queryRunner.manager.create(AsientoContable, {
       numero,
-      tipo:        data.tipo,
-      fecha:       data.fecha,
-      referencia:  data.referencia,
+      tipo: data.tipo,
+      fecha: data.fecha,
+      referencia: data.referencia,
       descripcion: data.descripcion,
       totalDebito,
       totalCredito,
       createdById: data.userId,
     });
 
-    const asientoGuardado = await queryRunner.manager.save(AsientoContable, asiento);
+    const asientoGuardado = await queryRunner.manager.save(
+      AsientoContable,
+      asiento,
+    );
 
     for (const detalle of data.detalles) {
       const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {
-        asientoId:   asientoGuardado.id,
-        cuentaId:    detalle.cuentaId,
-        debito:      detalle.debito,
-        credito:     detalle.credito,
+        asientoId: asientoGuardado.id,
+        cuentaId: detalle.cuentaId,
+        debito: detalle.debito,
+        credito: detalle.credito,
         descripcion: detalle.descripcion,
       });
       await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
@@ -859,7 +1022,9 @@ export class AsientosContablesService {
     return asientoGuardado;
   }
 
-  private async obtenerCuentaPorCodigo(codigo: string): Promise<CuentaContable> {
+  private async obtenerCuentaPorCodigo(
+    codigo: string,
+  ): Promise<CuentaContable> {
     const cuenta = await this.cuentaRepository.findOne({
       where: { codigo, isActive: true },
     });
@@ -872,10 +1037,14 @@ export class AsientosContablesService {
   /**
    * Busca la cuenta contable configurada para un impuesto según su tarifa y tipo.
    */
-  private async obtenerCuentaImpuesto(tarifa: number, tipo: string, operacion: 'ventas' | 'compras'): Promise<CuentaContable> {
+  private async obtenerCuentaImpuesto(
+    tarifa: number,
+    tipo: string,
+    operacion: 'ventas' | 'compras',
+  ): Promise<CuentaContable> {
     const impuesto = await this.impuestoRepository.findOne({
       where: { tarifa, tipo, activo: true },
-      relations: ['cuentaVentas', 'cuentaCompras']
+      relations: ['cuentaVentas', 'cuentaCompras'],
     });
 
     if (operacion === 'ventas' && impuesto?.cuentaVentas) {
@@ -888,10 +1057,11 @@ export class AsientosContablesService {
 
     // Fallback a cuentas estándar si no se encuentra configuración específica
     const fallbackCodigo = operacion === 'ventas' ? '2408' : '1355';
-    this.logger.warn(`No se encontró configuración de cuenta para impuesto ${tipo} ${tarifa}%. Usando fallback ${fallbackCodigo}`);
+    this.logger.warn(
+      `No se encontró configuración de cuenta para impuesto ${tipo} ${tarifa}%. Usando fallback ${fallbackCodigo}`,
+    );
     return this.obtenerCuentaPorCodigo(fallbackCodigo);
   }
-
 
   private async generarNumeroAsiento(queryRunner: any): Promise<string> {
     const ultimoAsiento = await queryRunner.manager.findOne(AsientoContable, {

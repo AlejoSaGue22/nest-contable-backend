@@ -19,8 +19,9 @@ export class CreateArticuloDto {
     @IsNotEmpty()
     unidadmedida: string
 
-    @IsNumber()
-    impuesto: number
+    @IsString()
+    @IsNotEmpty()
+    impuesto: string
 
     // @IsString()
     // retencion: string

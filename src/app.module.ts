@@ -34,10 +34,9 @@ import { ImpuestosService } from './settings/impuestos/impuestos.service';
 @Module({
     imports: [TypeOrmModule.forRoot({
         type: 'mysql',
-        host: process.env.DB_HOST || 'localhost',
-        port: Number(process.env.DB_PORT) || 3307,
+        host: process.env.DB_HOST || 'localhost', 
         username: process.env.DB_USERNAME || 'root',     
-        password: process.env.DB_PASSWORD || 'root',
+        password: process.env.DB_PASSWORD || '', 
         database: process.env.DB_DATABASE || 'finance_tejo',
         // logging: true,
         autoLoadEntities: true,

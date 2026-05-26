@@ -34,6 +34,16 @@ export const DEFAULT_MENU_ITEMS = [
         isVisible: true,
         metadata: { badge: null }
       },
+      {
+        title: "Nota Credito",
+        icon: "receipt",
+        route: "/panel/ventas/notas-ajuste",
+        requiredPermission: Permission.INVOICE_READ,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
       // INVOICES
       {
         title: 'Facturas Venta',
@@ -76,6 +86,16 @@ export const DEFAULT_MENU_ITEMS = [
         route: '/panel/compras/proveedores',
         requiredPermission: Permission.PROVIDER_READ,
         order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: "Nota Credito",
+        icon: "receipt",
+        route: "/panel/compras/notas-ajuste",
+        requiredPermission: Permission.PURCHASE_READ,
+        order: 1,
         isActive: true,
         isVisible: true,
         metadata: { badge: null }
