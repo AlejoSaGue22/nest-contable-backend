@@ -30,6 +30,7 @@ import { BancosModule } from './bancos/bancos.module';
 import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
 import { ImpuestosModule } from './settings/impuestos/impuestos.module';
 import { ImpuestosService } from './settings/impuestos/impuestos.service';
+import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-compras.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
@@ -66,7 +67,8 @@ import { ImpuestosService } from './settings/impuestos/impuestos.service';
     CuentasBancariasModule,
     BancosModule,
     NotasAjusteModule,
-    ImpuestosModule
+    ImpuestosModule,
+    NotasAjusteComprasModule
   ],
   controllers: [],
 })

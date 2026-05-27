@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDat
 import { User } from "src/users/entities/user.entity";
 import { AsientoDetalle } from "./asientos-detalles.entity";
 
-export enum TipoAsiento { 
+export enum TipoAsiento {
   FACTURA_VENTA           = 'FACTURA_VENTA',
   GASTO                   = 'GASTO',
   ANULACION_FACTURA_VENTA = 'ANULACION_FACTURA_VENTA',
@@ -10,8 +10,11 @@ export enum TipoAsiento {
   PAGO_FACTURA_VENTA      = 'PAGO_FACTURA_VENTA',  // legacy
   COBRO                   = 'COBRO',               // ← NUEVO
   PAGO_PROVEEDOR          = 'PAGO_PROVEEDOR',      // ← NUEVO
-  NOTA_CREDITO            = 'NOTA_CREDITO',
-  NOTA_DEBITO             = 'NOTA_DEBITO',
+  NOTA_CREDITO_VENTA      = 'NOTA_CREDITO_VENTA',
+  NOTA_DEBITO_VENTA       = 'NOTA_DEBITO_VENTA',
+  NOTA_CREDITO_COMPRA     = 'NOTA_CREDITO_COMPRA',
+  NOTA_DEBITO_COMPRA      = 'NOTA_DEBITO_COMPRA',
+  ANULACION_NOTA_COMPRA   = 'ANULACION_NOTA_COMPRA'
 }
 
 @Entity('asientos_contables')

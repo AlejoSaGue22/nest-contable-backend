@@ -18,7 +18,8 @@ import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
 import { TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
-
+import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste-compra.entity';
+import { TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
 interface DetalleAsiento {
   cuentaId: string;
   debito: number;
@@ -745,8 +746,8 @@ export class AsientosContablesService {
       const asiento = await this.crearAsiento(
         {
           tipo: isNotaCredito
-            ? TipoAsiento.NOTA_CREDITO
-            : TipoAsiento.NOTA_DEBITO,
+            ? TipoAsiento.NOTA_CREDITO_VENTA
+            : TipoAsiento.NOTA_DEBITO_VENTA,
           fecha: nota.fecha,
           referencia: nota.numeroCompleto,
           descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} ${nota.numeroCompleto}`,
@@ -1020,6 +1021,225 @@ export class AsientosContablesService {
     }
 
     return asientoGuardado;
+  }
+
+  async generarAsientoNotaAjusteCompra(notaId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const nota = await queryRunner.manager.findOne(NotaAjusteCompra, {
+        where: { id: notaId },
+        relations: ['facturaOriginal', 'items']
+      });
+
+      if (!nota) throw new Error(`Nota de ajuste compra ${notaId} no encontrada`);
+
+      const factura = nota.facturaOriginal;
+      const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
+      const detalles: DetalleAsiento[] = [];
+
+      // 1. Agrupar gastos e iva
+      const gastosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
+
+      for (const item of nota.items) {
+        if (!item.articuloId) continue;
+        const articulo = await queryRunner.manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+        });
+
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+           throw new Error(`Artículo no tiene cuenta contable principal configurada`);
+        }
+
+        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
+        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto);
+
+        const valorIva = Number(item.valorIVA) || 0;
+        if (valorIva > 0) {
+          let cuentaIvaId = articulo.impuestoRel?.cuentaComprasId;
+          if (!cuentaIvaId) {
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(item.porcentajeIVA || 0, 'IVA', 'compras');
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
+        }
+      }
+
+      // Para Nota Crédito de Compra: se revierte el gasto
+      // Crédito: Gasto (para NC) | Débito: Gasto (para ND)
+      for (const [cuentaId, valor] of gastosAgrupados) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
+        detalles.push({
+          cuentaId,
+          debito: isNotaCredito ? 0 : valor,
+          credito: isNotaCredito ? valor : 0,
+          descripcion: `${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} Gasto - ${cuenta?.nombre} | Nota: ${nota.numeroCompleto}`,
+        });
+      }
+
+      // Para Nota Crédito de Compra: se revierte el IVA descontable
+      // Crédito: IVA (para NC) | Débito: IVA (para ND)
+      for (const [cuentaId, valor] of ivaAgrupados) {
+        detalles.push({
+          cuentaId,
+          debito: isNotaCredito ? 0 : valor,
+          credito: isNotaCredito ? valor : 0,
+          descripcion: `${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} IVA Descontable | Nota: ${nota.numeroCompleto}`,
+        });
+      }
+
+      // Contrapartida: CxP o Bancos/Caja
+      // Débito: CxP (para NC) | Crédito: CxP (para ND)
+      const isContado = factura.formaPago === FormaPago.CONTADO;
+      let codigoCxP = '2205';
+      if (gastosAgrupados.size > 0) {
+        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, { where: { id: In(Array.from(gastosAgrupados.keys())) } });
+        if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
+          codigoCxP = '2335';
+        }
+      }
+
+      const codigoCuentaContra = isContado ? this.resolverCuentaContado(factura.metodoPago!) : codigoCxP;
+      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+
+      detalles.push({
+        cuentaId: cuentaContra.id,
+        debito: isNotaCredito ? Number(nota.total) : 0,
+        credito: isNotaCredito ? 0 : Number(nota.total),
+        descripcion: `${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Fact: ${factura.numero} | Nota: ${nota.numeroCompleto}`,
+      });
+
+      const asiento = await this.crearAsiento({
+        tipo: isNotaCredito ? TipoAsiento.NOTA_CREDITO_COMPRA : TipoAsiento.NOTA_DEBITO_COMPRA,
+        fecha: nota.fecha,
+        referencia: nota.numeroCompleto,
+        descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} Compra ${nota.numeroCompleto}`,
+        detalles,
+        userId: nota.createdById,
+      }, queryRunner);
+
+      await queryRunner.commitTransaction();
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento nota compra: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async generarAsientoAnulacionNotaAjusteCompra(notaId: string): Promise<AsientoContable> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const nota = await queryRunner.manager.findOne(NotaAjusteCompra, {
+        where: { id: notaId },
+        relations: ['facturaOriginal', 'items']
+      });
+
+      if (!nota) throw new Error(`Nota de ajuste compra ${notaId} no encontrada`);
+
+      const factura = nota.facturaOriginal;
+      const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
+      const detalles: DetalleAsiento[] = [];
+
+      // 1. Agrupar gastos e iva
+      const gastosAgrupados = new Map<string, number>();
+      const ivaAgrupados = new Map<string, number>();
+
+      for (const item of nota.items) {
+        if (!item.articuloId) continue;
+        const articulo = await queryRunner.manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+        });
+
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+           throw new Error(`Artículo no tiene cuenta contable principal configurada`);
+        }
+
+        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
+        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto);
+
+        const valorIva = Number(item.valorIVA) || 0;
+        if (valorIva > 0) {
+          let cuentaIvaId = articulo.impuestoRel?.cuentaComprasId;
+          if (!cuentaIvaId) {
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(item.porcentajeIVA || 0, 'IVA', 'compras');
+            cuentaIvaId = cuentaIvaFallback.id;
+          }
+          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
+        }
+      }
+
+      // Revertir (invertir débitos y créditos del asiento original)
+      // Para Nota Crédito original: Gasto fue Crédito -> Ahora es Débito
+      for (const [cuentaId, valor] of gastosAgrupados) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
+        detalles.push({
+          cuentaId,
+          debito: isNotaCredito ? valor : 0,
+          credito: isNotaCredito ? 0 : valor,
+          descripcion: `ANULACIÓN - ${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} Gasto - ${cuenta?.nombre} | Nota: ${nota.numeroCompleto}`,
+        });
+      }
+
+      for (const [cuentaId, valor] of ivaAgrupados) {
+        detalles.push({
+          cuentaId,
+          debito: isNotaCredito ? valor : 0,
+          credito: isNotaCredito ? 0 : valor,
+          descripcion: `ANULACIÓN - ${isNotaCredito ? 'REVERSIÓN' : 'ADICIÓN'} IVA Descontable | Nota: ${nota.numeroCompleto}`,
+        });
+      }
+
+      const isContado = factura.formaPago === FormaPago.CONTADO;
+      let codigoCxP = '2205';
+      if (gastosAgrupados.size > 0) {
+        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, { where: { id: In(Array.from(gastosAgrupados.keys())) } });
+        if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
+          codigoCxP = '2335';
+        }
+      }
+
+      const codigoCuentaContra = isContado ? this.resolverCuentaContado(factura.metodoPago!) : codigoCxP;
+      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+
+      // Para Nota Crédito original: CxP fue Débito -> Ahora es Crédito
+      detalles.push({
+        cuentaId: cuentaContra.id,
+        debito: isNotaCredito ? 0 : Number(nota.total),
+        credito: isNotaCredito ? Number(nota.total) : 0,
+        descripcion: `ANULACIÓN - ${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Fact: ${factura.numero} | Nota: ${nota.numeroCompleto}`,
+      });
+
+      const asiento = await this.crearAsiento({
+        tipo: TipoAsiento.ANULACION_NOTA_COMPRA,
+        fecha: new Date(),
+        referencia: nota.numeroCompleto,
+        descripcion: `Asiento automático - Anulación Nota Compra ${nota.numeroCompleto}`,
+        detalles,
+        userId: nota.createdById,
+      }, queryRunner);
+
+      await queryRunner.commitTransaction();
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento anulación nota compra: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private async obtenerCuentaPorCodigo(
