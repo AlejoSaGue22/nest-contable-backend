@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, MaxLength, IsNumber } from "class-validator";
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, MaxLength, IsNumber } from "class-validator";
 import { Type } from "class-transformer";
 import { TipoNotaCompra } from "../enums/notas-ajuste-compra.enum";
 import { CreateItemNotaAjusteCompraDto } from "./create-items-notas-ajuste-compra.dto";
@@ -32,7 +32,15 @@ export class CreateNotasAjusteCompraDto {
   @IsString()
   @IsNotEmpty()
   fecha: string; // YYYY-MM-DD
+
+  @IsString()
+  @IsOptional()
+  fechaVencimiento?: string;
  
+  @IsBoolean()
+  @IsOptional()
+  esReembolsoAbono?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateItemNotaAjusteCompraDto)

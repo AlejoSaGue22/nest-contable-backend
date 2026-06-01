@@ -68,6 +68,9 @@ export class NotaAjusteCompra {
   @Column({ type: 'date' }) 
   fecha: Date;
 
+  @Column({ type: 'boolean', nullable: true })
+  esReembolsoAbono: boolean; // Solo para NC, indica si es reembolso/abono a favor del proveedor
+
   @OneToMany(() => ItemNotaAjusteCompra, item => item.nota, { cascade: true })
   items: ItemNotaAjusteCompra[];
 

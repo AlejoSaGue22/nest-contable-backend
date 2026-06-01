@@ -237,6 +237,7 @@ export class FacturasComprasService {
                 .createQueryBuilder('invoice')
                 .leftJoinAndSelect('invoice.proveedor', 'proveedor')
                 .leftJoinAndSelect('invoice.items', 'items')
+                .leftJoinAndSelect('items.articulo', 'articulo')
                 .leftJoinAndSelect('invoice.createdBy', 'createdBy')
                 .where('1=1');
 

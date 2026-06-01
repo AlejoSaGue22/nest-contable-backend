@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { CreateNotasAjusteCompraDto } from './dto/create-notas-ajuste-compra.dto';
+import { UpdateNotasAjusteCompraDto } from './dto/update-notas-ajuste-compra.dto';
 import { NotasAjusteCompraFilterDto, toNotaAjusteCompraResponse } from './dto/nota-ajuste-compra-filter.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
@@ -52,6 +53,29 @@ export class NotasAjusteComprasController {
   async registrar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const nota = await this.notasAjusteService.registrar(id, req.user.sub);
     return toNotaAjusteCompraResponse(nota, 'Nota de ajuste registrada exitosamente.');
+  }
+
+  @Patch(':id')
+  @Permissions(Permission.PURCHASE_UPDATE)
+  async update(@Param('id') id: string, @Body() updateDto: UpdateNotasAjusteCompraDto) {
+    const nota = await this.notasAjusteService.update(id, updateDto);
+    return toNotaAjusteCompraResponse(nota, 'Nota de ajuste actualizada exitosamente.');
+  }
+
+  @Delete(':id')
+  @Permissions(Permission.PURCHASE_DELETE)
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string) {
+    await this.notasAjusteService.remove(id);
+    return toNotaAjusteCompraResponse([], 'Nota de ajuste eliminada.');
+  }
+
+  @Patch(':id/reintentar-asiento')
+  @Permissions(Permission.PURCHASE_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  async reintentarAsiento(@Param('id') id: string) {
+    const nota = await this.notasAjusteService.reintentarAsiento(id);
+    return toNotaAjusteCompraResponse(nota, 'Asiento contable generado exitosamente.');
   }
 
   @Patch(':id/anular')

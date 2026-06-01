@@ -657,9 +657,7 @@ export class AsientosContablesService {
 
       for (const item of nota.items) {
         if (!item.articuloId) {
-          throw new Error(
-            'El item de la nota no tiene un artículo vinculado (articuloId)',
-          );
+          throw new Error('El item de la nota no tiene un artículo vinculado (articuloId)');
         }
 
         const articulo = await queryRunner.manager.findOne(Articulo, {
@@ -668,19 +666,13 @@ export class AsientosContablesService {
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
-          );
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         // Para NC: usar subtotal menos descuento aplicado
-        const valorIngreso =
-          Number(item.subtotal) - Number(item.valorDescuento);
-        ingresosAgrupados.set(
-          cuentaId,
-          (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso,
-        );
+        const valorIngreso = Number(item.subtotal) - Number(item.valorDescuento);
+        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso);
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
@@ -689,17 +681,10 @@ export class AsientosContablesService {
             cuentaIvaId = articulo.impuestoRel.cuentaVentasId;
           } else {
             const ivaPorcentaje = item.porcentajeIVA || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
-              ivaPorcentaje,
-              'IVA',
-              'ventas',
-            );
+            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(ivaPorcentaje,'IVA','ventas');
             cuentaIvaId = cuentaIvaFallback.id;
           }
-          ivaAgrupados.set(
-            cuentaIvaId,
-            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
-          );
+          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
         }
       }
 

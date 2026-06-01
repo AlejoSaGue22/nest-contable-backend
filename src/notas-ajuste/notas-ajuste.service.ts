@@ -549,7 +549,7 @@ export class NotasAjusteService {
     try {
       const nota = await this.notaRepository.findOne({
         where: { id },
-        relations: ['cliente', 'facturaOriginal', 'items', 'items.articulo', 'metodoPagoRelacion', 'createdBy']
+        relations: ['cliente', 'facturaOriginal', 'items', 'items.articulo', 'items.impuesto', 'metodoPagoRelacion', 'createdBy']
       });
  
       if (!nota) {
@@ -763,6 +763,7 @@ export class NotasAjusteService {
  
       itemsCalculados.push({
         articuloId: itemDto.articuloId,
+        impuestoId: itemDto.impuestoId || null,
         valorUnitario,
         porcentajeIVA,
         cantidad,

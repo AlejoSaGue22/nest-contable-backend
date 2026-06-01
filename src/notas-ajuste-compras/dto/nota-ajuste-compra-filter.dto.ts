@@ -50,6 +50,7 @@ export class NotaAjusteCompraResponseDto {
   iva: number;
   total: number;
   estado: string;
+  esReembolsoAbono?: boolean;
   createdAt: Date;
 }
 
@@ -70,6 +71,7 @@ export function toNotaAjusteCompraResponse(
     iva: Number(n.iva),
     total: Number(n.total),
     estado: n.estado,
+    esReembolsoAbono: n.esReembolsoAbono,
     createdAt: n.createdAt
   });
  

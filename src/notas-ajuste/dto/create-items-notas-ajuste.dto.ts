@@ -21,6 +21,10 @@ export class CreateItemNotaAjusteDto {
   @IsNotEmpty()
   valorUnitario: number;
  
+  @IsUUID()
+  @IsOptional()
+  impuestoId?: string;
+
   @IsNumber()
   @Min(0)
   @IsOptional()

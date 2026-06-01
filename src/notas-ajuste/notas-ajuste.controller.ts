@@ -286,16 +286,16 @@ export class NotasAjusteController {
    */
   @Get(':id/pdf')
   @Permissions(Permission.INVOICE_READ)
-async descargarPDF(@Param('id') id: string, @Res() res: Response) {
-  const nota = await this.notasAjusteService.findOne(id);
-  
-  if (!nota.pdfUrl) {
-    throw new BadRequestException('Esta nota no tiene PDF generado');
-  }
-  
-  const { buffer, fileName } = await this.notasAjusteService.descargarPDF(id);
+  async descargarPDF(@Param('id') id: string, @Res() res: Response) {
+    const nota = await this.notasAjusteService.findOne(id);
+    
+    if (!nota.pdfUrl) {
+      throw new BadRequestException('Esta nota no tiene PDF generado');
+    }
+    
+    const { buffer, fileName } = await this.notasAjusteService.descargarPDF(id);
 
-  res.set({
+    res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename=${fileName}.pdf`,
       'Content-Length': buffer.length,

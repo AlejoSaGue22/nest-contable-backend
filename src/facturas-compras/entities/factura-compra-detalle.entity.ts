@@ -1,5 +1,5 @@
 import { Articulo } from "src/articulos/entities/articulos.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { FacturaCompra } from "./factura-compra.entity";
 
@@ -14,7 +14,8 @@ export class FacturaCompraDetalle {
     @Column()
     facturaCompraId: string;
 
-    @ManyToOne(() => Articulo)
+    @ManyToOne(() => Articulo, { eager: true })
+    @JoinColumn({ name: 'articuloId' })
     articulo: Articulo;
 
     @Column()

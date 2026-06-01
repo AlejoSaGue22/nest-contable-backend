@@ -4,9 +4,11 @@ import {
   Entity, 
   ManyToOne, 
   PrimaryGeneratedColumn,
+  JoinColumn,
 } from "typeorm";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { Articulo } from "src/articulos/entities/articulos.entity";
+import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 import { NotaAjusteCompra } from "./notas-ajuste-compra.entity";
 
 @Entity('items_nota_ajuste_compra')
@@ -14,11 +16,18 @@ export class ItemNotaAjusteCompra {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Articulo, { nullable: true })
+  @ManyToOne(() => Articulo, { nullable: true, eager: true })
   articulo: Articulo;
 
   @Column({ nullable: true })
   articuloId: string;
+
+  @ManyToOne(() => Impuesto, { nullable: true })
+  @JoinColumn({ name: 'impuestoId' })
+  impuesto: Impuesto;
+
+  @Column({ nullable: true })
+  impuestoId: string;
 
   @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
   cantidad: number;
