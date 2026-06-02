@@ -10,6 +10,7 @@ import { InternalServerErrorException } from '@nestjs/common';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { UnidadMedida } from 'src/core/catalogs/entities/unidad-medida.entity';
 import { CategoriaArticulo } from 'src/core/catalogs/entities/categorias-articulos-entity';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 
 @Injectable()
 export class ArticulosService {
@@ -24,7 +25,10 @@ export class ArticulosService {
     private readonly cuentasRepository: Repository<CuentaContable>,
 
     @InjectRepository(CategoriaArticulo)
-    private readonly categoriasRepository: Repository<CategoriaArticulo>
+    private readonly categoriasRepository: Repository<CategoriaArticulo>,
+
+    @InjectRepository(Impuesto)
+    private readonly impuestosRepository: Repository<Impuesto>
   ) { }
 
   async createConCuentas(createArticuloDto: CreateArticuloDto, userId: string) {
@@ -70,11 +74,22 @@ export class ArticulosService {
 
     const queryBuilder = this.articulosRepository.createQueryBuilder('articulo');
     queryBuilder.leftJoinAndSelect('articulo.unidadmedidaRel', 'unidadmedidaRel');
-    queryBuilder.leftJoinAndSelect('articulo.cuentaContable', 'cuentaContable');
-    queryBuilder.leftJoinAndSelect('articulo.cuentaIva', 'cuentaIva');
+    queryBuilder.leftJoinAndSelect('articulo.impuestoRel', 'impuestoRe');
+    queryBuilder.leftJoinAndSelect('articulo.categoriaArticulo', 'categoriaArticulo');
 
     if (venta_compra) {
-      queryBuilder.andWhere('articulo.tipo = :tipo', { tipo: venta_compra });
+      const tiposFiltro: Record<string, string[]> = {
+        'costo': ['costo', 'gasto'],
+        'venta': ['venta'],
+      };
+
+      const tiposAFiltrar = tiposFiltro[venta_compra];
+
+      if (tiposAFiltrar) {
+        queryBuilder.andWhere('articulo.tipo IN (:...tipos)', { tipos: tiposAFiltrar });
+      } else {
+        queryBuilder.andWhere('articulo.tipo = :tipo', { tipo: venta_compra });
+      }
     }
 
     if (search) {
@@ -93,7 +108,7 @@ export class ArticulosService {
     const articulosMap = articulos.map((cli, indx) => {
       return {
         ...cli,
-        iva_percent: cli.impuesto + '%',
+        iva_percent: cli.impuestoRel.tarifa + '%',
         rete_percent: cli.retencion + '%',
         unidadmedida: cli.unidadmedidaRel.id.toString(),
         estado: cli.isActive == true ? 'Activo' : 'Inactivo',
@@ -121,7 +136,7 @@ export class ArticulosService {
     const articulosMap = articulos.map((cli, indx) => {
       return {
         ...cli,
-        iva_percent: cli.impuesto + '%',
+        iva_percent: cli.impuestoRel.tarifa + '%',
         rete_percent: cli.retencion + '%',
         estado: cli.isActive == true ? 'Activo' : 'Inactivo',
         ind: (indx + 1).toString()

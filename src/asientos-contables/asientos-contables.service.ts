@@ -113,16 +113,18 @@ export class AsientosContablesService {
         const valorIva = (item as any).valor_iva || 0;
         if (valorIva > 0) {
           let cuentaIvaId: string;
-          if (producto.impuestoRel?.cuentaVentasId) {
+          const ivaPorcentaje = item.iva || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
+            ivaPorcentaje,
+            'IVA',
+            'ventas',
+          );
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (producto.impuestoRel?.cuentaVentasId) {
             cuentaIvaId = producto.impuestoRel.cuentaVentasId;
           } else {
-            const ivaPorcentaje = item.iva || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
-              ivaPorcentaje,
-              'IVA',
-              'ventas',
-            );
-            cuentaIvaId = cuentaIvaFallback.id;
+            cuentaIvaId = '2408';
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -239,16 +241,18 @@ export class AsientosContablesService {
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
-          if (articulo.impuestoRel?.cuentaComprasId) {
+          const ivaPorcentaje = item.porcentajeIva || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
+            ivaPorcentaje,
+            'IVA',
+            'compras',
+          );
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (articulo.impuestoRel?.cuentaComprasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
           } else {
-            const ivaPorcentaje = item.porcentajeIva || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
-              ivaPorcentaje,
-              'IVA',
-              'compras',
-            );
-            cuentaIvaId = cuentaIvaFallback.id;
+            cuentaIvaId = '1355';
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -394,16 +398,18 @@ export class AsientosContablesService {
         const valorIva = (item as any).valor_iva || 0;
         if (valorIva > 0) {
           let cuentaIvaId: string;
-          if (producto.impuestoRel?.cuentaVentasId) {
+          const ivaPorcentaje = item.iva || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
+            ivaPorcentaje,
+            'IVA',
+            'ventas',
+          );
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (producto.impuestoRel?.cuentaVentasId) {
             cuentaIvaId = producto.impuestoRel.cuentaVentasId;
           } else {
-            const ivaPorcentaje = item.iva || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
-              ivaPorcentaje,
-              'IVA',
-              'ventas',
-            );
-            cuentaIvaId = cuentaIvaFallback.id;
+            cuentaIvaId = '2408';
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -528,16 +534,18 @@ export class AsientosContablesService {
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
-          if (articulo.impuestoRel?.cuentaComprasId) {
+          const ivaPorcentaje = item.porcentajeIva || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
+            ivaPorcentaje,
+            'IVA',
+            'compras',
+          );
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (articulo.impuestoRel?.cuentaComprasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
           } else {
-            const ivaPorcentaje = item.porcentajeIva || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(
-              ivaPorcentaje,
-              'IVA',
-              'compras',
-            );
-            cuentaIvaId = cuentaIvaFallback.id;
+            cuentaIvaId = '1355';
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -677,12 +685,18 @@ export class AsientosContablesService {
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
           let cuentaIvaId: string;
-          if (articulo.impuestoRel?.cuentaVentasId) {
+          const ivaPorcentaje = item.porcentajeIVA || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
+            ivaPorcentaje,
+            'IVA',
+            'ventas',
+          );
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (articulo.impuestoRel?.cuentaVentasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaVentasId;
           } else {
-            const ivaPorcentaje = item.porcentajeIVA || 0;
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(ivaPorcentaje,'IVA','ventas');
-            cuentaIvaId = cuentaIvaFallback.id;
+            cuentaIvaId = '2408';
           }
           ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
         }
@@ -1046,10 +1060,15 @@ export class AsientosContablesService {
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
-          let cuentaIvaId = articulo.impuestoRel?.cuentaComprasId;
-          if (!cuentaIvaId) {
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(item.porcentajeIVA || 0, 'IVA', 'compras');
-            cuentaIvaId = cuentaIvaFallback.id;
+          const ivaPorcentaje = item.porcentajeIVA || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(ivaPorcentaje, 'IVA', 'compras');
+          let cuentaIvaId: string;
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (articulo.impuestoRel?.cuentaComprasId) {
+            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else {
+            cuentaIvaId = '1355';
           }
           ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
         }
@@ -1157,10 +1176,15 @@ export class AsientosContablesService {
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
-          let cuentaIvaId = articulo.impuestoRel?.cuentaComprasId;
-          if (!cuentaIvaId) {
-            const cuentaIvaFallback = await this.obtenerCuentaImpuesto(item.porcentajeIVA || 0, 'IVA', 'compras');
-            cuentaIvaId = cuentaIvaFallback.id;
+          const ivaPorcentaje = item.porcentajeIVA || 0;
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(ivaPorcentaje, 'IVA', 'compras');
+          let cuentaIvaId: string;
+          if (cuentaIvaPorcentaje) {
+            cuentaIvaId = cuentaIvaPorcentaje.id;
+          } else if (articulo.impuestoRel?.cuentaComprasId) {
+            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else {
+            cuentaIvaId = '1355';
           }
           ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
         }

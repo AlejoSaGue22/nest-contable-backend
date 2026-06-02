@@ -1,9 +1,14 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsUUID, Min } from "class-validator";
+import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from "class-validator";
 
 export class CreateItemNotaAjusteCompraDto {
   @IsUUID()
   @IsNotEmpty()
   articuloId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  descripcion: string;
 
   @IsNumber()
   @Min(0)

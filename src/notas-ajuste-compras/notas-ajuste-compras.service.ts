@@ -70,7 +70,7 @@ export class NotasAjusteComprasService {
         proveedorId: factura.proveedorId,
         motivo: dto.motivo,
         formaPago: dto.formaPago,
-        metodoPago: dto.metodoPago,
+        metodoPago: dto.metodoPago || null,
         esReembolsoAbono: dto.esReembolsoAbono || false,
         fecha: new Date(dto.fecha),
         subtotal: dto.subtotal || 0,
