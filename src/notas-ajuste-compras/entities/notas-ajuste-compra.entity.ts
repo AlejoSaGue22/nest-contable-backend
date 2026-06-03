@@ -135,7 +135,7 @@ export class NotaAjusteCompra {
   obtenerEstadoLegible(): string {
     const estados = {
       [EstadoNotaCompra.DRAFT]: 'Borrador',
-      [EstadoNotaCompra.ISSUED]: 'Emitida',
+      [EstadoNotaCompra.REGISTERED]: 'Registrada', 
       [EstadoNotaCompra.CANCELLED]: 'Anulada',
       [EstadoNotaCompra.ERROR_ASIENTO]: 'Error Asiento'
     };

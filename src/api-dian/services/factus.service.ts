@@ -3,6 +3,8 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as qs from 'qs';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AllowanceChargesFactus, FacturaDianResponse, FactusPayload, FactusTokenResponse, filtroMunicipios } from '../interfaces/api-dian-interface';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { ItemNotaAjuste } from 'src/notas-ajuste/entities/items-notas-ajuste.entity';
@@ -18,6 +20,7 @@ export class FactusService {
     private readonly logger = new Logger(FactusService.name);
     private readonly apiUrl: string;
     private readonly oauthUrl: string;
+    private readonly storageDir: string;
     private accessToken: string | null = null;
     private refreshToken: string | null = null;
     private tokenExpiry: Date | null = null;
@@ -38,6 +41,16 @@ export class FactusService {
         }
 
         this.logger.log(`🔌 Factus Service inicializado en modo: ${environment}`);
+
+        this.storageDir = path.join(process.cwd(), 'storage', 'facturas');
+        this.ensureStorageDir();
+    }
+
+    private ensureStorageDir(): void {
+        if (!fs.existsSync(this.storageDir)) {
+            fs.mkdirSync(this.storageDir, { recursive: true });
+            this.logger.log(`📁 Directorio de caché creado: ${this.storageDir}`);
+        }
     }
 
     /**
@@ -135,6 +148,46 @@ export class FactusService {
             this.logger.error('❌ Error renovando token', error.response?.data);
             throw error;
         }
+    }
+
+    private getCachedFilePath(numeroCompleto: string, type: 'pdf' | 'xml'): string | null {
+        const fileName = `${numeroCompleto}.${type}`;
+        const filePath = path.join(this.storageDir, fileName);
+        if (fs.existsSync(filePath)) {
+            return filePath;
+        }
+        return null;
+    }
+
+    private saveToCache(numeroCompleto: string, type: 'pdf' | 'xml', buffer: Buffer): void {
+        const fileName = `${numeroCompleto}.${type}`;
+        const filePath = path.join(this.storageDir, fileName);
+        fs.writeFileSync(filePath, buffer);
+        this.logger.log(`💾 ${type.toUpperCase()} cacheado: ${fileName}`);
+    }
+
+    async getCachedPDF(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string } | null> {
+        const filePath = this.getCachedFilePath(numeroCompleto, 'pdf');
+        if (filePath) {
+            this.logger.log(`📄 PDF servido desde caché: ${numeroCompleto}`);
+            return {
+                buffer: fs.readFileSync(filePath),
+                fileName: `${numeroCompleto}.pdf`,
+            };
+        }
+        return null;
+    }
+
+    async getCachedXML(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string } | null> {
+        const filePath = this.getCachedFilePath(numeroCompleto, 'xml');
+        if (filePath) {
+            this.logger.log(`📄 XML servido desde caché: ${numeroCompleto}`);
+            return {
+                buffer: fs.readFileSync(filePath),
+                fileName: `${numeroCompleto}.xml`,
+            };
+        }
+        return null;
     }
 
     async verFacturaByNumero(numeroCompleto: string): Promise<any> {
@@ -680,12 +733,15 @@ export class FactusService {
      * Descargar PDF de factura usando el numero del documento (en Factus ej. 'fv09008257590002400000241')
      */
     async descargarPDF(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
+        const cached = await this.getCachedPDF(numeroCompleto);
+        if (cached) return cached;
+
         try {
             const token = await this.obtenerToken();
 
             const response = await firstValueFrom(
                 this.httpService.get(
-                    `${this.apiUrl}/v1/bills/download-pdf/${numeroCompleto}`, // TODO: Verificar endpoint correcto
+                    `${this.apiUrl}/v1/bills/download-pdf/${numeroCompleto}`,
                     {
                         headers: {
                             'Content-Type': 'application/json',
@@ -696,10 +752,11 @@ export class FactusService {
                 )
             );
 
-            return {
-                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
-                fileName: response.data.data.file_name
-            };
+            const buffer = Buffer.from(response.data.data.pdf_base_64_encoded, 'base64');
+            const fileName = response.data.data.file_name;
+            this.saveToCache(numeroCompleto, 'pdf', buffer);
+
+            return { buffer, fileName };
 
         } catch (error) {
             this.logger.error('Error descargando PDF:', error);
@@ -711,6 +768,9 @@ export class FactusService {
      * Descargar XML de factura usando el numero del documento (en Factus ej. 'fv09008257590002400000241')
      */
     async descargarXML(numeroCompleto: string): Promise<{ buffer: Buffer, fileName: string }> {
+        const cached = await this.getCachedXML(numeroCompleto);
+        if (cached) return cached;
+
         try {
             const token = await this.obtenerToken();
 
@@ -727,10 +787,11 @@ export class FactusService {
                 )
             );
 
-            return {
-                buffer: Buffer.from(response.data.data.xml_base_64_encoded, 'base64'),
-                fileName: response.data.data.file_name
-            };
+            const buffer = Buffer.from(response.data.data.xml_base_64_encoded, 'base64');
+            const fileName = response.data.data.file_name;
+            this.saveToCache(numeroCompleto, 'xml', buffer);
+
+            return { buffer, fileName };
 
         } catch (error) {
             this.logger.error('Error descargando XML:', error);

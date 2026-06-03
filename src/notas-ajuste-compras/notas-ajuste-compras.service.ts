@@ -62,9 +62,15 @@ export class NotasAjusteComprasService {
         }
       }
 
+      // 3. Generar número de nota solo si NO es borrador
+      const isDraft = dto.isDraft || false;
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(tipo);
+
       const nota = this.notaRepository.create({
         tipo,
-        prefijo: tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC',
+        prefijo: numeroNota ? tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC' : '',
+        numero: numeroNota,
+        numeroCompleto: numeroNota ? `${tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC'}-${numeroNota}` : '',
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.numero || '',
         proveedorId: factura.proveedorId,
@@ -72,13 +78,13 @@ export class NotasAjusteComprasService {
         formaPago: dto.formaPago,
         metodoPago: dto.metodoPago || null,
         esReembolsoAbono: dto.esReembolsoAbono || false,
-        fecha: new Date(dto.fecha),
+        fecha: dto.fecha,
         subtotal: dto.subtotal || 0,
         iva: dto.iva || 0,
         descuento: dto.descuento || 0,
         total: dto.total || 0,
         saldoPendiente: dto.total || 0,
-        estado: EstadoNotaCompra.DRAFT,
+        estado: isDraft ? EstadoNotaCompra.DRAFT : EstadoNotaCompra.REGISTERED,
         observaciones: dto.observaciones,
         createdById: userId
       });
@@ -200,12 +206,13 @@ export class NotasAjusteComprasService {
 
     try {
       // Generar número consecutivo
-      const count = await queryRunner.manager.count(NotaAjusteCompra, {
-        where: { tipo: nota.tipo, estado: EstadoNotaCompra.ISSUED }
-      });
-      nota.numero = (count + 1).toString().padStart(8, '0');
-      nota.numeroCompleto = `${nota.prefijo}-${nota.numero}`;
-      nota.estado = EstadoNotaCompra.ISSUED;
+      const numero = await this.generateNotaNumber(nota.tipo);
+      const prefijo = nota.tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC';
+      
+      nota.numero = numero; 
+      nota.numeroCompleto = `${prefijo}-${numero}`;
+      nota.prefijo = prefijo;
+      nota.estado = EstadoNotaCompra.REGISTERED;
 
       // Actualizar la factura original si es nota crédito
       if (nota.tipo === TipoNotaCompra.CREDITO) {
@@ -259,7 +266,7 @@ export class NotasAjusteComprasService {
   async anular(id: string, motivo: string) {
     const nota = await this.findOne(id);
 
-    if (nota.estado !== EstadoNotaCompra.ISSUED) {
+    if (nota.estado !== EstadoNotaCompra.REGISTERED) {
       throw new BadRequestException('Solo se pueden anular notas registradas');
     }
 
@@ -383,7 +390,7 @@ export class NotasAjusteComprasService {
 
       if (updateDto.motivo) updatePayload.motivo = updateDto.motivo;
       if (updateDto.metodoPago) updatePayload.metodoPago = updateDto.metodoPago;
-      if (updateDto.fecha) updatePayload.fecha = new Date(updateDto.fecha);
+      if (updateDto.fecha) updatePayload.fecha = updateDto.fecha;
       if (updateDto.observaciones) updatePayload.observaciones = updateDto.observaciones;
       if (updateDto.esReembolsoAbono !== undefined) updatePayload.esReembolsoAbono = updateDto.esReembolsoAbono;
       if (updateDto.formaPago) updatePayload.formaPago = updateDto.formaPago;
@@ -421,7 +428,7 @@ export class NotasAjusteComprasService {
       where: {
         facturaOriginalId: facturaId,
         tipo: TipoNotaCompra.CREDITO,
-        estado: In([EstadoNotaCompra.ISSUED, EstadoNotaCompra.ERROR_ASIENTO])
+        estado: In([EstadoNotaCompra.REGISTERED, EstadoNotaCompra.ERROR_ASIENTO])
       }
     });
     return notasCredito.reduce((sum, nota) => sum + Number(nota.total), 0);
@@ -430,7 +437,7 @@ export class NotasAjusteComprasService {
   async reintentarAsiento(id: string): Promise<NotaAjusteCompra> {
     const nota = await this.findOne(id);
 
-    if (nota.estado !== EstadoNotaCompra.ERROR_ASIENTO && nota.estado !== EstadoNotaCompra.ISSUED) {
+    if (nota.estado !== EstadoNotaCompra.ERROR_ASIENTO && nota.estado !== EstadoNotaCompra.REGISTERED) {
       throw new BadRequestException('Solo se puede reintentar el asiento para notas registradas o con error de asiento');
     }
 
@@ -440,7 +447,7 @@ export class NotasAjusteComprasService {
       }
 
       await this.notaRepository.update(id, {
-        estado: EstadoNotaCompra.ISSUED,
+        estado: EstadoNotaCompra.REGISTERED,
         asientoError: null,
         fechaAsientoError: ''
       });
@@ -458,5 +465,15 @@ export class NotasAjusteComprasService {
       this.logger.error(`Falló reintento de asiento para nota compra ${nota.numeroCompleto || id}: ${error.message}`);
       throw new BadRequestException(`Error generando asiento: ${error.message}`);
     }
+  }
+
+  private async generateNotaNumber(tipo: TipoNotaCompra): Promise<string> {
+      const lastNota = await this.notaRepository.findOne({
+        where: { tipo },
+        order: { createdAt: 'DESC' }
+      });
+  
+      const lastNumber = lastNota?.numero ? parseInt(lastNota.numero) : 0;
+      return (lastNumber + 1).toString().padStart(8, '0');
   }
 }

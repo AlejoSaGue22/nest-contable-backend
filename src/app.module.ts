@@ -3,6 +3,8 @@ import { ClientesModule } from './clientes/clientes.module';
 import { UsersModule } from './users/users.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { FacturasVentasModule } from './facturas-ventas/facturas-ventas.module';
 import { RolesModule } from './core/roles/roles.module';
@@ -34,16 +36,20 @@ import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-co
 
 @Module({
     imports: [TypeOrmModule.forRoot({
-        type: 'mysql',
+        type: 'postgres',
         host: process.env.DB_HOST || 'localhost', 
-        port: Number(process.env.DB_PORT) || 3307,
+        port: Number(process.env.DB_PORT) || 5432,
         username: process.env.DB_USERNAME || 'root',     
-        password: process.env.DB_PASSWORD || 'root', 
+        password: process.env.DB_PASSWORD || '', 
         database: process.env.DB_DATABASE || 'finance_tejo',
-        // logging: true,
         autoLoadEntities: true,
-        synchronize: true // ⚠️ nunca true en producción
+        synchronize: true,
     }),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{
+      ttl: Number(process.env.THROTTLE_TTL) || 60000,
+      limit: Number(process.env.THROTTLE_LIMIT) || 100,
+    }]),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

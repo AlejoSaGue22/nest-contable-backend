@@ -1,3 +1,3 @@
 export const jwtConstants = {
-  secret: 'ESTE ES MI CLAVE SECRETA PARA JWT',
+  secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
 };

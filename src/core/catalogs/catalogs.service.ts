@@ -298,9 +298,40 @@ export class CatalogsService {
         for (const item of data) {
             const exists = await this.categoriasArticulosRepo.findOne({ where: { codigo: item.codigo } });
             if (!exists) {
+                // Buscar cuenta principal por código
+                const cuentaPrincipal = await this.cuentaContableRepo.findOne({ where: { codigo: item.cuentaPrincipalId } });
+                if (!cuentaPrincipal) {
+                    this.logger.warn(`⚠ Cuenta principal con código ${item.cuentaPrincipalId} no encontrada para categoría "${item.nombre}"`);
+                    continue;
+                }
+
+                // Buscar cuenta de inventario (puede ser 'N/A')
+                let cuentaInventario: CuentaContable | null = null;
+                if (item.cuentaInventarioId && item.cuentaInventarioId !== 'N/A') {
+                    cuentaInventario = await this.cuentaContableRepo.findOne({ where: { codigo: item.cuentaInventarioId } });
+                    if (!cuentaInventario) {
+                        this.logger.warn(`⚠ Cuenta inventario con código ${item.cuentaInventarioId} no encontrada para categoría "${item.nombre}"`);
+                    }
+                }
+
+                // Buscar cuenta de costo (puede ser 'N/A')
+                let cuentaCosto: CuentaContable | null = null;
+                if (item.cuentaCostoId && item.cuentaCostoId !== 'N/A') {
+                    cuentaCosto = await this.cuentaContableRepo.findOne({ where: { codigo: item.cuentaCostoId } });
+                    if (!cuentaCosto) {
+                        this.logger.warn(`⚠ Cuenta costo con código ${item.cuentaCostoId} no encontrada para categoría "${item.nombre}"`);
+                    }
+                }
+
                 await this.categoriasArticulosRepo.save({
-                    ...item,
-                    state: true
+                    codigo: item.codigo,
+                    nombre: item.nombre,
+                    tipo: item.tipo,
+                    descripcion: item.descripcion,
+                    cuentaPrincipal,
+                    ...(cuentaInventario && { cuentaInventario }),
+                    ...(cuentaCosto && { cuentaCosto }),
+                    state: true,
                 });
             }
         }

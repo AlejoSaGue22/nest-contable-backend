@@ -43,7 +43,6 @@ export class NotasAjusteService {
     await queryRunner.startTransaction();
  
     try {
-      // 1. Validar factura original
       const factura = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id: createDto.facturaOriginalId },
         relations: ['client']
@@ -53,13 +52,11 @@ export class NotasAjusteService {
         throw new NotFoundException('Factura original no encontrada');
       }
  
-      // Validar según tipo de factura
       if (factura.esElectronica() && factura.status !== InvoiceStatus.ACCEPTED) {
           throw new BadRequestException('Solo se pueden crear notas para facturas electrónicas aceptadas por DIAN');
       }
       
       if (!factura.esElectronica() && factura.status !== InvoiceStatus.ISSUED) {
-        // Para facturas estándar: debe estar emitida
           throw new BadRequestException('Solo se pueden crear notas para facturas estándar emitidas');
       }
 
@@ -121,7 +118,7 @@ export class NotasAjusteService {
         try {
           notaGuardada.items = itemsToSave;
           await this.asientosService.generarAsientoNotaAjuste(notaGuardada, notaGuardada.createdById);
-          this.logger.log(`Asiento contable generado automáticamente para nota credito ${notaGuardada.numeroCompleto}`);
+          this.logger.log(`Asiento contable generado automáticamente para notas credito ${notaGuardada.numeroCompleto}`);
 
         } catch (error) {
            await queryRunner.manager.update(NotaAjuste, 
