@@ -59,6 +59,7 @@ export class ArticulosService {
       isInventariable: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
       afectaInventario: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
       tipo: categoria.tipo,
+      impuestoId: createArticuloDto.impuesto,
       fullNameCategoria: categoria.nombre,
       categoriaArticuloId: categoria.id,
       unidadmedida: unidadmedida.id,

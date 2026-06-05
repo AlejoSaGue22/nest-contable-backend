@@ -1,14 +1,17 @@
+import { Transform } from "class-transformer";
 import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class CreateClienteDto {
 
     @IsString()
-    // @IsNotEmpty()
-    nombre: string;
+    @IsOptional()
+    @Transform(({ value }) => value === null ? '' : value)
+    nombre?: string;
 
     @IsString()
-    // @IsNotEmpty()
-    apellido: string;
+    @IsOptional()
+    @Transform(({ value }) => value === null ? '' : value)
+    apellido?: string;
 
     @IsNumber()
     @IsNotEmpty()
@@ -27,8 +30,9 @@ export class CreateClienteDto {
     tipoPersona: string;
 
     @IsString()
-    // @IsNotEmpty() 
-    razonSocial: string;
+    @IsOptional()
+    @Transform(({ value }) => value === null ? '' : value)
+    razonSocial?: string;
 
     @IsString()
     @IsNotEmpty()
@@ -44,9 +48,13 @@ export class CreateClienteDto {
     telefono: string;
 
     @IsEmail()
+    @IsOptional()
+    @Transform(({ value }) => value === null ? '' : value)
     email: string;
 
     @IsString()
+    @IsOptional()
+    @Transform(({ value }) => value === null ? '' : value)
     observacion: string;
 
     @IsString()

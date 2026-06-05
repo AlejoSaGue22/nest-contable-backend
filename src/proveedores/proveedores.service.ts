@@ -46,7 +46,7 @@ export class ProveedoresService {
         const proveedoresMap = proveedores.map((prov, indx) => {
             return {
                 ...prov,
-                fullName: prov.tipoPersona === 'PN' ? `${prov.nombre}` : prov.razonSocial,
+                fullName: prov.tipoPersona === 'PN' ? `${prov.nombre} ${prov.apellido}` : prov.razonSocial,
                 estado: prov.isActive == true ? 'Activo' : 'Inactivo',
                 ind: (indx + 1).toString()
             }
