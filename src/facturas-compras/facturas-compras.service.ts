@@ -16,6 +16,7 @@ import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { ComprasFilterDto } from './dto/compras-filter.dto';
 import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 
 
 @Injectable()
@@ -34,6 +35,9 @@ export class FacturasComprasService {
 
         @InjectRepository(Articulo)
         private articuloRepository: Repository<Articulo>,
+
+        @InjectRepository(Impuesto)
+        private impuestoRepository: Repository<Impuesto>,
 
         private dataSource: DataSource,
         private asientosContablesService: AsientosContablesService,
@@ -108,9 +112,23 @@ export class FacturasComprasService {
                 const itemSubtotal = MathUtil.sub(totalSinDescuento, descuentoValor);
 
                 const porcentajeIva = itemDto.iva || articulo.porcentajeIva;
+                let impuestoIdSeleccionado: string | undefined = undefined;
+
+                if (itemDto.impuestoId) {
+                    const impuesto = await queryRunner.manager.findOne(Impuesto, {
+                        where: { id: itemDto.impuestoId, activo: true }
+                    });
+                    if (!impuesto) {
+                        throw new NotFoundException(`Impuesto ${itemDto.impuestoId} no encontrado`);
+                    }
+                    impuestoIdSeleccionado = impuesto.id;
+                } else {
+                    impuestoIdSeleccionado = articulo.impuestoId || undefined;
+                }
+
                 const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
                 
-                // (itemSubtotal - descuentoValor) + valorIva
+                // (itemSubtotal - descuentoValor) + valorIva 
                 const itemTotal = MathUtil.sum(itemSubtotal, valorIva);
 
                 detalles.push({
@@ -119,6 +137,7 @@ export class FacturasComprasService {
                     unitPrice,
                     quantity: itemDto.quantity,
                     porcentajeIva,
+                    impuestoId: impuestoIdSeleccionado,
                     valorIva,
                     valorSubtotal: itemSubtotal,
                     descuento: itemDto.discount || 0,
@@ -294,7 +313,7 @@ export class FacturasComprasService {
         try {
             const factura = await this.facturaCompraRepository.findOne({
                 where: { id },
-                relations: ['proveedor', 'items', 'items.articulo', 'metodoPagoRel', 'createdBy']
+                relations: ['proveedor', 'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'createdBy']
             });
 
             if (!factura) {
@@ -594,6 +613,17 @@ export class FacturasComprasService {
             const porcentajeIva = Number(item.iva) || 0;
             const porcentajeDescuento = Number(item.discount) || 0;
 
+            let impuestoIdSeleccionado: string | undefined;
+            if (item.impuestoId) {
+                const impuesto = await queryRunner.manager.findOne(Impuesto, {
+                    where: { id: item.impuestoId, activo: true }
+                });
+                if (!impuesto) throw new NotFoundException(`Impuesto ${item.impuestoId} no encontrado`);
+                impuestoIdSeleccionado = impuesto.id;
+            } else {
+                impuestoIdSeleccionado = articulo.impuestoId || undefined;
+            }
+
             const itemSubtotal = MathUtil.mul(precioUnitario, cantidad);
             const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
             const descuentoValor = MathUtil.percentage(itemSubtotal, porcentajeDescuento);
@@ -607,6 +637,7 @@ export class FacturasComprasService {
                 quantity: cantidad,
                 unitPrice: precioUnitario,  
                 porcentajeIva: porcentajeIva,
+                impuestoId: impuestoIdSeleccionado,
                 descuento: porcentajeDescuento,
                 valorSubtotal: itemSubtotal,
                 valorIva: valorIva,

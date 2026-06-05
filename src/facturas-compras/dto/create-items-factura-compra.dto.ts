@@ -18,6 +18,10 @@ export class CreateFacturaCompraItemDto {
     @IsOptional()
     iva: number;
 
+    @IsString()
+    @IsOptional()
+    impuestoId?: string;
+
     @IsNumber()
     @IsOptional()
     discount: number;

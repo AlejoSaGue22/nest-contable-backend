@@ -73,8 +73,8 @@ export class NotasAjusteComprasController {
   @Patch(':id/reintentar-asiento')
   @Permissions(Permission.PURCHASE_UPDATE)
   @HttpCode(HttpStatus.OK)
-  async reintentarAsiento(@Param('id') id: string) {
-    const nota = await this.notasAjusteService.reintentarAsiento(id);
+  async reintentarAsiento(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const nota = await this.notasAjusteService.reintentarAsiento(id, req.user.sub);
     return toNotaAjusteCompraResponse(nota, 'Asiento contable generado exitosamente.');
   }
 

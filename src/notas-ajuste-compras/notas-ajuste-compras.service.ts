@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { NotaAjusteCompra } from './entities/notas-ajuste-compra.entity';
@@ -64,6 +64,8 @@ export class NotasAjusteComprasService {
 
       // 3. Generar número de nota solo si NO es borrador
       const isDraft = dto.isDraft || false;
+      console.log("IsDraft: ", isDraft);
+      console.log("IsDraft Dto: ", dto.isDraft);
       const numeroNota = isDraft ? '' : await this.generateNotaNumber(tipo);
 
       const nota = this.notaRepository.create({
@@ -93,19 +95,36 @@ export class NotasAjusteComprasService {
 
       for (const itemDto of dto.items) {
         const item = this.itemRepository.create({
-          notaId: notaGuardada.id,
-          articuloId: itemDto.articuloId,
-          impuestoId: itemDto.impuestoId,
-          cantidad: itemDto.cantidad,
-          valorUnitario: itemDto.valorUnitario,
-          porcentajeIVA: itemDto.porcentajeIVA || 0,
-          descuento: itemDto.descuento || 0,
-          subtotal: itemDto.subtotal,
-          total: itemDto.total,
-          valorDescuento: 0,
-          valorIVA: 0
+              notaId: notaGuardada.id,
+              articuloId: itemDto.articuloId,
+              impuestoId: itemDto.impuestoId,
+              cantidad: itemDto.cantidad,
+              valorUnitario: itemDto.valorUnitario,
+              porcentajeIVA: itemDto.porcentajeIVA || 0,
+              descuento: itemDto.descuento || 0,
+              subtotal: itemDto.subtotal,
+              total: itemDto.total,
+              valorDescuento: 0,
+              valorIVA: 0
         });
         await queryRunner.manager.save(ItemNotaAjusteCompra, item);
+      }
+
+      if (!isDraft) {
+        try {
+          await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada.id, userId);
+          this.logger.log(`Asiento contable generado para ${tipo} ${notaGuardada.numeroCompleto}`);
+        } catch (asientoError) {
+          await queryRunner.manager.update(NotaAjusteCompra,
+            { id: notaGuardada.id },
+            {
+              estado: EstadoNotaCompra.ERROR_ASIENTO,
+              asientoError: asientoError.message,
+              fechaAsientoError: new Date()
+            }
+          );
+          this.logger.error(`Error generando asiento para ${tipo}: ${asientoError.message}`);
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -241,7 +260,7 @@ export class NotasAjusteComprasService {
       // Generar asiento contable
       try {
         if (typeof this.asientosContablesService.generarAsientoNotaAjusteCompra === 'function') {
-           await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada.id);
+           await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada.id, userId);
         }
       } catch (error) {
         this.logger.error(`Error generando asiento contable para nota compra ${nota.id}: ${error.message}`);
@@ -434,7 +453,7 @@ export class NotasAjusteComprasService {
     return notasCredito.reduce((sum, nota) => sum + Number(nota.total), 0);
   }
 
-  async reintentarAsiento(id: string): Promise<NotaAjusteCompra> {
+  async reintentarAsiento(id: string, userId: string): Promise<NotaAjusteCompra> {
     const nota = await this.findOne(id);
 
     if (nota.estado !== EstadoNotaCompra.ERROR_ASIENTO && nota.estado !== EstadoNotaCompra.REGISTERED) {
@@ -443,7 +462,7 @@ export class NotasAjusteComprasService {
 
     try {
       if (typeof this.asientosContablesService.generarAsientoNotaAjusteCompra === 'function') {
-        await this.asientosContablesService.generarAsientoNotaAjusteCompra(nota.id);
+        await this.asientosContablesService.generarAsientoNotaAjusteCompra(nota.id, userId);
       }
 
       await this.notaRepository.update(id, {

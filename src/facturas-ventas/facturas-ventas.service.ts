@@ -14,6 +14,7 @@ import { AsientosContablesService } from 'src/asientos-contables/asientos-contab
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -31,6 +32,9 @@ export class FacturasVentasService {
 
     @InjectRepository(Articulo)
     private ArticuloRepository: Repository<Articulo>,
+
+    @InjectRepository(Impuesto)
+    private impuestoRepository: Repository<Impuesto>,
 
     private dataSource: DataSource,
 
@@ -148,7 +152,6 @@ export class FacturasVentasService {
               fechaAsientoError: new Date()
             }
           );
-            
         }
       }
 
@@ -361,7 +364,7 @@ export class FacturasVentasService {
       const invoice = await this.facturaVentaRepository.findOne({
         where: { id },
         relations: ['client', 'client.tipoDocumentoRel',
-                   'items', 'items.articulo', 'metodoPagoRel', 'canalVentaRel', 'createdBy'],
+                   'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'canalVentaRel', 'createdBy'],
       });
 
       if (!invoice) {
@@ -617,7 +620,7 @@ export class FacturasVentasService {
     for (const itemDto of items) {
       const product = await queryRunner.manager.findOne(Articulo, {
         where: { id: itemDto.articuloId },
-        relations: ['cuentaContable']
+        relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal']
       });
 
       if (!product) throw new NotFoundException(`Producto no encontrado: ${itemDto.articuloId}`);
@@ -639,7 +642,18 @@ export class FacturasVentasService {
 
       const taxRate = Number(itemDto.iva) || 0;
       const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
-      
+
+      let impuestoIdSeleccionado: string | undefined;
+      if (itemDto.impuestoId) {
+        const impuesto = await queryRunner.manager.findOne(Impuesto, {
+          where: { id: itemDto.impuestoId, activo: true }
+        });
+        if (!impuesto) throw new NotFoundException(`Impuesto ${itemDto.impuestoId} no encontrado`);
+        impuestoIdSeleccionado = impuesto.id;
+      } else {
+        impuestoIdSeleccionado = product.impuestoId || undefined;
+      }
+
       const itemTotal = MathUtil.sum(itemSubtotal, itemIva);
 
       itemsCalculados.push({
@@ -647,6 +661,7 @@ export class FacturasVentasService {
         description: itemDto.description || product.observacion,
         unitPrice,
         iva: taxRate,
+        impuestoId: impuestoIdSeleccionado,
         quantity,
         subtotal: itemSubtotal,
         valor_iva: itemIva,
@@ -676,7 +691,6 @@ export class FacturasVentasService {
     });
 
     console.log(`Last Invoice: ${lastInvoice}`);
-    console.log(`Last Number Comprobante: ${parseInt(lastInvoice!.comprobante)}`);
     const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante) : 0;
     return (lastNumber + 1).toString().padStart(8, '0');
   }

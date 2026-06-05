@@ -105,20 +105,17 @@ export class AsientosContablesService {
         }
 
         const cuentaId = producto.categoriaArticulo.cuentaPrincipalId;
-        ingresosAgrupados.set(
-          cuentaId,
-          (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,
-        );
+        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,);
 
         const valorIva = (item as any).valor_iva || 0;
         if (valorIva > 0) {
           let cuentaIvaId: string;
-          const ivaPorcentaje = item.iva || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
-            ivaPorcentaje,
-            'IVA',
-            'ventas',
-          );
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: item.impuestoId,
+            tarifa: item.iva || 0,
+            tipo: 'IVA',
+            operacion: 'ventas',
+          });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
           } else if (producto.impuestoRel?.cuentaVentasId) {
@@ -126,10 +123,7 @@ export class AsientosContablesService {
           } else {
             cuentaIvaId = '2408';
           }
-          ivaAgrupados.set(
-            cuentaIvaId,
-            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
-          );
+          ivaAgrupados.set(cuentaIvaId,(ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,);
         }
       }
 
@@ -241,12 +235,12 @@ export class AsientosContablesService {
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
-          const ivaPorcentaje = item.porcentajeIva || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
-            ivaPorcentaje,
-            'IVA',
-            'compras',
-          );
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.porcentajeIva || 0,
+            tipo: 'IVA',
+            operacion: 'compras',
+          });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
           } else if (articulo.impuestoRel?.cuentaComprasId) {
@@ -399,11 +393,12 @@ export class AsientosContablesService {
         if (valorIva > 0) {
           let cuentaIvaId: string;
           const ivaPorcentaje = item.iva || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
-            ivaPorcentaje,
-            'IVA',
-            'ventas',
-          );
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.iva || 0,
+            tipo: 'IVA',
+            operacion: 'ventas',
+          });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
           } else if (producto.impuestoRel?.cuentaVentasId) {
@@ -534,12 +529,12 @@ export class AsientosContablesService {
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
-          const ivaPorcentaje = item.porcentajeIva || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
-            ivaPorcentaje,
-            'IVA',
-            'compras',
-          );
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.porcentajeIva || 0,
+            tipo: 'IVA',
+            operacion: 'compras',
+          });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
           } else if (articulo.impuestoRel?.cuentaComprasId) {
@@ -686,11 +681,12 @@ export class AsientosContablesService {
         if (valorIva > 0) {
           let cuentaIvaId: string;
           const ivaPorcentaje = item.porcentajeIVA || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(
-            ivaPorcentaje,
-            'IVA',
-            'ventas',
-          );
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.porcentajeIVA || 0,
+            tipo: 'IVA',
+            operacion: 'ventas',
+          });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
           } else if (articulo.impuestoRel?.cuentaVentasId) {
@@ -1022,7 +1018,7 @@ export class AsientosContablesService {
     return asientoGuardado;
   }
 
-  async generarAsientoNotaAjusteCompra(notaId: string): Promise<AsientoContable> {
+  async generarAsientoNotaAjusteCompra(notaId: string, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1061,7 +1057,12 @@ export class AsientosContablesService {
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
           const ivaPorcentaje = item.porcentajeIVA || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(ivaPorcentaje, 'IVA', 'compras');
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.porcentajeIVA || 0,
+            tipo: 'IVA',
+            operacion: 'compras',
+          });
           let cuentaIvaId: string;
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
@@ -1124,7 +1125,7 @@ export class AsientosContablesService {
         referencia: nota.numeroCompleto,
         descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} Compra ${nota.numeroCompleto}`,
         detalles,
-        userId: nota.createdById,
+        userId,
       }, queryRunner);
 
       await queryRunner.commitTransaction();
@@ -1177,7 +1178,12 @@ export class AsientosContablesService {
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
           const ivaPorcentaje = item.porcentajeIVA || 0;
-          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto(ivaPorcentaje, 'IVA', 'compras');
+          const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
+            impuestoId: (item as any).impuestoId,
+            tarifa: item.porcentajeIVA || 0,
+            tipo: 'IVA',
+            operacion: 'compras',
+          });
           let cuentaIvaId: string;
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
@@ -1264,30 +1270,42 @@ export class AsientosContablesService {
   }
 
   /**
-   * Busca la cuenta contable configurada para un impuesto según su tarifa y tipo.
+   * Busca la cuenta contable configurada para un impuesto.
+   * Prioriza búsqueda por impuestoId (UUID), con fallback por tarifa + tipo.
    */
-  private async obtenerCuentaImpuesto(
-    tarifa: number,
-    tipo: string,
-    operacion: 'ventas' | 'compras',
-  ): Promise<CuentaContable> {
-    const impuesto = await this.impuestoRepository.findOne({
-      where: { tarifa, tipo, activo: true },
-      relations: ['cuentaVentas', 'cuentaCompras'],
-    });
+  private async obtenerCuentaImpuesto(params: {
+    impuestoId?: string;
+    tarifa?: number;
+    tipo?: string;
+    operacion: 'ventas' | 'compras';
+  }): Promise<CuentaContable> {
+    let impuesto: Impuesto | null = null;
 
-    if (operacion === 'ventas' && impuesto?.cuentaVentas) {
+    if (params.impuestoId) {
+      impuesto = await this.impuestoRepository.findOne({
+        where: { id: params.impuestoId, activo: true },
+        relations: ['cuentaVentas', 'cuentaCompras'],
+      });
+    }
+
+    if (!impuesto && params.tarifa !== undefined && params.tipo) {
+      impuesto = await this.impuestoRepository.findOne({
+        where: { tarifa: params.tarifa, tipo: params.tipo, activo: true },
+        relations: ['cuentaVentas', 'cuentaCompras'],
+      });
+    }
+
+    if (params.operacion === 'ventas' && impuesto?.cuentaVentas) {
       return impuesto.cuentaVentas;
     }
 
-    if (operacion === 'compras' && impuesto?.cuentaCompras) {
+    if (params.operacion === 'compras' && impuesto?.cuentaCompras) {
       return impuesto.cuentaCompras;
     }
 
-    // Fallback a cuentas estándar si no se encuentra configuración específica
-    const fallbackCodigo = operacion === 'ventas' ? '2408' : '1355';
+    const fallbackCodigo = params.operacion === 'ventas' ? '2408' : '1355';
     this.logger.warn(
-      `No se encontró configuración de cuenta para impuesto ${tipo} ${tarifa}%. Usando fallback ${fallbackCodigo}`,
+      `No se encontró configuración de cuenta para impuesto ${params.impuestoId || `${params.tipo} ${params.tarifa}%`}. Usando fallback ${fallbackCodigo}`,
     );
     return this.obtenerCuentaPorCodigo(fallbackCodigo);
   }

@@ -249,7 +249,7 @@ export class NotasAjusteService {
    */
   async emitir(id: string, userId: string): Promise<NotaAjuste> {
     const nota = await this.findOne(id);
- 
+  
     if (!nota.puedeEnviarse()) {
       throw new BadRequestException(`No se puede emitir una nota en estado ${nota.obtenerEstadoLegible()}`);
     }
@@ -266,13 +266,17 @@ export class NotasAjusteService {
         throw new BadRequestException(`Esta Nota Crédito excede el saldo disponible de la factura original.`);
       }
     }
- 
+  
     this.logger.log(`📤 Emitiendo ${nota.tipo} ${nota.numeroCompleto} a DIAN`);
     const numeroNota = await this.generateNotaNumber(nota.tipo);
- 
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+  
     try {
-      // 1. Cambiar estado
-      await this.notaRepository.update({ id }, {
+      // 1. Cambiar estado a SENT dentro de la transacción
+      await queryRunner.manager.update(NotaAjuste, { id }, {
         estado: EstadoNota.SENT,
         estadoDIAN: EstadoDIANNota.ENVIADA,
         fechaEnvioDIAN: new Date(),
@@ -291,7 +295,6 @@ export class NotasAjusteService {
           nota.items
         );
       } else {
-        // Nota débito
         respuesta = await this.factusService.crearNotaDebito(
           numeroNota,
           nota.facturaOriginal,
@@ -301,7 +304,7 @@ export class NotasAjusteService {
           nota.items
         );
       }
- 
+  
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
         const updateAceptada: Partial<NotaAjuste> = {
@@ -317,30 +320,27 @@ export class NotasAjusteService {
           prefijo: nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND',
           numero: numeroNota,
         };
- 
+  
         if (respuesta.numeroCompleto) {
           updateAceptada.numeroCompleto = respuesta.numeroCompleto;
         }
- 
+
         // Generar asiento contable
         try {
           await this.asientosService.generarAsientoNotaAjuste(nota, userId);
-          this.logger.log(`Asiento contable generado automáticamente para nota credito ${nota.numeroCompleto}`);
-
-        } catch (error) {
-              updateAceptada.estado = EstadoNota.ERROR_ASIENTO;
-              updateAceptada.asientoError = error.message;
-              updateAceptada.fechaAsientoError = new Date(); 
-              this.logger.error(`Error generando asiento contable NC: ${error.message}`);
+          this.logger.log(`Asiento contable generado automáticamente para ${nota.tipo} ${nota.numeroCompleto}`);
+        } catch (asientoError) {
+          updateAceptada.estado = EstadoNota.ERROR_ASIENTO;
+          updateAceptada.asientoError = asientoError.message;
+          updateAceptada.fechaAsientoError = new Date(); 
+          this.logger.error(`Error generando asiento contable para ${nota.tipo}: ${asientoError.message}`);
         }
-        // Notificar
-        // TODO: await this.notificacionesService.notificarNotaAceptada(nota);
 
-        await this.notaRepository.update({ id }, updateAceptada);
+        await queryRunner.manager.update(NotaAjuste, { id }, updateAceptada);
         this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: CUFE: ${respuesta.cufe} - CUDE: ${respuesta.cude}`);
- 
+  
       } else {
-        await this.notaRepository.update({ id }, {
+        await queryRunner.manager.update(NotaAjuste, { id }, {
           estado: EstadoNota.REJECTED,
           estadoDIAN: EstadoDIANNota.RECHAZADA,
           mensajeError: respuesta.mensaje,
@@ -350,28 +350,20 @@ export class NotasAjusteService {
         this.logger.error(`❌ ${nota.tipo} RECHAZADA: ${respuesta.mensaje}`);
       }
 
-      return nota;
- 
+      await queryRunner.commitTransaction();
+      return await this.findOne(id);
+  
     } catch (error) {
-      // Si el error ocurre después de intentar enviar, lo dejamos en estado SENT
-      // para que el usuario pueda sincronizar y no intente emitir de nuevo (evitando duplicados)
+      await queryRunner.rollbackTransaction();
       this.logger.error(`Error emitiendo nota ${id}: ${error.message}`);
-      
-      // Solo revertimos a borrador si NO se ha intentado enviar o si es un error de validación previo
-      if (error instanceof BadRequestException) {
-         this.notaRepository.update({ id }, {
-          estado: EstadoNota.DRAFT,
-          estadoDIAN: EstadoDIANNota.PENDIENTE,
-          mensajeError: error.message
-        });
-      } else {
-        // En caso de error inesperado/timeout, lo dejamos en SENT con el error registrado
-        this.notaRepository.update({ id }, {
-          mensajeError: `Error durante la emisión: ${error.message}. Por favor sincronice el estado.`
-        });
-      }
 
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
       throw new InternalServerErrorException(`Error al emitir la nota de ajuste: ${error.message}`);
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -462,7 +454,6 @@ export class NotasAjusteService {
       throw new BadRequestException(`Error al sincronizar con Factus: ${error.message}`);
     }
   }
-
  
   /**
    * Listar notas de ajuste
@@ -570,9 +561,7 @@ export class NotasAjusteService {
     const nota = await this.findOne(id);
 
     if (!nota.puedeEnviarse()) {
-      throw new BadRequestException(
-        'Solo se pueden modificar notas en estado borrador'
-      );
+      throw new BadRequestException('Solo se pueden modificar notas en estado borrador');
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -586,22 +575,22 @@ export class NotasAjusteService {
 
       // Si se actualizan items, recalcular y reemplazar
       if (updateDto.items && updateDto.items.length > 0) {
-        const calc = await this.calcularTotales(queryRunner, updateDto.items);
-        subtotal = calc.subtotal;
-        iva = calc.iva;
-        total = calc.total;
+          const calc = await this.calcularTotales(queryRunner, updateDto.items);
+          subtotal = calc.subtotal;
+          iva = calc.iva;
+          total = calc.total;
 
-        // 1. Eliminar items actuales
-        await queryRunner.manager.delete(ItemNotaAjuste, { notaId: id });
+          // 1. Eliminar items actuales
+          await queryRunner.manager.delete(ItemNotaAjuste, { notaId: id });
 
-        // 2. Crear nuevos items
-        const newItems = calc.itemsCalculados.map(item =>
-          queryRunner.manager.create(ItemNotaAjuste, {
-            ...item,
-            notaId: id
-          })
-        );
-        await queryRunner.manager.save(ItemNotaAjuste, newItems);
+          // 2. Crear nuevos items
+          const newItems = calc.itemsCalculados.map(item =>
+            queryRunner.manager.create(ItemNotaAjuste, {
+              ...item,
+              notaId: id
+            })
+          );
+          await queryRunner.manager.save(ItemNotaAjuste, newItems);
       }
 
       // 3. Preparar payload de actualización para la nota

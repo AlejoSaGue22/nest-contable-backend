@@ -2,6 +2,7 @@ import { Articulo } from "src/articulos/entities/articulos.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { FacturaCompra } from "./factura-compra.entity";
+import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 
 @Entity('facturas_compras_detalles')
 export class FacturaCompraDetalle {
@@ -32,6 +33,13 @@ export class FacturaCompraDetalle {
 
     @Column('decimal', { precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     porcentajeIva: number;
+
+    @Column({ type: 'uuid', nullable: true })
+    impuestoId?: string;
+
+    @ManyToOne(() => Impuesto, { eager: true, nullable: true })
+    @JoinColumn({ name: 'impuestoId' })
+    impuestoRel?: Impuesto;
 
     @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
     valorIva: number;

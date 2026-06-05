@@ -94,15 +94,15 @@ export class AppModule implements OnModuleInit {
 
   async onModuleInit() {
     // Seed roles por defecto
-    await this.rolesService.seedDefaultRoles();
+    // await this.rolesService.seedDefaultRoles();
 
     // Seed menu por defecto
     // await this.menuService.seedDefaultMenu();
 
-    await this.cuentasService.seedCuentasBasicasSincronizacion(this.datasource)
+    // await this.cuentasService.seedCuentasBasicasSincronizacion(this.datasource)
 
     // Seed impuestos por defecto
-    await this.impuestosService.seedDefaultTaxes();
+    // await this.impuestosService.seedDefaultTaxes();
 
     // Seed municipios si está vacío
     const municipiosCount = (await this.municipalitiesService.findAll()).length;
