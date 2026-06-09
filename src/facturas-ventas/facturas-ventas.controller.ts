@@ -60,6 +60,12 @@ export class FacturasVentasController {
     return toInvoiceResponse(invoice, 'Factura emitida exitosamente');
   }
 
+  @Post(':id/emitir-estandar')
+  async emitirEstandar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const invoice = await this.facturasVentasService.emitirEstandar(id, req.user.sub);
+    return toInvoiceResponse(invoice, 'Factura estándar emitida exitosamente');
+  }
+
   @Post(':id/reintentar')
   async reintentar(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const invoice = await this.facturasVentasService.reintentarEnvio(id, req.user.sub);

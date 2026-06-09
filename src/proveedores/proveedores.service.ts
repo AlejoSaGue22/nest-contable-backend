@@ -15,17 +15,14 @@ export class ProveedoresService {
         @InjectRepository(TipoDocumento)
         private readonly tipoDocumentoRepo: Repository<TipoDocumento>
     ) { }
-
-    create(createProveedorDto: CreateProveedorDto) {
-        const { nombre, apellido, ...rest } = createProveedorDto;
-
+    async create(createProveedorDto: CreateProveedorDto) {
         const proveedor = this.proveedorRepository.create({
-            ...rest,
-            nombre: `${nombre} ${apellido}`,
+            ...createProveedorDto,
             isActive: true
         });
-
-        return this.proveedorRepository.save(proveedor);
+        const saved = await this.proveedorRepository.save(proveedor);
+        const result = await this.findOne(saved.id);
+        return result;
     }
 
     async findAll(options: PaginatioDto) {

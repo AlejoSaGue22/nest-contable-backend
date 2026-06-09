@@ -236,7 +236,7 @@ export class AsientosContablesService {
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: item.impuestoId,
             tarifa: item.porcentajeIva || 0,
             tipo: 'IVA',
             operacion: 'compras',
@@ -641,10 +641,7 @@ export class AsientosContablesService {
   // NC (CRÉDITO): DÉBITO Ingresos (xArt) + IVA 2408 | CRÉDITO Clientes 1305 / Caja-Bancos
   // ND (DÉBITO):  DÉBITO Clientes 1305 / Caja-Bancos | CRÉDITO Ingresos (xArt) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoNotaAjuste(
-    nota: NotaAjuste,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoNotaAjuste(nota: NotaAjuste, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -728,8 +725,7 @@ export class AsientosContablesService {
         ? this.resolverCuentaContado(factura.metodoPago!)
         : '1305';
 
-      const cuentaContra =
-        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       detalles.push({
         cuentaId: cuentaContra.id,
@@ -1018,19 +1014,12 @@ export class AsientosContablesService {
     return asientoGuardado;
   }
 
-  async generarAsientoNotaAjusteCompra(notaId: string, userId: string): Promise<AsientoContable> {
+  async generarAsientoNotaAjusteCompra(nota: NotaAjusteCompra, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    try {
-      const nota = await queryRunner.manager.findOne(NotaAjusteCompra, {
-        where: { id: notaId },
-        relations: ['facturaOriginal', 'items']
-      });
-
-      if (!nota) throw new Error(`Nota de ajuste compra ${notaId} no encontrada`);
-
+    try {      
       const factura = nota.facturaOriginal;
       const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
       const detalles: DetalleAsiento[] = [];
@@ -1267,6 +1256,115 @@ export class AsientosContablesService {
       throw new Error(`Cuenta contable '${codigo}' no encontrada o inactiva`);
     }
     return cuenta;
+  }
+
+  async generarAsientoSaldoInicial(params: {
+    nombreCuenta: string;
+    monto: number;
+    cuentaContrapartidaCodigo: string;
+    userId: string;
+  }): Promise<AsientoContable> {
+    const { nombreCuenta, monto, cuentaContrapartidaCodigo, userId } = params;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const cuentaBancos = await this.obtenerCuentaPorCodigo('1110');
+      const cuentaContrapartida = await this.obtenerCuentaPorCodigo(cuentaContrapartidaCodigo);
+
+      const detalles: DetalleAsiento[] = [
+        {
+          cuentaId: cuentaBancos.id,
+          debito: monto,
+          credito: 0,
+          descripcion: `Saldo inicial - ${nombreCuenta}`,
+        },
+        {
+          cuentaId: cuentaContrapartida.id,
+          debito: 0,
+          credito: monto,
+          descripcion: `Contrapartida saldo inicial - ${nombreCuenta}`,
+        },
+      ];
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.SALDO_INICIAL_BANCO,
+          fecha: new Date(),
+          referencia: nombreCuenta,
+          descripcion: `Saldo inicial de cuenta bancaria ${nombreCuenta} por $${monto.toLocaleString('es-CO')}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento SALDO_INICIAL generado: ${asiento.numero} | $${monto} | ${nombreCuenta}`);
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento saldo inicial: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de saldo inicial: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async generarAsientoTransferencia(params: {
+    nombreOrigen: string;
+    nombreDestino: string;
+    monto: number;
+    userId: string;
+  }): Promise<AsientoContable> {
+    const { nombreOrigen, nombreDestino, monto, userId } = params;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const cuentaBancos = await this.obtenerCuentaPorCodigo('1110');
+
+      const detalles: DetalleAsiento[] = [
+        {
+          cuentaId: cuentaBancos.id,
+          debito: monto,
+          credito: 0,
+          descripcion: `Transferencia recibida - ${nombreDestino}`,
+        },
+        {
+          cuentaId: cuentaBancos.id,
+          debito: 0,
+          credito: monto,
+          descripcion: `Transferencia enviada - ${nombreOrigen}`,
+        },
+      ];
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.TRANSFERENCIA_BANCARIA,
+          fecha: new Date(),
+          referencia: `${nombreOrigen} -> ${nombreDestino}`,
+          descripcion: `Transferencia de ${nombreOrigen} a ${nombreDestino} por $${monto.toLocaleString('es-CO')}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento TRANSFERENCIA generado: ${asiento.numero} | $${monto} | ${nombreOrigen} -> ${nombreDestino}`);
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento transferencia: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de transferencia: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**

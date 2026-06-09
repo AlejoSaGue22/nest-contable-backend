@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { CreateItemsFacturasVentaDto } from "./create-items-facturas-venta.dto";
 import { Type } from "class-transformer";
 import { FormaPago, TipoFactura } from "../enums/factura-venta.enum";
@@ -58,6 +58,9 @@ export class CreateFacturasVentaDto {
     @IsNotEmpty()
     total: number;
 
+    @IsBoolean()
+    @IsOptional()
+    saveAsDraft?: boolean;
 
 }
 

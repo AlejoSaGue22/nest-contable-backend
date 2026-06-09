@@ -4,7 +4,7 @@ import { UpdateFacturasVentaDto } from './dto/update-facturas-venta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturasVenta} from './entities/facturas-venta.entity';
 import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from './enums/factura-venta.enum';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
@@ -57,7 +57,7 @@ export class FacturasVentasService {
         throw new NotFoundException('Cliente no encontrado');
       }
 
-      if(createFacturasVentaDto.fechaVencimiento){
+      if(createFacturasVentaDto.fechaVencimiento && createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA){
         const fechaVencimiento = new Date(createFacturasVentaDto.fechaVencimiento);
         if(fechaVencimiento < new Date()){
           throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
@@ -84,7 +84,8 @@ export class FacturasVentasService {
 
       const { items, ...createDtoRest } = createFacturasVentaDto;
 
-      const statusInvoice = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT 
+      const statusInvoice = createFacturasVentaDto.saveAsDraft === true ? InvoiceStatus.DRAFT
+                            : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA ? InvoiceStatus.DRAFT 
                             : InvoiceStatus.ISSUED;
       // ⭐ Determinar estado de pago según si es borrador o no
       let paymentStatus: PaymentStatus;
@@ -138,7 +139,7 @@ export class FacturasVentasService {
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
 
       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
-      if (savedInvoice.tipoFactura === TipoFactura.STANDARD) {
+      if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
           savedInvoice.items = itemsToSave;
           await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
@@ -511,6 +512,84 @@ export class FacturasVentasService {
     return await this.emitir(id, userId);
   }
 
+  async emitirEstandar(id: string, userId: string): Promise<FacturasVenta> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const factura = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items', 'client'],
+      });
+
+      if (!factura) {
+        throw new NotFoundException('Factura no encontrada');
+      }
+
+      if (factura.tipoFactura !== TipoFactura.STANDARD) {
+        throw new BadRequestException('Solo se pueden emitir facturas estándar desde borrador');
+      }
+
+      if (factura.status !== InvoiceStatus.DRAFT) {
+        throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
+      }
+
+      const numberFactura = await this.generateInvoiceNumber();
+      const prefijo = 'FV';
+
+      const paymentStatus = factura.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
+      const saldoPendiente = factura.formaPago === FormaPago.CREDITO ? factura.total : 0;
+      const totalPagado = factura.formaPago === FormaPago.CREDITO ? 0 : factura.total;
+
+      await queryRunner.manager.update(FacturasVenta, { id }, {
+        status: InvoiceStatus.ISSUED,
+        paymentStatus,
+        saldoPendiente,
+        totalPagado,
+        dianStatus: DianStatus.ACCEPTED,
+        prefijo,
+        comprobante: numberFactura,
+        comprobante_completo: `${prefijo}-${numberFactura}`,
+      });
+
+      const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items', 'client'],
+      });
+
+      if (!updatedInvoice) {
+        throw new NotFoundException('Factura no encontrada');
+      }
+
+      try {
+        await this.asientosContablesService.generarAsientoFacturaVenta(updatedInvoice, userId);
+        this.logger.log(`Asiento contable generado para factura estándar ${updatedInvoice.comprobante_completo}`);
+      } catch (asientoError) {
+        await queryRunner.manager.update(FacturasVenta, { id }, {
+          status: InvoiceStatus.ERROR_ASIENTO,
+          asientoError: asientoError.message,
+          fechaAsientoError: new Date(),
+        });
+        this.logger.error(`Error generando asiento contable para factura estándar: ${asientoError.message}`);
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Factura estándar emitida: ${updatedInvoice.comprobante_completo}`);
+      return await this.findOne(id);
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error emitiendo factura estándar: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Error al emitir factura estándar: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async registrarPago(id: string, metodoPago: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
     if (!factura.estaAceptada() && factura.tipoFactura === TipoFactura.ELECTRONICA) {
@@ -686,13 +765,15 @@ export class FacturasVentasService {
 
   private async generateInvoiceNumber(): Promise<string> {
     const lastInvoice = await this.facturaVentaRepository.findOne({
-      where: {},
+      where: {
+        comprobante: Not(''),
+      },
       order: { createdAt: 'DESC' },
     });
 
-    console.log(`Last Invoice: ${lastInvoice}`);
-    const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante) : 0;
-    return (lastNumber + 1).toString().padStart(8, '0');
+    const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante, 10) : 0;
+    const nextNumber = isNaN(lastNumber) ? 0 : lastNumber;
+    return (nextNumber + 1).toString().padStart(8, '0');
   }
 
   async reintentarAsiento(id: string, userId: string): Promise<FacturasVenta> {

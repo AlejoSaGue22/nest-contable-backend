@@ -113,7 +113,6 @@ export class FacturasComprasService {
 
                 const porcentajeIva = itemDto.iva || articulo.porcentajeIva;
                 let impuestoIdSeleccionado: string | undefined = undefined;
-
                 if (itemDto.impuestoId) {
                     const impuesto = await queryRunner.manager.findOne(Impuesto, {
                         where: { id: itemDto.impuestoId, activo: true }
@@ -152,14 +151,14 @@ export class FacturasComprasService {
 
             const total = MathUtil.sum(subtotal, totalIva);
             const isDraft = createFacturaCompraDto.isDraft;
-            const numero = isDraft == 'draft' ? null : await this.generarNumeroGasto(queryRunner);
+            const numero = isDraft == true ? null : await this.generarNumeroGasto(queryRunner);
 
             // ⭐ Determinar estado de pago según si es borrador o no
             let paymentStatus: PaymentStatus;
             let saldoPendiente: number;
             let totalPagado: number;
 
-            if (isDraft == 'draft') {
+            if (isDraft == true) {
               // Para BORRADORES: siempre PENDING con saldo = 0
               paymentStatus = PaymentStatus.PENDING;
               saldoPendiente = 0;
@@ -188,7 +187,7 @@ export class FacturasComprasService {
                 iva: totalIva,
                 descuento,
                 total,
-                estado: isDraft == 'draft' ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
+                estado: isDraft == true ? GastoEstado.BORRADOR : GastoEstado.REGISTRADO,
                 paymentStatus,
                 saldoPendiente,
                 totalPagado,
@@ -207,10 +206,9 @@ export class FacturasComprasService {
 
 
             // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO
-            console.log('isDraft', isDraft);
             if (!isDraft) {
-                console.log('isDraft2', isDraft);
                 try {
+                    gastoGuardado.items = itemsToSave
                     await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
                     this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
                 } catch (asientoError) {
@@ -416,7 +414,7 @@ export class FacturasComprasService {
         // ✅ Validar: no anular si tiene pagos parciales registrados
         if (factura.paymentStatus === PaymentStatus.PARTIAL || factura.paymentStatus === PaymentStatus.PAID) {
             throw new BadRequestException(
-                'No se puede anular una factura de compra con pagos registrados.'
+                'No se puede anular una factura de compra pagada o con pagos registrados.'
             );
         }
 

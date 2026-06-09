@@ -56,11 +56,12 @@ export class ArticulosService {
     // Crear artículo con cuentas automáticas
     const articulo = this.articulosRepository.create({
       ...createArticuloDto,
-      isInventariable: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
-      afectaInventario: createArticuloDto.isInventariable !== undefined ? createArticuloDto.isInventariable : true,
+      isInventariable: createArticuloDto.isInventariable ? createArticuloDto.isInventariable : true,
       tipo: categoria.tipo,
       impuestoId: createArticuloDto.impuesto,
       fullNameCategoria: categoria.nombre,
+      precio: createArticuloDto.precio || 0,
+      precioventa2: createArticuloDto.precioventa2 || 0,
       categoriaArticuloId: categoria.id,
       unidadmedida: unidadmedida.id,
       unidadmedidaRel: unidadmedida,
@@ -183,7 +184,7 @@ export class ArticulosService {
     }
 
     if (updateArticuloDto.isInventariable !== undefined) {
-      articulo.afectaInventario = updateArticuloDto.isInventariable;
+      articulo.isInventariable = updateArticuloDto.isInventariable;
     }
 
     const updatedArticulo = this.articulosRepository.merge(articulo, updateArticuloDto);

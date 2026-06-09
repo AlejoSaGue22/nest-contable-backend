@@ -18,9 +18,9 @@ export class ClientesService {
   ) { }
 
   async create(createClienteDto: CreateClienteDto) {
-    const cliente = this.clientesRepository.create(createClienteDto)
-
-    return await this.clientesRepository.save(cliente);
+    const cliente = this.clientesRepository.create(createClienteDto);
+    const saved = await this.clientesRepository.save(cliente);
+    return this.findOne(saved.id);
   }
 
   async findAll(options: PaginatioDto) {

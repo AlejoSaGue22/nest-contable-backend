@@ -23,7 +23,7 @@ export class Articulo {
     @Column({ nullable: true, unique: true })
     nombre: string;
 
-    @Column()
+    @Column({ nullable: true })
     observacion: string;
 
     @Column({ type: 'enum', enum: ArticuloTipo })
@@ -61,9 +61,6 @@ export class Articulo {
 
     @Column({ default: 0 })
     precioventa2: number;
-
-    @Column({ default: true })
-    afectaInventario: boolean;
 
     @Column({ default: true })
     isInventariable: boolean;

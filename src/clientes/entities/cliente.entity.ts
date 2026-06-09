@@ -52,11 +52,8 @@ export class Cliente {
     @Column()
     observacion: string;
 
-    @Column()
+    @Column({ comment: 'Indica si el cliente es responsable de IVA S=Si, N=No' })
     tributo: string;
-
-    @Column()
-    responsableFiscal: string;
 
     @Column('bool', { default: true })
     isActive: boolean;

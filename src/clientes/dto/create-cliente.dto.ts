@@ -61,8 +61,4 @@ export class CreateClienteDto {
     @IsNotEmpty()
     tributo: string;
 
-    @IsString()
-    @IsNotEmpty()
-    responsableFiscal: string;
-
 }

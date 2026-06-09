@@ -9,6 +9,7 @@ import { UpdateNotasAjusteCompraDto } from './dto/update-notas-ajuste-compra.dto
 import { TipoNotaCompra, EstadoNotaCompra } from './enums/notas-ajuste-compra.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { PaymentStatus } from 'src/pagos/enums/pago.enum';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class NotasAjusteComprasService {
@@ -34,41 +35,45 @@ export class NotasAjusteComprasService {
   }
 
   private async crearNota(dto: CreateNotasAjusteCompraDto, userId: string, tipo: TipoNotaCompra) {
-    const factura = await this.facturaRepository.findOne({
-      where: { id: dto.facturaOriginalId },
-      relations: ['proveedor']
-    });
-
-    if (!factura) {
-      throw new NotFoundException(`Factura de compra con ID ${dto.facturaOriginalId} no encontrada`);
-    }
-
-    if (factura.estado !== GastoEstado.REGISTRADO) {
-        throw new BadRequestException('Solo se pueden crear notas para facturas registradas');
-    }
-
+    this.logger.log(`📝 Creando Nota ${tipo} para factura ${dto.facturaOriginalId}`);
+ 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      const factura = await queryRunner.manager.findOne(FacturaCompra, {
+        where: { id: dto.facturaOriginalId },
+        relations: ['proveedor']
+      });
+
+      if (!factura) {
+        throw new NotFoundException(`Factura de compra con ID ${dto.facturaOriginalId} no encontrada`);
+      }
+
+      if (factura.estado !== GastoEstado.REGISTRADO) {
+          throw new BadRequestException('Solo se pueden crear notas para facturas registradas');
+      }
+
       // Validar que el total de la NC crédito no exceda el saldo de la factura
+      let saldoDisponible = 0;
       if (tipo === TipoNotaCompra.CREDITO) {
         const totalNotasCredito = await this.calcularTotalNotasCredito(factura.id);
-        const saldoDisponible = Number(factura.total) - totalNotasCredito;
-        const totalNueva = Number(dto.total || 0);
-        if (totalNueva > saldoDisponible) {
-          throw new BadRequestException(`El total de la nota crédito ($${totalNueva}) excede el saldo disponible de la factura ($${saldoDisponible})`);
-        }
+        saldoDisponible = Number(factura.total) - totalNotasCredito;
+      }
+      
+      const { subtotal, iva, total, itemsCalculados } = await this.calcularTotales(dto.items);
+
+      if (tipo === TipoNotaCompra.CREDITO && total > saldoDisponible) {
+        throw new BadRequestException(`El total de la nota crédito ($${total}) excede el saldo disponible de la factura ($${saldoDisponible})`);
       }
 
       // 3. Generar número de nota solo si NO es borrador
       const isDraft = dto.isDraft || false;
-      console.log("IsDraft: ", isDraft);
-      console.log("IsDraft Dto: ", dto.isDraft);
       const numeroNota = isDraft ? '' : await this.generateNotaNumber(tipo);
 
-      const nota = this.notaRepository.create({
+      // 4. Crear nota
+      const nota = queryRunner.manager.create(NotaAjusteCompra, {
         tipo,
         prefijo: numeroNota ? tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC' : '',
         numero: numeroNota,
@@ -81,11 +86,11 @@ export class NotasAjusteComprasService {
         metodoPago: dto.metodoPago || null,
         esReembolsoAbono: dto.esReembolsoAbono || false,
         fecha: dto.fecha,
-        subtotal: dto.subtotal || 0,
-        iva: dto.iva || 0,
+        subtotal,
+        iva,
         descuento: dto.descuento || 0,
-        total: dto.total || 0,
-        saldoPendiente: dto.total || 0,
+        total,
+        saldoPendiente: total,
         estado: isDraft ? EstadoNotaCompra.DRAFT : EstadoNotaCompra.REGISTERED,
         observaciones: dto.observaciones,
         createdById: userId
@@ -93,27 +98,21 @@ export class NotasAjusteComprasService {
 
       const notaGuardada = await queryRunner.manager.save(NotaAjusteCompra, nota);
 
-      for (const itemDto of dto.items) {
-        const item = this.itemRepository.create({
-              notaId: notaGuardada.id,
-              articuloId: itemDto.articuloId,
-              impuestoId: itemDto.impuestoId,
-              cantidad: itemDto.cantidad,
-              valorUnitario: itemDto.valorUnitario,
-              porcentajeIVA: itemDto.porcentajeIVA || 0,
-              descuento: itemDto.descuento || 0,
-              subtotal: itemDto.subtotal,
-              total: itemDto.total,
-              valorDescuento: 0,
-              valorIVA: 0
-        });
-        await queryRunner.manager.save(ItemNotaAjusteCompra, item);
-      }
+      const itemsToSave = itemsCalculados.map(item => 
+        queryRunner.manager.create(ItemNotaAjusteCompra, {
+          ...item,
+          notaId: notaGuardada.id
+        })
+      );
+
+      await queryRunner.manager.save(ItemNotaAjusteCompra, itemsToSave);
 
       if (!isDraft) {
         try {
-          await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada.id, userId);
-          this.logger.log(`Asiento contable generado para ${tipo} ${notaGuardada.numeroCompleto}`);
+          notaGuardada.items = itemsToSave;
+          notaGuardada.facturaOriginal = factura;
+          await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada, userId);
+          this.logger.log(`Asiento contable generado automáticamente para ${tipo} ${notaGuardada.numeroCompleto}`);
         } catch (asientoError) {
           await queryRunner.manager.update(NotaAjusteCompra,
             { id: notaGuardada.id },
@@ -123,16 +122,25 @@ export class NotasAjusteComprasService {
               fechaAsientoError: new Date()
             }
           );
-          this.logger.error(`Error generando asiento para ${tipo}: ${asientoError.message}`);
+          this.logger.error(`Error generando asiento contable para ${tipo}: ${asientoError.message}`);
         }
       }
 
       await queryRunner.commitTransaction();
-      return this.findOne(notaGuardada.id);
+ 
+      this.logger.log(`✅ Nota ${tipo} ${notaGuardada.numeroCompleto || 'en borrador'} creada exitosamente`);
+ 
+      return await this.findOne(notaGuardada.id);
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error al crear nota de ajuste compra: ${error.message}`, error.stack);
-      throw error;
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+ 
+      throw new InternalServerErrorException('Error al crear la nota de ajuste de compra');
     } finally {
       await queryRunner.release();
     }
@@ -260,7 +268,7 @@ export class NotasAjusteComprasService {
       // Generar asiento contable
       try {
         if (typeof this.asientosContablesService.generarAsientoNotaAjusteCompra === 'function') {
-           await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada.id, userId);
+           await this.asientosContablesService.generarAsientoNotaAjusteCompra(notaGuardada, userId);
         }
       } catch (error) {
         this.logger.error(`Error generando asiento contable para nota compra ${nota.id}: ${error.message}`);
@@ -373,30 +381,22 @@ export class NotasAjusteComprasService {
 
       // Si se actualizan items, recalcular y reemplazar
       if (updateDto.items && updateDto.items.length > 0) {
-        subtotal = Number(updateDto.subtotal || 0);
-        iva = Number(updateDto.iva || 0);
-        total = Number(updateDto.total || 0);
+          const calc = await this.calcularTotales(updateDto.items);
+          subtotal = calc.subtotal;
+          iva = calc.iva;
+          total = calc.total;
 
-        // Eliminar items actuales
-        await queryRunner.manager.delete(ItemNotaAjusteCompra, { notaId: id });
+          // 1. Eliminar items actuales
+          await queryRunner.manager.delete(ItemNotaAjusteCompra, { notaId: id });
 
-        // Crear nuevos items
-        for (const itemDto of updateDto.items) {
-          const item = this.itemRepository.create({
-            notaId: id,
-            articuloId: itemDto.articuloId,
-            impuestoId: itemDto.impuestoId,
-            cantidad: itemDto.cantidad,
-            valorUnitario: itemDto.valorUnitario,
-            porcentajeIVA: itemDto.porcentajeIVA || 0,
-            descuento: itemDto.descuento || 0,
-            subtotal: itemDto.subtotal,
-            total: itemDto.total,
-            valorDescuento: 0,
-            valorIVA: 0
-          });
-          await queryRunner.manager.save(ItemNotaAjusteCompra, item);
-        }
+          // 2. Crear nuevos items
+          const newItems = calc.itemsCalculados.map(item =>
+            queryRunner.manager.create(ItemNotaAjusteCompra, {
+              ...item,
+              notaId: id
+            })
+          );
+          await queryRunner.manager.save(ItemNotaAjusteCompra, newItems);
       }
 
       // Actualizar campos de la nota
@@ -462,7 +462,7 @@ export class NotasAjusteComprasService {
 
     try {
       if (typeof this.asientosContablesService.generarAsientoNotaAjusteCompra === 'function') {
-        await this.asientosContablesService.generarAsientoNotaAjusteCompra(nota.id, userId);
+        await this.asientosContablesService.generarAsientoNotaAjusteCompra(nota, userId);
       }
 
       await this.notaRepository.update(id, {
@@ -484,6 +484,50 @@ export class NotasAjusteComprasService {
       this.logger.error(`Falló reintento de asiento para nota compra ${nota.numeroCompleto || id}: ${error.message}`);
       throw new BadRequestException(`Error generando asiento: ${error.message}`);
     }
+  }
+
+  private async calcularTotales(items: any[]): Promise<{
+    subtotal: number;
+    iva: number;
+    total: number;
+    itemsCalculados: Partial<ItemNotaAjusteCompra>[];
+  }> {
+    let subtotal = 0;
+    let iva = 0;
+    let total = 0;
+    const itemsCalculados: Partial<ItemNotaAjusteCompra>[] = [];
+ 
+    for (const itemDto of items) {
+      const cantidad = Number(itemDto.cantidad);
+      const valorUnitario = Number(itemDto.valorUnitario);
+      const porcentajeIVA = Number(itemDto.porcentajeIVA || 0);
+      const descuento = Number(itemDto.descuento || 0);
+      
+      const itemSubtotalSinDescuento = MathUtil.mul(valorUnitario, cantidad);
+      const valorDescuento = MathUtil.percentage(itemSubtotalSinDescuento, descuento);
+      const itemSubtotal = MathUtil.sub(itemSubtotalSinDescuento, valorDescuento);
+      const itemIVA = MathUtil.percentage(itemSubtotal, porcentajeIVA);
+      const itemTotal = MathUtil.sum(itemSubtotal, itemIVA);
+ 
+      itemsCalculados.push({
+        articuloId: itemDto.articuloId,
+        impuestoId: itemDto.impuestoId || null,
+        valorUnitario,
+        porcentajeIVA,
+        cantidad,
+        subtotal: itemSubtotal,
+        valorIVA: itemIVA,
+        descuento: descuento,
+        valorDescuento: valorDescuento,
+        total: itemTotal,
+      });
+ 
+      subtotal = MathUtil.sum(subtotal, itemSubtotal);
+      iva = MathUtil.sum(iva, itemIVA);
+      total = MathUtil.sum(total, itemTotal);
+    }
+ 
+    return { subtotal, iva, total, itemsCalculados };
   }
 
   private async generateNotaNumber(tipo: TipoNotaCompra): Promise<string> {

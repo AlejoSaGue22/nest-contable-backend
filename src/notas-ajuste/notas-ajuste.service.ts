@@ -65,8 +65,7 @@ export class NotasAjusteService {
       const totalNotasCredito = await this.calcularTotalNotasCredito(factura.id);
       saldoDisponible = Number(factura.total) - totalNotasCredito;
       
-      const { subtotal, iva, total, itemsCalculados } = 
-        await this.calcularTotales(queryRunner, createDto.items);
+      const { subtotal, iva, total, itemsCalculados } = await this.calcularTotales(queryRunner, createDto.items);
 
       if (total > saldoDisponible) {
         throw new BadRequestException(`El total de la nota crédito ($${total}) excede el saldo disponible de la factura ($${saldoDisponible})`);
@@ -117,6 +116,7 @@ export class NotasAjusteService {
       if(factura.tipoFactura == TipoFactura.STANDARD && isDraft == false){
         try {
           notaGuardada.items = itemsToSave;
+          notaGuardada.facturaOriginal = factura;
           await this.asientosService.generarAsientoNotaAjuste(notaGuardada, notaGuardada.createdById);
           this.logger.log(`Asiento contable generado automáticamente para notas credito ${notaGuardada.numeroCompleto}`);
 

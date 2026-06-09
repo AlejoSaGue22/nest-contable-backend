@@ -142,7 +142,7 @@ export class DashboardService {
                 const saldo = await this.reportesService.calcularSaldoCuenta(acc.id, new Date('2000-01-01'), referenceDate);
                 return {
                     name: acc.nombre,
-                    balance: Math.abs(saldo)
+                    balance: saldo
                 };
             }));
 
