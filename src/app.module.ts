@@ -33,6 +33,7 @@ import { NotasAjusteModule } from './notas-ajuste/notas-ajuste.module';
 import { ImpuestosModule } from './settings/impuestos/impuestos.module';
 import { ImpuestosService } from './settings/impuestos/impuestos.service';
 import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-compras.module';
+import { VendedoresModule } from './settings/vendedores/vendedores.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
@@ -40,7 +41,7 @@ import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-co
         host: process.env.DB_HOST || 'localhost', 
         port: Number(process.env.DB_PORT) || 5432,
         username: process.env.DB_USERNAME || 'postgres',     
-        password: process.env.DB_PASSWORD?.toString() || 'MySecr3tPassWord@as2', 
+        password: process.env.DB_PASSWORD?.toString() || '2201', 
         database: process.env.DB_DATABASE || 'finance_tejo',
         autoLoadEntities: true,
         synchronize: true,
@@ -75,7 +76,8 @@ import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-co
     BancosModule,
     NotasAjusteModule,
     ImpuestosModule,
-    NotasAjusteComprasModule
+    NotasAjusteComprasModule,
+    VendedoresModule
   ],
   controllers: [],
 })

@@ -73,6 +73,7 @@ export class ProveedoresService {
     async update(id: string, updateProveedorDto: UpdateProveedorDto) {
         const proveedor = await this.findOne(id);
         this.proveedorRepository.merge(proveedor, updateProveedorDto);
+        
         return this.proveedorRepository.save(proveedor);
     }
 

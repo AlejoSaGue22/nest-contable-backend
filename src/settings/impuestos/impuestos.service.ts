@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { Impuesto } from './entities/impuesto.entity';
 import { CreateImpuestoDto } from './dto/create-impuesto.dto';
 import { UpdateImpuestoDto } from './dto/update-impuesto.dto';
@@ -8,21 +8,49 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 
 @Injectable()
 export class ImpuestosService {
+  private readonly logger = new Logger(ImpuestosService.name);
+
   constructor(
     @InjectRepository(Impuesto)
     private readonly impuestoRepository: Repository<Impuesto>,
   ) {}
 
-  async create(createImpuestoDto: CreateImpuestoDto): Promise<Impuesto> {
-    const impuesto = this.impuestoRepository.create(createImpuestoDto);
-    return await this.impuestoRepository.save(impuesto);
+  async create(createImpuestoDto: CreateImpuestoDto) {
+    try {
+      const impuesto = this.impuestoRepository.create(createImpuestoDto);
+      const saved = await this.impuestoRepository.save(impuesto);
+      return { success: true, data: saved, message: 'Impuesto creado correctamente' };
+    } catch (error) {
+      this.logger.error(`Error creando impuesto: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
-  async findAll(): Promise<Impuesto[]> {
-    return await this.impuestoRepository.find({
+  async findAll(page: number = 1, limit: number = 10, search?: string) {
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (search) {
+      where.nombre = ILike(`%${search}%`);
+    }
+
+    const [data, total] = await this.impuestoRepository.findAndCount({
+      where,
       relations: ['cuentaVentas', 'cuentaCompras', 'cuentaDevVentas', 'cuentaDevCompras'],
-      order: { nombre: 'ASC' }
+      order: { nombre: 'ASC' },
+      skip,
+      take: limit,
     });
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string): Promise<Impuesto> {
@@ -38,15 +66,27 @@ export class ImpuestosService {
     return impuesto;
   }
 
-  async update(id: string, updateImpuestoDto: UpdateImpuestoDto): Promise<Impuesto> {
-    const impuesto = await this.findOne(id);
-    this.impuestoRepository.merge(impuesto, updateImpuestoDto);
-    return await this.impuestoRepository.save(impuesto);
+  async update(id: string, updateImpuestoDto: UpdateImpuestoDto) {
+    try {
+      const impuesto = await this.findOne(id);
+      this.impuestoRepository.merge(impuesto, updateImpuestoDto);
+      const saved = await this.impuestoRepository.save(impuesto);
+      return { success: true, data: saved, message: 'Impuesto actualizado correctamente' };
+    } catch (error) {
+      this.logger.error(`Error actualizando impuesto: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
-  async remove(id: string): Promise<void> {
-    const impuesto = await this.findOne(id);
-    await this.impuestoRepository.remove(impuesto);
+  async remove(id: string) {
+    try {
+      const impuesto = await this.findOne(id);
+      await this.impuestoRepository.remove(impuesto);
+      return { success: true, message: 'Impuesto eliminado correctamente' };
+    } catch (error) {
+      this.logger.error(`Error eliminando impuesto: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   async seedDefaultTaxes(): Promise<void> {
