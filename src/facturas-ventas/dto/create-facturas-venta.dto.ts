@@ -33,6 +33,10 @@ export class CreateFacturasVentaDto {
     @IsOptional()
     metodoPago?: string;
 
+    @IsUUID()
+    @IsOptional()
+    cuentaBancariaId?: string;
+
     @IsString()
     @IsOptional()
     fechaVencimiento?: string;

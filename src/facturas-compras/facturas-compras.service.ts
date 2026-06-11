@@ -182,6 +182,7 @@ export class FacturasComprasService {
                 observaciones: createFacturaCompraDto.observaciones,
                 formaPago: createFacturaCompraDto.formaPago,
                 metodoPago: createFacturaCompraDto.metodoPago || null,
+                cuentaBancariaId: createFacturaCompraDto.cuentaBancariaId || null,
                 fechaVencimiento: createFacturaCompraDto.fechaVencimiento?.trim() === '' ? null : createFacturaCompraDto.fechaVencimiento,
                 subtotal,
                 iva: totalIva,
@@ -209,6 +210,15 @@ export class FacturasComprasService {
             if (!isDraft) {
                 try {
                     gastoGuardado.items = itemsToSave
+                    if (gastoGuardado.cuentaBancariaId) {
+                        const gastoConRelacion = await queryRunner.manager.findOne(FacturaCompra, {
+                            where: { id: gastoGuardado.id },
+                            relations: ['cuentaBancaria'],
+                        });
+                        if (gastoConRelacion) {
+                            gastoGuardado.cuentaBancaria = gastoConRelacion.cuentaBancaria;
+                        }
+                    }
                     await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
                     this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
                 } catch (asientoError) {
@@ -256,6 +266,7 @@ export class FacturasComprasService {
                 .leftJoinAndSelect('invoice.items', 'items')
                 .leftJoinAndSelect('items.articulo', 'articulo')
                 .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+                .leftJoinAndSelect('invoice.cuentaBancaria', 'cuentaBancaria')
                 .where('1=1');
 
             // Aplicar filtros
@@ -311,7 +322,7 @@ export class FacturasComprasService {
         try {
             const factura = await this.facturaCompraRepository.findOne({
                 where: { id },
-                relations: ['proveedor', 'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'createdBy']
+                relations: ['proveedor', 'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'createdBy', 'cuentaBancaria']
             });
 
             if (!factura) {
@@ -507,6 +518,7 @@ export class FacturasComprasService {
                 fecha: updateFacturaCompraDto.fecha,
                 formaPago: updateFacturaCompraDto.formaPago,
                 metodoPago: updateFacturaCompraDto.metodoPago || null,
+                cuentaBancariaId: updateFacturaCompraDto.cuentaBancariaId || null,
                 fechaVencimiento: updateFacturaCompraDto.fechaVencimiento?.trim() === '' ? null : updateFacturaCompraDto.fechaVencimiento,
                 observaciones: updateFacturaCompraDto.observaciones,
                 subtotal,

@@ -7,6 +7,7 @@ import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { FormaPago } from "../../facturas-ventas/enums/factura-venta.enum";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
+import { CuentasBancarias } from "src/cuentas-bancarias/entities/cuentas-bancaria.entity";
 
 
 export enum GastoEstado {
@@ -46,6 +47,13 @@ export class FacturaCompra {
 
     @Column({ type: 'varchar', length: 255, nullable: true }) 
     metodoPago: string | null; 
+
+    @ManyToOne(() => CuentasBancarias, { nullable: true, eager: true })
+    @JoinColumn({ name: 'cuentaBancariaId' })
+    cuentaBancaria: CuentasBancarias;
+
+    @Column({ type: 'uuid', nullable: true })
+    cuentaBancariaId: string | null;
 
     @Column({ type: 'date', nullable: true })
     fechaVencimiento: Date | null;

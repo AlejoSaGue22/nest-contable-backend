@@ -136,6 +136,16 @@ export const DEFAULT_MENU_ITEMS = [
       metadata: { badge: null },
       children: [
           {
+            title: 'Resumen Financiero',
+            icon: 'dashboard',
+            route: '/panel/pagos/resumen',
+            requiredPermission: Permission.PAGO_READ,
+            order: -1,
+            isActive: true,
+            isVisible: true,
+            metadata: { badge: null }
+          },
+          {
             title: 'Cuentas por Cobrar',
             icon: 'arrow_downward',
             route: '/panel/pagos/cxc',
@@ -164,8 +174,18 @@ export const DEFAULT_MENU_ITEMS = [
             isActive: true,
             isVisible: true,
             metadata: { badge: null }
+          },
+          {
+            title: 'Movimientos',
+            icon: 'swap_horiz',
+            route: '/panel/pagos/movimientos',
+            requiredPermission: Permission.PAGO_READ,
+            order: 3,
+            isActive: true,
+            isVisible: true,
+            metadata: { badge: null }
           }
-        ]
+      ]
   },
   {
     title: 'Reportes',
@@ -275,7 +295,7 @@ export const DEFAULT_MENU_ITEMS = [
         metadata: { badge: null }
       },
       {
-        title: 'Bancos',
+        title: 'Bancos y Cajas',
         icon: '<i class="fa-solid fa-building-columns"></i>',
         route: '/panel/contabilidad/bancos',
         requiredPermission: Permission.ACCOUNTING_VIEW,

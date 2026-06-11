@@ -4,10 +4,11 @@ import { UpdateCuentasBancariaDto } from './dto/update-cuentas-bancaria.dto';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { CuentasBancarias } from './entities/cuentas-bancaria.entity';
+import { CuentasBancarias, TipoCuentaBancaria } from './entities/cuentas-bancaria.entity';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { Banco } from 'src/bancos/entities/banco.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { CuentasService } from 'src/cuentas/cuentas.service';
 import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
@@ -21,15 +22,23 @@ export class CuentasBancariasService {
     private readonly bancosRepository: Repository<Banco>,
     private readonly dataSource: DataSource,
     private readonly asientosContablesService: AsientosContablesService,
+    private readonly cuentasService: CuentasService,
   ) {}
 
   async create(createCuentasBancariaDto: CreateCuentasBancariaDto, userId: string) {
     try {
-      const { bancoId, saldoInicial, cuentaContrapartidaCodigo, ...rest } = createCuentasBancariaDto;
-      
-      const banco = await this.bancosRepository.findOne({ where: { id: bancoId } });
-      if (!banco) {
-        throw new NotFoundException('Banco no encontrado');
+      const { bancoId, saldoInicial, cuentaContrapartidaCodigo, tipoCuenta, ...rest } = createCuentasBancariaDto;
+
+      if (tipoCuenta === TipoCuentaBancaria.BANCO && !bancoId) {
+        throw new BadRequestException('Debe seleccionar un banco cuando el tipo de cuenta es Banco');
+      }
+
+      let banco: Banco | null = null;
+      if (bancoId) {
+        banco = await this.bancosRepository.findOne({ where: { id: bancoId } });
+        if (!banco) {
+          throw new NotFoundException('Banco no encontrado');
+        }
       }
 
       const saldo = saldoInicial && saldoInicial > 0 ? saldoInicial : 0;
@@ -39,10 +48,29 @@ export class CuentasBancariasService {
           throw new BadRequestException('Debe seleccionar una cuenta contrapartida cuando el saldo inicial es mayor a 0');
         }
       }
-      
+
+      const codigoPadre = tipoCuenta === TipoCuentaBancaria.BANCO ? '1110' : '1105';
+      const nombreCuenta = banco ? `${banco.nombre} - ${rest.nombre}` : rest.nombre;
+
+      let codigoSubcuenta = codigoPadre;
+      try {
+        const subcuenta = await this.cuentasService.create({
+          codigo: await this.generarCodigoSubcuenta(codigoPadre),
+          nombre: nombreCuenta,
+          parentCode: codigoPadre,
+          aceptaMovimiento: true,
+        });
+        codigoSubcuenta = subcuenta.codigo;
+        this.logger.log(`Subcuenta contable creada: ${codigoSubcuenta} para ${nombreCuenta}`);
+      } catch (error) {
+        this.logger.warn(`No se pudo crear subcuenta automática, usando código padre ${codigoPadre}: ${error.message}`);
+      }
+
       const cuentaBancaria = this.cuentasBancariasRepository.create({
         ...rest,
-        banco,
+        tipoCuenta,
+        banco: banco || undefined,
+        codigoCuentaContable: codigoSubcuenta,
         saldoInicial: saldo,
         saldoActual: saldo,
       });
@@ -74,6 +102,24 @@ export class CuentasBancariasService {
       }
       throw new InternalServerErrorException('Error al crear la cuenta bancaria');
     }
+  }
+
+  private async generarCodigoSubcuenta(codigoPadre: string): Promise<string> {
+    const repo = this.dataSource.getRepository('CuentaContable');
+    const cuentas = await repo.find({
+      where: { codigo: new RegExp(`^${codigoPadre}`) },
+      order: { codigo: 'DESC' },
+      take: 1,
+    });
+
+    if (cuentas.length === 0) {
+      return `${codigoPadre}01`;
+    }
+
+    const ultimoCodigo = cuentas[0].codigo as string;
+    const sufijo = ultimoCodigo.substring(codigoPadre.length);
+    const siguiente = parseInt(sufijo || '0', 10) + 1;
+    return `${codigoPadre}${siguiente.toString().padStart(2, '0')}`;
   }
 
   async findAll(paginationDto: PaginatioDto) {

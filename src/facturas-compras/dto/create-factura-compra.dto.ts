@@ -32,6 +32,10 @@ export class CreateFacturaCompraDto {
     @IsOptional()
     metodoPago?: string;
 
+    @IsUUID()
+    @IsOptional()
+    cuentaBancariaId?: string;
+
     @IsArray()
     @IsNotEmpty()
     items: CreateFacturaCompraItemDto[];

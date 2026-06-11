@@ -105,6 +105,16 @@ export const PLAN_CUENTAS_MINIMO = [
         isActive: true
     },
     {
+        codigo: '21',
+        nombre: 'OBLIGACIONES FINANCIERAS',
+        tipo: TipoCuenta.PASIVO,
+        naturaleza: NaturalezaCuenta.CREDITO,
+        nivel: 2,
+        cuentaPadreId: '2',
+        aceptaMovimiento: false,
+        isActive: true
+    },
+    {
         codigo: '22',
         nombre: 'PROVEEDORES',
         tipo: TipoCuenta.PASIVO,

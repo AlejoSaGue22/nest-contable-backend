@@ -8,6 +8,7 @@ import { Pago } from "src/pagos/entities/pago.entity";
 import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from "../enums/factura-venta.enum";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { CuentasBancarias } from "src/cuentas-bancarias/entities/cuentas-bancaria.entity";
 
 @Entity('facturas_venta')
 export class FacturasVenta {
@@ -55,6 +56,13 @@ export class FacturasVenta {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   metodoPago: string | null; 
+
+  @ManyToOne(() => CuentasBancarias, { nullable: true, eager: true })
+  @JoinColumn({ name: 'cuentaBancariaId' })
+  cuentaBancaria: CuentasBancarias;
+
+  @Column({ type: 'uuid', nullable: true })
+  cuentaBancariaId: string | null;
 
   @Column({ type: 'date', nullable: true })
   fechaVencimiento: Date | null;

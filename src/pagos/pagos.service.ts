@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Between, DataSource, Repository } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
 import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
@@ -13,6 +13,7 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { MathUtil } from 'src/common/utils/math.util';
+import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
 
 @Injectable()
 export class PagosService {
@@ -400,6 +401,429 @@ export class PagosService {
       relations: ['cuentaBancaria', 'creadoPor'],
       order: { fecha: 'ASC' },
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MOVIMIENTOS (listado global de cobros y pagos)
+  // ═══════════════════════════════════════════════════════════════
+
+  async listarMovimientos(filtros: {
+    tipo?: TipoPago;
+    fechaInicio?: string;
+    fechaFin?: string;
+    medioPago?: MedioPago;
+    clienteId?: string;
+    proveedorId?: string;
+    busqueda?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = filtros.page || 1;
+    const limit = filtros.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const qb = this.pagoRepository
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.cuentaBancaria', 'cb')
+      .leftJoinAndSelect('cb.banco', 'banco')
+      .leftJoinAndSelect('p.creadoPor', 'user')
+      .leftJoin('p.facturaVenta', 'fv')
+      .leftJoin('fv.client', 'client')
+      .leftJoin('p.facturaCompra', 'fc')
+      .leftJoin('fc.proveedor', 'proveedor')
+      .addSelect(['fv.id', 'fv.comprobante_completo', 'fv.comprobante', 'fv.clientId'])
+      .addSelect(['client.id', 'client.razonSocial', 'client.nombre', 'client.apellido'])
+      .addSelect(['fc.id', 'fc.numero', 'fc.proveedorId'])
+      .addSelect(['proveedor.id', 'proveedor.razonSocial', 'proveedor.nombre', 'proveedor.apellido']);
+
+    if (filtros.tipo) {
+      qb.andWhere('p.tipo = :tipo', { tipo: filtros.tipo });
+    }
+
+    if (filtros.fechaInicio) {
+      qb.andWhere('p.fecha >= :fechaInicio', { fechaInicio: filtros.fechaInicio });
+    }
+
+    if (filtros.fechaFin) {
+      qb.andWhere('p.fecha <= :fechaFin', { fechaFin: filtros.fechaFin });
+    }
+
+    if (filtros.medioPago) {
+      qb.andWhere('p.medioPago = :medioPago', { medioPago: filtros.medioPago });
+    }
+
+    if (filtros.clienteId) {
+      qb.andWhere('fv.clientId = :clienteId', { clienteId: filtros.clienteId });
+    }
+
+    if (filtros.proveedorId) {
+      qb.andWhere('fc.proveedorId = :proveedorId', { proveedorId: filtros.proveedorId });
+    }
+
+    if (filtros.busqueda) {
+      qb.andWhere(
+        '(LOWER(COALESCE(client.razonSocial, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(client.nombre, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(proveedor.razonSocial, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(proveedor.nombre, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(fv.comprobante_completo, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(fc.numero, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(p.referencia, \'\')) LIKE :b)',
+        { b: `%${filtros.busqueda.toLowerCase()}%` },
+      );
+    }
+
+    qb.orderBy('p.fecha', 'DESC').addOrderBy('p.createdAt', 'DESC');
+
+    const [pagos, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    const items = pagos.map(p => {
+      const isCobro = p.tipo === TipoPago.COBRO;
+      const factura = isCobro ? (p as any).facturaVenta : (p as any).facturaCompra;
+      const tercero = isCobro ? factura?.client : factura?.proveedor;
+
+      return {
+        id: p.id,
+        tipo: p.tipo,
+        fecha: p.fecha,
+        monto: p.monto,
+        medioPago: p.medioPago,
+        referencia: p.referencia,
+        notas: p.notas,
+        asientoId: p.asientoId,
+        numeroFactura: isCobro
+          ? (factura?.comprobante_completo || '—')
+          : (factura?.numero || '—'),
+        facturaId: isCobro ? p.facturaVentaId : p.facturaCompraId,
+        contraparteId: tercero?.id || null,
+        contraparteNombre: tercero
+          ? (tercero.razonSocial || `${tercero.nombre} ${tercero.apellido}`)
+          : '—',
+        cuentaBancaria: p.cuentaBancaria
+          ? {
+              id: p.cuentaBancaria.id,
+              nombre: p.cuentaBancaria.nombre,
+              numeroCuenta: p.cuentaBancaria.numeroCuenta,
+              banco: p.cuentaBancaria.banco
+                ? { id: p.cuentaBancaria.banco.id, nombre: p.cuentaBancaria.banco.nombre }
+                : null,
+            }
+          : null,
+        creadoPor: p.creadoPor
+          ? `${(p.creadoPor as any).nombre || ''} ${(p.creadoPor as any).apellido || ''}`.trim()
+          : '—',
+        createdAt: p.createdAt,
+      };
+    });
+
+    const totalCobros = items.filter(i => i.tipo === TipoPago.COBRO).reduce((s, i) => s + Number(i.monto), 0);
+    const totalPagos = items.filter(i => i.tipo === TipoPago.PAGO).reduce((s, i) => s + Number(i.monto), 0);
+
+    return {
+      items,
+      resumen: { totalCobros, totalPagos, neto: totalCobros - totalPagos },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ASIENTO CONTABLE DE UN PAGO
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerAsientoDePago(pagoId: string) {
+    const pago = await this.pagoRepository.findOne({
+      where: { id: pagoId },
+      relations: ['facturaVenta', 'facturaCompra', 'cuentaBancaria'],
+    });
+
+    if (!pago) {
+      throw new NotFoundException(`Pago ${pagoId} no encontrado`);
+    }
+
+    if (!pago.asientoId) {
+      return { pago, asiento: null, detalles: [] };
+    }
+
+    const asiento = await this.dataSource.getRepository(AsientoContable).findOne({
+      where: { id: pago.asientoId },
+      relations: ['detalles', 'detalles.cuenta'],
+    });
+
+    return {
+      pago: {
+        id: pago.id,
+        tipo: pago.tipo,
+        fecha: pago.fecha,
+        monto: pago.monto,
+        medioPago: pago.medioPago,
+        referencia: pago.referencia,
+        numeroFactura: pago.facturaVenta
+          ? pago.facturaVenta.comprobante_completo
+          : (pago.facturaCompra?.numero || '—'),
+      },
+      asiento: asiento
+        ? {
+            id: asiento.id,
+            numero: asiento.numero,
+            fecha: asiento.fecha,
+            tipo: asiento.tipo,
+            referencia: asiento.referencia,
+            descripcion: asiento.descripcion,
+            totalDebito: asiento.totalDebito,
+            totalCredito: asiento.totalCredito,
+          }
+        : null,
+      detalles: asiento?.detalles?.map(d => ({
+        id: d.id,
+        cuentaCodigo: d.cuenta?.codigo || '—',
+        cuentaNombre: d.cuenta?.nombre || '—',
+        debito: d.debito,
+        credito: d.credito,
+        descripcion: d.descripcion,
+      })) || [],
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // RESUMEN FINANCIERO (Dashboard unificado)
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerResumenFinanciero() {
+    // CxC: Total por cobrar, vencido, por vencer
+    const cxcResult = await this.facturaVentaRepository
+      .createQueryBuilder('fv')
+      .select([
+        'SUM(fv.saldoPendiente) as totalPendiente',
+        'COUNT(fv.id) as totalFacturas',
+        'SUM(CASE WHEN fv.fechaVencimiento < CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END) as totalVencido',
+        'SUM(CASE WHEN fv.fechaVencimiento >= CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END) as totalPorVencer',
+      ])
+      .where('fv.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
+      .andWhere('fv.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
+      .andWhere('fv.saldoPendiente > 0')
+      .andWhere('fv.status NOT IN (:...excluidos)', { excluidos: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT] })
+      .getRawOne();
+
+    // CxP: Total por pagar, vencido, por vencer
+    const cxpResult = await this.facturaCompraRepository
+      .createQueryBuilder('fc')
+      .select([
+        'SUM(fc.saldoPendiente) as totalPendiente',
+        'COUNT(fc.id) as totalFacturas',
+        'SUM(CASE WHEN fc.fechaVencimiento < CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END) as totalVencido',
+        'SUM(CASE WHEN fc.fechaVencimiento >= CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END) as totalPorVencer',
+      ])
+      .where('fc.formaPago = :formaPago', { formaPago: 'CREDITO' })
+      .andWhere('fc.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
+      .andWhere('fc.saldoPendiente > 0')
+      .andWhere('fc.estado NOT IN (:...excluidos)', { excluidos: [GastoEstado.ANULADO, GastoEstado.BORRADOR] })
+      .getRawOne();
+
+    // Últimos movimientos (últimos 10)
+    const ultimosMovimientos = await this.pagoRepository
+      .createQueryBuilder('p')
+      .leftJoin('p.facturaVenta', 'fv')
+      .leftJoin('fv.client', 'client')
+      .leftJoin('p.facturaCompra', 'fc')
+      .leftJoin('fc.proveedor', 'proveedor')
+      .addSelect(['fv.comprobante_completo', 'client.razonSocial', 'client.nombre', 'client.apellido'])
+      .addSelect(['fc.numero', 'proveedor.razonSocial', 'proveedor.nombre', 'proveedor.apellido'])
+      .orderBy('p.fecha', 'DESC')
+      .addOrderBy('p.createdAt', 'DESC')
+      .limit(10)
+      .getMany();
+
+    const movimientos = ultimosMovimientos.map(p => {
+      const isCobro = p.tipo === TipoPago.COBRO;
+      const factura = isCobro ? (p as any).facturaVenta : (p as any).facturaCompra;
+      const tercero = isCobro ? factura?.client : factura?.proveedor;
+
+      return {
+        id: p.id,
+        tipo: p.tipo,
+        fecha: p.fecha,
+        monto: p.monto,
+        numeroFactura: isCobro ? (factura?.comprobante_completo || '—') : (factura?.numero || '—'),
+        contraparteNombre: tercero ? (tercero.razonSocial || `${tercero.nombre} ${tercero.apellido}`) : '—',
+      };
+    });
+
+    // Próximos vencimientos (próximos 7 días)
+    const proximosVencimientos = await this.facturaVentaRepository
+      .createQueryBuilder('fv')
+      .leftJoinAndSelect('fv.client', 'client')
+      .where('fv.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
+      .andWhere('fv.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL] })
+      .andWhere('fv.saldoPendiente > 0')
+      .andWhere('fv.fechaVencimiento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL \'7 days\'')
+      .andWhere('fv.status NOT IN (:...excluidos)', { excluidos: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT] })
+      .orderBy('fv.fechaVencimiento', 'ASC')
+      .limit(5)
+      .getMany();
+
+    const vencimientos = proximosVencimientos.map(f => ({
+      facturaId: f.id,
+      numeroFactura: f.comprobante_completo,
+      clienteNombre: f.client.razonSocial || `${f.client.nombre} ${f.client.apellido}`,
+      saldoPendiente: f.saldoPendiente,
+      fechaVencimiento: f.fechaVencimiento,
+    }));
+
+    return {
+      cxc: {
+        totalPendiente: Number(cxcResult?.totalPendiente || 0),
+        totalVencido: Number(cxcResult?.totalVencido || 0),
+        totalPorVencer: Number(cxcResult?.totalPorVencer || 0),
+        totalFacturas: Number(cxcResult?.totalFacturas || 0),
+      },
+      cxp: {
+        totalPendiente: Number(cxpResult?.totalPendiente || 0),
+        totalVencido: Number(cxpResult?.totalVencido || 0),
+        totalPorVencer: Number(cxpResult?.totalPorVencer || 0),
+        totalFacturas: Number(cxpResult?.totalFacturas || 0),
+      },
+      posicionNeta: Number(cxcResult?.totalPendiente || 0) - Number(cxpResult?.totalPendiente || 0),
+      ultimosMovimientos: movimientos,
+      proximosVencimientos: vencimientos,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ESTADO DE CUENTA POR CLIENTE
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerEstadoCuentaCliente(clienteId: string) {
+    // Facturas pendientes
+    const facturasPendientes = await this.facturaVentaRepository
+      .createQueryBuilder('fv')
+      .where('fv.clientId = :clienteId', { clienteId })
+      .andWhere('fv.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
+      .andWhere('fv.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
+      .andWhere('fv.saldoPendiente > 0')
+      .andWhere('fv.status NOT IN (:...excluidos)', { excluidos: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT] })
+      .orderBy('fv.fechaVencimiento', 'ASC')
+      .getMany();
+
+    // Historial de cobros
+    const cobros = await this.pagoRepository
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.facturaVenta', 'fv')
+      .leftJoinAndSelect('p.cuentaBancaria', 'cb')
+      .leftJoinAndSelect('cb.banco', 'banco')
+      .where('fv.clientId = :clienteId', { clienteId })
+      .andWhere('p.tipo = :tipo', { tipo: TipoPago.COBRO })
+      .orderBy('p.fecha', 'DESC')
+      .addOrderBy('p.createdAt', 'DESC')
+      .getMany();
+
+    const facturas = facturasPendientes.map(f => ({
+      facturaId: f.id,
+      numeroFactura: f.comprobante_completo,
+      fecha: f.fecha,
+      fechaVencimiento: f.fechaVencimiento,
+      total: f.total,
+      totalPagado: f.totalPagado,
+      saldoPendiente: f.saldoPendiente,
+      paymentStatus: f.paymentStatus,
+    }));
+
+    const movimientos = cobros.map(p => ({
+      id: p.id,
+      fecha: p.fecha,
+      monto: p.monto,
+      medioPago: p.medioPago,
+      numeroFactura: p.facturaVenta?.comprobante_completo || '—',
+      referencia: p.referencia,
+      cuentaBancaria: p.cuentaBancaria
+        ? { nombre: p.cuentaBancaria.nombre, banco: p.cuentaBancaria.banco?.nombre }
+        : null,
+    }));
+
+    const totalFacturado = facturas.reduce((sum, f) => sum + Number(f.total), 0);
+    const totalPagado = facturas.reduce((sum, f) => sum + Number(f.totalPagado), 0);
+    const saldoPendiente = facturas.reduce((sum, f) => sum + Number(f.saldoPendiente), 0);
+
+    return {
+      clienteId,
+      resumen: {
+        totalFacturado,
+        totalPagado,
+        saldoPendiente,
+        totalFacturas: facturas.length,
+        totalCobros: movimientos.length,
+      },
+      facturas,
+      movimientos,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ESTADO DE CUENTA POR PROVEEDOR
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerEstadoCuentaProveedor(proveedorId: string) {
+    // Facturas pendientes
+    const facturasPendientes = await this.facturaCompraRepository
+      .createQueryBuilder('fc')
+      .where('fc.proveedorId = :proveedorId', { proveedorId })
+      .andWhere('fc.formaPago = :formaPago', { formaPago: 'CREDITO' })
+      .andWhere('fc.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
+      .andWhere('fc.saldoPendiente > 0')
+      .andWhere('fc.estado NOT IN (:...excluidos)', { excluidos: [GastoEstado.ANULADO, GastoEstado.BORRADOR] })
+      .orderBy('fc.fechaVencimiento', 'ASC')
+      .getMany();
+
+    // Historial de pagos
+    const pagos = await this.pagoRepository
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.facturaCompra', 'fc')
+      .leftJoinAndSelect('p.cuentaBancaria', 'cb')
+      .leftJoinAndSelect('cb.banco', 'banco')
+      .where('fc.proveedorId = :proveedorId', { proveedorId })
+      .andWhere('p.tipo = :tipo', { tipo: TipoPago.PAGO })
+      .orderBy('p.fecha', 'DESC')
+      .addOrderBy('p.createdAt', 'DESC')
+      .getMany();
+
+    const facturas = facturasPendientes.map(f => ({
+      facturaId: f.id,
+      numeroFactura: f.numero,
+      fecha: f.fecha,
+      fechaVencimiento: f.fechaVencimiento,
+      total: f.total,
+      totalPagado: f.totalPagado,
+      saldoPendiente: f.saldoPendiente,
+      paymentStatus: f.paymentStatus,
+    }));
+
+    const movimientos = pagos.map(p => ({
+      id: p.id,
+      fecha: p.fecha,
+      monto: p.monto,
+      medioPago: p.medioPago,
+      numeroFactura: p.facturaCompra?.numero || '—',
+      referencia: p.referencia,
+      cuentaBancaria: p.cuentaBancaria
+        ? { nombre: p.cuentaBancaria.nombre, banco: p.cuentaBancaria.banco?.nombre }
+        : null,
+    }));
+
+    const totalFacturado = facturas.reduce((sum, f) => sum + Number(f.total), 0);
+    const totalPagado = facturas.reduce((sum, f) => sum + Number(f.totalPagado), 0);
+    const saldoPendiente = facturas.reduce((sum, f) => sum + Number(f.saldoPendiente), 0);
+
+    return {
+      proveedorId,
+      resumen: {
+        totalFacturado,
+        totalPagado,
+        saldoPendiente,
+        totalFacturas: facturas.length,
+        totalPagos: movimientos.length,
+      },
+      facturas,
+      movimientos,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════

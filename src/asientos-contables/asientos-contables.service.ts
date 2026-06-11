@@ -63,10 +63,7 @@ export class AsientosContablesService {
   // TARJETA/OTROS: DÉBITO Bancos 1110   | CRÉDITO Ingresos (x artículo) + IVA 2408
   // CRÉDITO:       DÉBITO Clientes 1305 | CRÉDITO Ingresos (x artículo) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoFacturaVenta(
-    factura: FacturasVenta,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -76,9 +73,14 @@ export class AsientosContablesService {
 
       // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
       const isContado = factura.formaPago === FormaPago.CONTADO;
-      const codigoDebito = isContado
-        ? this.resolverCuentaContado(factura.metodoPago || undefined)
-        : '1305';
+      let codigoDebito: string;
+      if (isContado) {
+        codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
+          ? factura.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(factura.metodoPago || undefined);
+      } else {
+        codigoDebito = '1305';
+      }
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
@@ -298,7 +300,9 @@ export class AsientosContablesService {
       }
 
       const codigoCredito = isContado
-        ? this.resolverCuentaContado(gasto.metodoPago ?? undefined)
+        ? (gasto.cuentaBancaria?.codigoCuentaContable
+            ? gasto.cuentaBancaria.codigoCuentaContable
+            : this.resolverCuentaContado(gasto.metodoPago ?? undefined))
         : codigoCxP;
 
       const descCredito = isContado
@@ -355,9 +359,14 @@ export class AsientosContablesService {
 
       // ── Crédito: reversa de Caja/Bancos / Clientes ──────────────────
       const isContado = factura.formaPago === FormaPago.CONTADO;
-      const codigoDebito = isContado
-        ? this.resolverCuentaContado(factura.metodoPago!)
-        : '1305';
+      let codigoDebito: string;
+      if (isContado) {
+        codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
+          ? factura.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(factura.metodoPago!);
+      } else {
+        codigoDebito = '1305';
+      }
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
 
       detalles.push({
@@ -567,7 +576,9 @@ export class AsientosContablesService {
       }
 
       const codigoDebito = isContado
-        ? this.resolverCuentaContado(gasto.metodoPago!)
+        ? (gasto.cuentaBancaria?.codigoCuentaContable
+            ? gasto.cuentaBancaria.codigoCuentaContable
+            : this.resolverCuentaContado(gasto.metodoPago!))
         : codigoCxP;
 
       const descDebito = isContado
@@ -722,7 +733,9 @@ export class AsientosContablesService {
       // 4. Contrapartida (Crédito para NC, Débito para ND): Clientes o Caja/Bancos
       const isContado = factura.formaPago === FormaPago.CONTADO;
       const codigoCuentaContra = isContado
-        ? this.resolverCuentaContado(factura.metodoPago!)
+        ? (factura.cuentaBancaria?.codigoCuentaContable
+            ? factura.cuentaBancaria.codigoCuentaContable
+            : this.resolverCuentaContado(factura.metodoPago!))
         : '1305';
 
       const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
@@ -1098,7 +1111,11 @@ export class AsientosContablesService {
         }
       }
 
-      const codigoCuentaContra = isContado ? this.resolverCuentaContado(factura.metodoPago!) : codigoCxP;
+      const codigoCuentaContra = isContado
+        ? (factura.cuentaBancaria?.codigoCuentaContable
+            ? factura.cuentaBancaria.codigoCuentaContable
+            : this.resolverCuentaContado(factura.metodoPago!))
+        : codigoCxP;
       const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       detalles.push({
@@ -1215,7 +1232,11 @@ export class AsientosContablesService {
         }
       }
 
-      const codigoCuentaContra = isContado ? this.resolverCuentaContado(factura.metodoPago!) : codigoCxP;
+      const codigoCuentaContra = isContado
+        ? (factura.cuentaBancaria?.codigoCuentaContable
+            ? factura.cuentaBancaria.codigoCuentaContable
+            : this.resolverCuentaContado(factura.metodoPago!))
+        : codigoCxP;
       const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       // Para Nota Crédito original: CxP fue Débito -> Ahora es Crédito

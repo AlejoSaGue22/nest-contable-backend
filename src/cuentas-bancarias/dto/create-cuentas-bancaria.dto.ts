@@ -7,8 +7,8 @@ export class CreateCuentasBancariaDto {
   nombre: string;
 
   @IsString()
-  @IsNotEmpty()
-  bancoId: string;
+  @IsOptional()
+  bancoId?: string;
 
   @IsString()
   @IsOptional()

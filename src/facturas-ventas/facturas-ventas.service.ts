@@ -111,6 +111,7 @@ export class FacturasVentasService {
         ...createDtoRest,
         fechaVencimiento: createFacturasVentaDto.fechaVencimiento || null,
         metodoPago: createFacturasVentaDto.metodoPago || null,
+        cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || null,
         vendedor: createFacturasVentaDto.vendedor || null,
         comprobante: statusInvoice === InvoiceStatus.DRAFT ? '' : numberFactura,
         comprobante_completo: statusInvoice === InvoiceStatus.DRAFT ? '' : `${prefijo}-${numberFactura}`,
@@ -142,6 +143,15 @@ export class FacturasVentasService {
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
           savedInvoice.items = itemsToSave;
+          if (savedInvoice.cuentaBancariaId) {
+            const facturaConRelacion = await queryRunner.manager.findOne(FacturasVenta, {
+              where: { id: savedInvoice.id },
+              relations: ['cuentaBancaria'],
+            });
+            if (facturaConRelacion) {
+              savedInvoice.cuentaBancaria = facturaConRelacion.cuentaBancaria;
+            }
+          }
           await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
           this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
         } catch (asientoError) {
@@ -183,6 +193,9 @@ export class FacturasVentasService {
         .leftJoinAndSelect('invoice.items', 'items')
         .leftJoinAndSelect('items.articulo', 'articulo')
         .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+        .leftJoinAndSelect('invoice.cuentaBancaria', 'cuentaBancaria')
+        .leftJoinAndSelect('invoice.canalVentaRel', 'canalVentaRel')
+        .leftJoinAndSelect('invoice.metodoPagoRel', 'metodoPagoRel')
         .where('1=1');
 
       // Filtros
@@ -314,6 +327,7 @@ export class FacturasVentasService {
             fecha: updateDto.fecha,
             formaPago: updateDto.formaPago,
             metodoPago: updateDto.metodoPago || null,
+            cuentaBancariaId: updateDto.cuentaBancariaId || null,
             fechaVencimiento: updateDto.fechaVencimiento || null,
             tipoFactura: updateDto.tipoFactura,
             subtotal,
@@ -365,7 +379,7 @@ export class FacturasVentasService {
       const invoice = await this.facturaVentaRepository.findOne({
         where: { id },
         relations: ['client', 'client.tipoDocumentoRel',
-                   'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'canalVentaRel', 'createdBy'],
+                   'items', 'items.articulo', 'items.impuestoRel', 'metodoPagoRel', 'canalVentaRel', 'createdBy', 'cuentaBancaria', 'cuentaBancaria.banco'],
       });
 
       if (!invoice) {
@@ -520,7 +534,7 @@ export class FacturasVentasService {
     try {
       const factura = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id },
-        relations: ['items', 'client'],
+        relations: ['items', 'client', 'cuentaBancaria'],
       });
 
       if (!factura) {
@@ -555,7 +569,7 @@ export class FacturasVentasService {
 
       const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id },
-        relations: ['items', 'client'],
+        relations: ['items', 'client', 'cuentaBancaria'],
       });
 
       if (!updatedInvoice) {

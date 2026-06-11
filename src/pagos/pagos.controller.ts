@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Query, ParseUUIDPipe, Request, UseGuards } from '@nestjs/common';
 import { PagosService } from './pagos.service';
-import { PaymentStatus } from './enums/pago.enum';
+import { MedioPago, PaymentStatus, TipoPago } from './enums/pago.enum';
 import { CxcService } from 'src/common/services/cxc.service';
 import { CxpService } from 'src/common/services/cxp.service';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
@@ -62,11 +62,15 @@ export class PagosController {
     @Query('clienteId')     clienteId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
     @Query('soloVencidas')  soloVencidas?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PagoResponseDto<any>> {
     const data = await this.cxcService.findAll({
       clienteId,
       paymentStatus,
       soloVencidas: soloVencidas === 'true',
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 1
     });
     return toPagoResponse(data, 'Cuentas por cobrar obtenidas exitosamente');
   }
@@ -144,11 +148,15 @@ export class PagosController {
     @Query('proveedorId')   proveedorId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
     @Query('soloVencidas')  soloVencidas?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ): Promise<PagoResponseDto<any>> {
     const data = await this.cxpService.findAll({
       proveedorId,
       paymentStatus,
       soloVencidas: soloVencidas === 'true',
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 10,
     });
     return toPagoResponse(data, 'Cuentas por pagar obtenidas exitosamente');
   }
@@ -207,6 +215,78 @@ export class PagosController {
     const userId = req.user?.sub;
     const data = await this.pagosService.registrarPago(facturaCompraId, dto, userId);
     return toPagoResponse(data, 'Pago registrado exitosamente');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // RESUMEN FINANCIERO (Dashboard unificado)
+  // ════════════════════════════════════════════════════════════
+
+  @Get('resumen')
+  async obtenerResumenFinanciero(): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerResumenFinanciero();
+    return toPagoResponse(data, 'Resumen financiero obtenido exitosamente');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ESTADO DE CUENTA POR TERCERO
+  // ════════════════════════════════════════════════════════════
+
+  @Get('estado-cuenta/cliente/:clienteId')
+  async obtenerEstadoCuentaCliente(
+    @Param('clienteId', ParseUUIDPipe) clienteId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerEstadoCuentaCliente(clienteId);
+    return toPagoResponse(data, 'Estado de cuenta del cliente obtenido exitosamente');
+  }
+
+  @Get('estado-cuenta/proveedor/:proveedorId')
+  async obtenerEstadoCuentaProveedor(
+    @Param('proveedorId', ParseUUIDPipe) proveedorId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerEstadoCuentaProveedor(proveedorId);
+    return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido exitosamente');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // MOVIMIENTOS — LISTADO GLOBAL DE COBROS Y PAGOS
+  // ════════════════════════════════════════════════════════════
+
+  @Get('movimientos')
+  async listarMovimientos(
+    @Query('tipo') tipo?: TipoPago,
+    @Query('fechaInicio') fechaInicio?: string,
+    @Query('fechaFin') fechaFin?: string,
+    @Query('medioPago') medioPago?: MedioPago,
+    @Query('clienteId') clienteId?: string,
+    @Query('proveedorId') proveedorId?: string,
+    @Query('busqueda') busqueda?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.listarMovimientos({
+      tipo,
+      fechaInicio,
+      fechaFin,
+      medioPago,
+      clienteId,
+      proveedorId,
+      busqueda,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 20,
+    });
+    return toPagoResponse(data, 'Movimientos obtenidos exitosamente', data.meta);
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ASIENTO CONTABLE DE UN PAGO
+  // ════════════════════════════════════════════════════════════
+
+  @Get(':id/asiento')
+  async obtenerAsientoDePago(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAsientoDePago(id);
+    return toPagoResponse(data, 'Asiento contable obtenido exitosamente');
   }
 
   // ════════════════════════════════════════════════════════════

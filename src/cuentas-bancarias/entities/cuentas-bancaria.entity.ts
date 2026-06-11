@@ -1,19 +1,11 @@
 import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  DeleteDateColumn,
-} from 'typeorm';
+  Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
 import { Banco } from '../../bancos/entities/banco.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
 export enum TipoCuentaBancaria {
-  CORRIENTE = 'corriente',
-  AHORRO    = 'ahorro',
+  BANCO = 'Banco' ,
+  CAJA = 'Efectivo'
 }
 
 @Entity('cuentas_bancarias')
@@ -40,7 +32,7 @@ export class CuentasBancarias {
    * Normalmente '1110' (Bancos) — pero podría ser una subcuenta
    * si manejan varios bancos con cuentas distintas.
    */
-  @Column({ length: 10, default: '1110' })
+  @Column({ length: 10 })
   codigoCuentaContable: string;
 
   @Column({ default: true })
