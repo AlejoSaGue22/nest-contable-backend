@@ -11,7 +11,7 @@ async function bootstrap() {
   app.setGlobalPrefix("api/v1");
 
   // Helmet: security headers
-  app.use(helmet.default());
+  // app.use(helmet.default());
 
   // CORS restrictivo
   // const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['https://0s3mdg2j-4200.use2.devtunnels.ms', 'http://localhost:4200'];

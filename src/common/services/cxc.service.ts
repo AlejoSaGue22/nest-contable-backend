@@ -203,10 +203,10 @@ export class CxcService {
     return items.reduce(
       (acc, item) => ({
         totalCartera:      acc.totalCartera      + item.saldoPendiente,
-        porVencer:         acc.porVencer         + (item.diasVencida <= 0 ? item.saldoPendiente : 0),
-        vencida:           acc.vencida           + (item.diasVencida >  0 ? item.saldoPendiente : 0),
-        cantidadPorVencer: acc.cantidadPorVencer + (item.diasVencida <= 0 ? 1 : 0),
-        cantidadVencida:   acc.cantidadVencida   + (item.diasVencida >  0 ? 1 : 0),
+        porVencer:         acc.porVencer         + (item.diasVencida >= 0 ? item.saldoPendiente : 0),
+        vencida:           acc.vencida           + (item.diasVencida < 0 ? item.saldoPendiente : 0),
+        cantidadPorVencer: acc.cantidadPorVencer + (item.diasVencida >= 0 ? 1 : 0),
+        cantidadVencida:   acc.cantidadVencida   + (item.diasVencida < 0 ? 1 : 0),
       }),
       { totalCartera: 0, porVencer: 0, vencida: 0, cantidadPorVencer: 0, cantidadVencida: 0 },
     );

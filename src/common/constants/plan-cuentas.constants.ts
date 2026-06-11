@@ -775,5 +775,49 @@ export const PLAN_CUENTAS_MINIMO = [
         cuentaPadreId: '61',
         aceptaMovimiento: true,
         isActive: true
-    }
+    },
+
+    // ========================================
+    // NIVEL 4: Subcuentas
+    // ========================================
+    { 
+        codigo: '110505',
+        nombre: 'Caja General',
+        descripcion: 'Caja General',
+        tipo: TipoCuenta.ACTIVO,
+        naturaleza: NaturalezaCuenta.DEBITO,
+        nivel: 4,
+        cuentaPadreId: '1105',
+        aceptaMovimiento: true,
+        isActive: true
+    },
+    { 
+        codigo: '110510',
+        nombre: 'Caja Menor',
+        descripcion: 'Caja Menor',
+        tipo: TipoCuenta.ACTIVO,
+        naturaleza: NaturalezaCuenta.DEBITO,
+        nivel: 4,
+        cuentaPadreId: '1105',
+        aceptaMovimiento: true,
+        isActive: true
+    },
+    { 
+        codigo: '110515',
+        nombre: 'Moneda Extranjera',
+        descripcion: 'Moneda Extranjera',
+        tipo: TipoCuenta.ACTIVO,
+        naturaleza: NaturalezaCuenta.DEBITO,
+        nivel: 4,
+        cuentaPadreId: '1105',
+        aceptaMovimiento: true,
+        isActive: true
+    },
+    // ========================================
+    // NIVEL 5: Subcuentas
+    // ========================================
+    
+
+
+
 ];

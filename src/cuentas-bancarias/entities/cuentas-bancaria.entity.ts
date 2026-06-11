@@ -5,7 +5,7 @@ import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric
 
 export enum TipoCuentaBancaria {
   BANCO = 'Banco' ,
-  CAJA = 'Efectivo'
+  CAJA = 'Caja'
 }
 
 @Entity('cuentas_bancarias')

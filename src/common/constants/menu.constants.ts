@@ -134,17 +134,7 @@ export const DEFAULT_MENU_ITEMS = [
       isVisible: true,
       other: 'NO',
       metadata: { badge: null },
-      children: [
-          {
-            title: 'Resumen Financiero',
-            icon: 'dashboard',
-            route: '/panel/pagos/resumen',
-            requiredPermission: Permission.PAGO_READ,
-            order: -1,
-            isActive: true,
-            isVisible: true,
-            metadata: { badge: null }
-          },
+      children: [          
           {
             title: 'Cuentas por Cobrar',
             icon: 'arrow_downward',
@@ -214,6 +204,16 @@ export const DEFAULT_MENU_ITEMS = [
         route: '/panel/reports/reports-cartera',
         requiredPermission: Permission.REPORT_VIEW,
         order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: 'Resumen Financiero',
+        icon: '<i class="fa-solid fa-bar-chart"></i>',
+        route: '/panel/reports/resumen',
+        requiredPermission: Permission.REPORT_VIEW,
+        order: 2,
         isActive: true,
         isVisible: true,
         metadata: { badge: null }

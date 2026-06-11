@@ -106,11 +106,16 @@ export class CuentasBancariasService {
 
   private async generarCodigoSubcuenta(codigoPadre: string): Promise<string> {
     const repo = this.dataSource.getRepository('CuentaContable');
-    const cuentas = await repo.find({
-      where: { codigo: new RegExp(`^${codigoPadre}`) },
-      order: { codigo: 'DESC' },
-      take: 1,
-    });
+    const longitudHijo = codigoPadre.length + 2;
+
+    // Only match direct children (exactly parent code + 2 digits)
+    const cuentas = await repo
+      .createQueryBuilder('cuenta')
+      .where('cuenta.codigo LIKE :pattern', { pattern: `${codigoPadre}%` })
+      .andWhere('LENGTH(cuenta.codigo) = :len', { len: longitudHijo })
+      .orderBy('cuenta.codigo', 'DESC')
+      .limit(1)
+      .getMany();
 
     if (cuentas.length === 0) {
       return `${codigoPadre}01`;
@@ -124,14 +129,16 @@ export class CuentasBancariasService {
 
   async findAll(paginationDto: PaginatioDto) {
     try {
-      const { limit = 10, offset = 0 } = paginationDto;
+      const page = paginationDto.offset || 1;
+      const limit = paginationDto.limit || 10;
+      const skip = (page - 1) * limit;
 
       const [cuentasBancarias, total] = await this.cuentasBancariasRepository.findAndCount({
         where: { activa: true },
         order: { nombre: 'ASC' },
         relations: ['banco'],
         take: limit,
-        skip: offset,
+        skip: skip,
       });
 
       return {
@@ -177,7 +184,12 @@ export class CuentasBancariasService {
         throw new NotFoundException('Cuenta bancaria no encontrada');
       }
 
-      const { bancoId, ...rest } = updateCuentasBancariaDto;
+      // Prevent changing the account type
+      const { bancoId, tipoCuenta, ...rest } = updateCuentasBancariaDto as any;
+
+      if (tipoCuenta && tipoCuenta !== cuentaBancaria.tipoCuenta) {
+        throw new BadRequestException('No se permite cambiar el tipo de cuenta bancaria');
+      }
 
       if (bancoId) {
         const banco = await this.bancosRepository.findOne({ where: { id: bancoId } });
@@ -189,13 +201,18 @@ export class CuentasBancariasService {
 
       await this.cuentasBancariasRepository.update(id, rest);
 
+      const updated = await this.cuentasBancariasRepository.findOne({
+        where: { id },
+        relations: ['banco'],
+      });
+
       return {
         message: 'Cuenta bancaria actualizada exitosamente',
-        data: cuentaBancaria,
+        data: updated,
       };
       
     } catch (error) {
-      if (error instanceof NotFoundException) throw error;
+      if (error instanceof NotFoundException || error instanceof BadRequestException) throw error;
       throw new InternalServerErrorException('Error al actualizar la cuenta bancaria');
     }
   }

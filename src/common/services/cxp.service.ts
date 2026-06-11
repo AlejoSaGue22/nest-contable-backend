@@ -47,8 +47,8 @@ export class CxpService {
 
       queryBuilder.orderBy('f.fechaVencimiento', 'ASC');
 
-      const page = filtros?.page ?? 1;
-      const limit = filtros?.limit ?? 10;
+      const page = filtros?.page || 1;
+      const limit = filtros?.limit || 10;
       const skip = (page - 1) * limit;
 
       const [facturas, total] = await queryBuilder

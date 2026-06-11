@@ -592,12 +592,10 @@ export class PagosService {
     // CxC: Total por cobrar, vencido, por vencer
     const cxcResult = await this.facturaVentaRepository
       .createQueryBuilder('fv')
-      .select([
-        'SUM(fv.saldoPendiente) as totalPendiente',
-        'COUNT(fv.id) as totalFacturas',
-        'SUM(CASE WHEN fv.fechaVencimiento < CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END) as totalVencido',
-        'SUM(CASE WHEN fv.fechaVencimiento >= CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END) as totalPorVencer',
-      ])
+      .select('SUM(fv.saldoPendiente)', 'totalPendiente')
+      .addSelect('COUNT(fv.id)', 'totalFacturas')
+      .addSelect('SUM(CASE WHEN fv.fechaVencimiento < CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END)', 'totalVencido')
+      .addSelect('SUM(CASE WHEN fv.fechaVencimiento >= CURRENT_DATE THEN fv.saldoPendiente ELSE 0 END)', 'totalPorVencer')
       .where('fv.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
       .andWhere('fv.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
       .andWhere('fv.saldoPendiente > 0')
@@ -607,12 +605,10 @@ export class PagosService {
     // CxP: Total por pagar, vencido, por vencer
     const cxpResult = await this.facturaCompraRepository
       .createQueryBuilder('fc')
-      .select([
-        'SUM(fc.saldoPendiente) as totalPendiente',
-        'COUNT(fc.id) as totalFacturas',
-        'SUM(CASE WHEN fc.fechaVencimiento < CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END) as totalVencido',
-        'SUM(CASE WHEN fc.fechaVencimiento >= CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END) as totalPorVencer',
-      ])
+      .select('SUM(fc.saldoPendiente)', 'totalPendiente')
+      .addSelect('COUNT(fc.id)', 'totalFacturas')
+      .addSelect('SUM(CASE WHEN fc.fechaVencimiento < CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END)', 'totalVencido')
+      .addSelect('SUM(CASE WHEN fc.fechaVencimiento >= CURRENT_DATE THEN fc.saldoPendiente ELSE 0 END)', 'totalPorVencer')
       .where('fc.formaPago = :formaPago', { formaPago: 'CREDITO' })
       .andWhere('fc.paymentStatus IN (:...estados)', { estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] })
       .andWhere('fc.saldoPendiente > 0')
