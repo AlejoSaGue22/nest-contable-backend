@@ -823,6 +823,34 @@ export class PagosService {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // ESTADO DE CUENTA POR NÚMERO DE DOCUMENTO
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerEstadoCuentaClientePorDocumento(numeroDocumento: string) {
+    const cliente = await this.dataSource
+      .getRepository('clientes')
+      .findOne({ where: { numeroDocumento } });
+
+    if (!cliente) {
+      throw new NotFoundException(`Cliente con documento ${numeroDocumento} no encontrado`);
+    }
+
+    return this.obtenerEstadoCuentaCliente(cliente.id);
+  }
+
+  async obtenerEstadoCuentaProveedorPorDocumento(identificacion: string) {
+    const proveedor = await this.dataSource
+      .getRepository('proveedores')
+      .findOne({ where: { identificacion } });
+
+    if (!proveedor) {
+      throw new NotFoundException(`Proveedor con documento ${identificacion} no encontrado`);
+    }
+
+    return this.obtenerEstadoCuentaProveedor(proveedor.id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // CUENTAS BANCARIAS
   // ═══════════════════════════════════════════════════════════════
 

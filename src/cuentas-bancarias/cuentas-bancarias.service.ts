@@ -8,7 +8,6 @@ import { CuentasBancarias, TipoCuentaBancaria } from './entities/cuentas-bancari
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { Banco } from 'src/bancos/entities/banco.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
-import { CuentasService } from 'src/cuentas/cuentas.service';
 import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
@@ -22,12 +21,11 @@ export class CuentasBancariasService {
     private readonly bancosRepository: Repository<Banco>,
     private readonly dataSource: DataSource,
     private readonly asientosContablesService: AsientosContablesService,
-    private readonly cuentasService: CuentasService,
   ) {}
 
   async create(createCuentasBancariaDto: CreateCuentasBancariaDto, userId: string) {
     try {
-      const { bancoId, saldoInicial, cuentaContrapartidaCodigo, tipoCuenta, ...rest } = createCuentasBancariaDto;
+      const { bancoId, saldoInicial, cuentaContrapartidaCodigo, tipoCuenta, codigoCuentaContable, ...rest } = createCuentasBancariaDto;
 
       if (tipoCuenta === TipoCuentaBancaria.BANCO && !bancoId) {
         throw new BadRequestException('Debe seleccionar un banco cuando el tipo de cuenta es Banco');
@@ -49,28 +47,11 @@ export class CuentasBancariasService {
         }
       }
 
-      const codigoPadre = tipoCuenta === TipoCuentaBancaria.BANCO ? '1110' : '1105';
-      const nombreCuenta = banco ? `${banco.nombre} - ${rest.nombre}` : rest.nombre;
-
-      let codigoSubcuenta = codigoPadre;
-      try {
-        const subcuenta = await this.cuentasService.create({
-          codigo: await this.generarCodigoSubcuenta(codigoPadre),
-          nombre: nombreCuenta,
-          parentCode: codigoPadre,
-          aceptaMovimiento: true,
-        });
-        codigoSubcuenta = subcuenta.codigo;
-        this.logger.log(`Subcuenta contable creada: ${codigoSubcuenta} para ${nombreCuenta}`);
-      } catch (error) {
-        this.logger.warn(`No se pudo crear subcuenta automática, usando código padre ${codigoPadre}: ${error.message}`);
-      }
-
       const cuentaBancaria = this.cuentasBancariasRepository.create({
         ...rest,
         tipoCuenta,
         banco: banco || undefined,
-        codigoCuentaContable: codigoSubcuenta,
+        codigoCuentaContable,
         saldoInicial: saldo,
         saldoActual: saldo,
       });
@@ -102,29 +83,6 @@ export class CuentasBancariasService {
       }
       throw new InternalServerErrorException('Error al crear la cuenta bancaria');
     }
-  }
-
-  private async generarCodigoSubcuenta(codigoPadre: string): Promise<string> {
-    const repo = this.dataSource.getRepository('CuentaContable');
-    const longitudHijo = codigoPadre.length + 2;
-
-    // Only match direct children (exactly parent code + 2 digits)
-    const cuentas = await repo
-      .createQueryBuilder('cuenta')
-      .where('cuenta.codigo LIKE :pattern', { pattern: `${codigoPadre}%` })
-      .andWhere('LENGTH(cuenta.codigo) = :len', { len: longitudHijo })
-      .orderBy('cuenta.codigo', 'DESC')
-      .limit(1)
-      .getMany();
-
-    if (cuentas.length === 0) {
-      return `${codigoPadre}01`;
-    }
-
-    const ultimoCodigo = cuentas[0].codigo as string;
-    const sufijo = ultimoCodigo.substring(codigoPadre.length);
-    const siguiente = parseInt(sufijo || '0', 10) + 1;
-    return `${codigoPadre}${siguiente.toString().padStart(2, '0')}`;
   }
 
   async findAll(paginationDto: PaginatioDto) {
@@ -274,8 +232,8 @@ export class CuentasBancariasService {
 
       try {
         await this.asientosContablesService.generarAsientoTransferencia({
-          nombreOrigen: `${origen.banco.nombre} - ${origen.nombre}`,
-          nombreDestino: `${destino.banco.nombre} - ${destino.nombre}`,
+          nombreOrigen: origen.banco ? `${origen.banco.nombre} - ${origen.nombre}` : origen.nombre,
+          nombreDestino: destino.banco ? `${destino.banco.nombre} - ${destino.nombre}` : destino.nombre,
           monto: dto.monto,
           userId,
         });

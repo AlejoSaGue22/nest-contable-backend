@@ -72,7 +72,7 @@ export class ArticulosService {
   }
 
   async findAll(options: PaginatioDto) {
-    const { limit = 10, offset = 0, venta_compra, search } = options;
+    const { venta_compra, search } = options;
 
     const queryBuilder = this.articulosRepository.createQueryBuilder('articulo');
     queryBuilder.leftJoinAndSelect('articulo.unidadmedidaRel', 'unidadmedidaRel');
@@ -99,6 +99,10 @@ export class ArticulosService {
         search: `%${search}%`
       });
     }
+
+    const page = options.offset || 1;
+    const limit = options.limit || 10;
+    const offset = (page - 1) * limit;
 
     queryBuilder.take(limit);
     queryBuilder.skip(offset);

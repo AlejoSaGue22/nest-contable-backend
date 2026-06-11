@@ -18,6 +18,10 @@ export class CreateCuentasBancariaDto {
   @IsNotEmpty()
   tipoCuenta: TipoCuentaBancaria;
 
+  @IsString()
+  @IsNotEmpty()
+  codigoCuentaContable: string;
+
   @IsNumber()
   @IsOptional()
   @Min(0)

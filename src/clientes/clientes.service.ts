@@ -23,9 +23,12 @@ export class ClientesService {
     return this.findOne(saved.id);
   }
 
-  async findAll(options: PaginatioDto) {
+  async findAll(paginationDto: PaginatioDto) {
 
-    const { limit = 10, offset = 0, search } = options;
+    const page = paginationDto.offset || 1;
+    const limit = paginationDto.limit || 10;
+    const offset = (page - 1) * limit;
+    const { search } = paginationDto;
 
     const queryBuilder = this.clientesRepository.createQueryBuilder('cliente');
 

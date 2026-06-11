@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, ParseUUIDPipe, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Body, Param, Query, ParseUUIDPipe, Request, UseGuards } from '@nestjs/common';
 import { PagosService } from './pagos.service';
 import { MedioPago, PaymentStatus, TipoPago } from './enums/pago.enum';
 import { CxcService } from 'src/common/services/cxc.service';
@@ -239,11 +239,33 @@ export class PagosController {
     return toPagoResponse(data, 'Estado de cuenta del cliente obtenido exitosamente');
   }
 
+  @Get('estado-cuenta/cliente-por-documento')
+  async obtenerEstadoCuentaClientePorDocumento(
+    @Query('documento') documento: string,
+  ): Promise<PagoResponseDto<any>> {
+    if (!documento?.trim()) {
+      throw new BadRequestException('El número de documento es requerido');
+    }
+    const data = await this.pagosService.obtenerEstadoCuentaClientePorDocumento(documento.trim());
+    return toPagoResponse(data, 'Estado de cuenta del cliente obtenido exitosamente');
+  }
+
   @Get('estado-cuenta/proveedor/:proveedorId')
   async obtenerEstadoCuentaProveedor(
     @Param('proveedorId', ParseUUIDPipe) proveedorId: string,
   ): Promise<PagoResponseDto<any>> {
     const data = await this.pagosService.obtenerEstadoCuentaProveedor(proveedorId);
+    return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido exitosamente');
+  }
+
+  @Get('estado-cuenta/proveedor-por-documento')
+  async obtenerEstadoCuentaProveedorPorDocumento(
+    @Query('documento') documento: string,
+  ): Promise<PagoResponseDto<any>> {
+    if (!documento?.trim()) {
+      throw new BadRequestException('El número de documento es requerido');
+    }
+    const data = await this.pagosService.obtenerEstadoCuentaProveedorPorDocumento(documento.trim());
     return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido exitosamente');
   }
 

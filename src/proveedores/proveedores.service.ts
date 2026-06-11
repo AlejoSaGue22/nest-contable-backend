@@ -25,8 +25,12 @@ export class ProveedoresService {
         return result;
     }
 
-    async findAll(options: PaginatioDto) {
-        const { limit = 10, offset = 0 } = options;
+    async findAll(paginationDto: PaginatioDto) {
+        const page = paginationDto.offset || 1;
+        const limit = paginationDto.limit || 10;
+        const offset = (page - 1) * limit;
+        const { search } = paginationDto;
+        
         const proveedores = await this.proveedorRepository.find({
             take: limit,
             skip: offset,
