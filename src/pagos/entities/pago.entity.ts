@@ -34,6 +34,9 @@ export class Pago {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 20 })
+  numero: string;
+
   @Column({ type: 'enum', enum: TipoPago })
   tipo: TipoPago;
 

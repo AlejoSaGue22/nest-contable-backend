@@ -146,8 +146,12 @@ export class PagosService {
         // pero el asientoId quedará '' para revisión manual.
       }
 
-      // ── 6. Crear registro de pago ────────────────────────────────────
+      // ── 6. Generar número de comprobante ─────────────────────────────
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.COBRO);
+
+      // ── 7. Crear registro de pago ────────────────────────────────────
       const pago = queryRunner.manager.create(Pago, {
+        numero:           numeroComprobante,
         tipo:             TipoPago.COBRO,
         facturaVentaId:   factura.id,
         fecha:            new Date(dto.fecha),
@@ -163,14 +167,14 @@ export class PagosService {
 
       const pagoGuardado = await queryRunner.manager.save(Pago, pago);
 
-      // ── 7. Actualizar factura ────────────────────────────────────────
+      // ── 8. Actualizar factura ─────────────────────────────────────
       await queryRunner.manager.update(FacturasVenta, { id: factura.id }, {
         totalPagado:    nuevoTotalPagado,
         saldoPendiente: nuevoSaldoPendiente,
         paymentStatus:  nuevoPaymentStatus,
       });
 
-      // ── 8. Actualizar saldo de cuenta bancaria ─────────────────────
+      // ── 9. Actualizar saldo de cuenta bancaria ─────────────────────
       if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
@@ -310,8 +314,12 @@ export class PagosService {
         
       }
 
-      // ── 6. Crear registro de pago ────────────────────────────────────
+      // ── 6. Generar número de comprobante ─────────────────────────────
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.PAGO);
+
+      // ── 7. Crear registro de pago ────────────────────────────────────
       const pago = queryRunner.manager.create(Pago, {
+        numero:           numeroComprobante,
         tipo:             TipoPago.PAGO,
         facturaCompraId:  factura.id,
         fecha:            new Date(dto.fecha),
@@ -327,7 +335,7 @@ export class PagosService {
 
       const pagoGuardado = await queryRunner.manager.save(Pago, pago);
 
-      // ── 7. Actualizar factura compra ─────────────────────────────────
+      // ── 8. Actualizar factura compra ─────────────────────────────────
       const updatePayload: Partial<FacturaCompra> = {
         totalPagado:    nuevoTotalPagado,
         saldoPendiente: nuevoSaldoPendiente,
@@ -341,7 +349,7 @@ export class PagosService {
 
       await queryRunner.manager.update(FacturaCompra, { id: factura.id }, updatePayload);
 
-      // ── 8. Actualizar saldo de cuenta bancaria ─────────────────────
+      // ── 9. Actualizar saldo de cuenta bancaria ─────────────────────
       if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
@@ -484,6 +492,7 @@ export class PagosService {
 
       return {
         id: p.id,
+        numero: p.numero,
         tipo: p.tipo,
         fecha: p.fecha,
         monto: p.monto,
@@ -552,6 +561,7 @@ export class PagosService {
     return {
       pago: {
         id: pago.id,
+        numero: pago.numero,
         tipo: pago.tipo,
         fecha: pago.fecha,
         monto: pago.monto,
@@ -636,6 +646,7 @@ export class PagosService {
 
       return {
         id: p.id,
+        numero: p.numero,
         tipo: p.tipo,
         fecha: p.fecha,
         monto: p.monto,
@@ -848,6 +859,35 @@ export class PagosService {
     }
 
     return this.obtenerEstadoCuentaProveedor(proveedor.id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GENERACIÓN DE NÚMERO DE COMPROBANTE
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Genera un número secuencial para el comprobante de pago/cobro.
+   * Formato: COB-0001 / PAG-0001 (secuencia independiente por tipo).
+   */
+  private async generarNumeroPago(
+    queryRunner: any,
+    tipo: TipoPago,
+  ): Promise<string> {
+    const prefijo = tipo === TipoPago.COBRO ? 'COB' : 'PAG';
+
+    const ultimoPago = await queryRunner.manager.findOne(Pago, {
+      where: { tipo },
+      order: { createdAt: 'DESC' },
+    });
+
+    let correlativo = 1;
+    if (ultimoPago?.numero) {
+      const partes = ultimoPago.numero.split('-');
+      const ultimoNum = parseInt(partes[1], 10);
+      correlativo = isNaN(ultimoNum) ? 1 : ultimoNum + 1;
+    }
+
+    return `${prefijo}-${String(correlativo).padStart(4, '0')}`;
   }
 
   // ═══════════════════════════════════════════════════════════════

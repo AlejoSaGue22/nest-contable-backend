@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEnum, IsNumber, IsBoolean, IsOptional, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
 import { TipoCuentaBancaria } from '../entities/cuentas-bancaria.entity';
 
 export class CreateCuentasBancariaDto {
