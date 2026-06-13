@@ -9,6 +9,7 @@ import { UnidadMedida } from './entities/unidad-medida.entity';
 import { CategoriaArticulo } from './entities/categorias-articulos-entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
+import { EntidadSeguridadSocial } from 'src/nomina/entities/entidad-seguridad-social.entity';
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
             CategoriaArticulo,
             CuentaContable,
             ConceptoCorreccion,
+            EntidadSeguridadSocial,
         ]),
     ],
     providers: [CatalogsService],

@@ -125,6 +125,49 @@ export const DEFAULT_MENU_ITEMS = [
     ],
   },
   {
+    title: 'Nómina',
+    icon: '<i class="fa-solid fa-file-invoice"></i>',
+    route: '/panel/nomina/empleados',
+    requiredPermission: Permission.NOMINA_ACCESS,
+    order: 3,
+    isActive: true,
+    isVisible: true,
+    other: 'NO',
+    metadata: { badge: null },
+    children: [
+      {
+        title: 'Empleados',
+        icon: 'people',
+        route: '/panel/nomina/empleados',
+        requiredPermission: Permission.NOMINA_EMPLOYEE_READ,
+        order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: 'Períodos',
+        icon: 'calendar_month',
+        route: '/panel/nomina/periodos',
+        requiredPermission: Permission.NOMINA_PERIOD_READ,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+      {
+        title: 'Reportes',
+        icon: 'bar_chart',
+        route: '/panel/nomina/reportes',
+        requiredPermission: Permission.NOMINA_REPORT_READ,
+        order: 2,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null }
+      },
+    ],
+  },
+  {
       title: 'Pagos',
       icon: '<i class="fa-solid fa-money-bill-transfer"></i>',
       route: '/panel/pagos',

@@ -1429,6 +1429,167 @@ export class AsientosContablesService {
     return this.obtenerCuentaPorCodigo(fallbackCodigo);
   }
 
+  async generarAsientoNomina(params: {
+    periodoNombre: string;
+    fecha: Date;
+    totalDevengado: number;
+    totalProvisiones: number;
+    totalAportes: number;
+    netoPagar: number;
+    saludPensionEmpleado: number;
+    retencionFuente: number;
+    userId: string;
+  }): Promise<AsientoContable> {
+    const { periodoNombre, fecha, totalDevengado, totalProvisiones, totalAportes, netoPagar, saludPensionEmpleado, retencionFuente, userId } = params;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const cuentaGastosPersonal = await this.obtenerCuentaPorCodigo('5105');
+      const cuentaPrestaciones = await this.obtenerCuentaPorCodigo('5110');
+      const cuentaAportesParafiscales = await this.obtenerCuentaPorCodigo('5115');
+      const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
+      const cuentaRetencionNomina = await this.obtenerCuentaPorCodigo('2370');
+      const cuentaRetefuente = await this.obtenerCuentaPorCodigo('2365');
+      const cuentaAportesXPagar = await this.obtenerCuentaPorCodigo('2368');
+
+      const detalles: DetalleAsiento[] = [
+        { cuentaId: cuentaGastosPersonal.id, debito: totalDevengado, credito: 0, descripcion: 'Sueldos y salarios' },
+        { cuentaId: cuentaPrestaciones.id, debito: totalProvisiones, credito: 0, descripcion: 'Prestaciones sociales' },
+        { cuentaId: cuentaAportesParafiscales.id, debito: totalAportes, credito: 0, descripcion: 'Aportes parafiscales' },
+        { cuentaId: cuentaObligacionesLab.id, debito: 0, credito: netoPagar + totalProvisiones, descripcion: 'Obligaciones laborales' },
+        { cuentaId: cuentaRetencionNomina.id, debito: 0, credito: saludPensionEmpleado, descripcion: 'Retenciones salud y pensión' },
+        { cuentaId: cuentaRetefuente.id, debito: 0, credito: retencionFuente, descripcion: 'Retención en la fuente' },
+        { cuentaId: cuentaAportesXPagar.id, debito: 0, credito: totalAportes, descripcion: 'Aportes parafiscales por pagar' },
+      ];
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.NOMINA,
+          fecha,
+          referencia: periodoNombre,
+          descripcion: `Provisión nómina - ${periodoNombre}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento nómina: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de nómina: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async generarAsientoPagoNomina(params: {
+    periodoNombre: string;
+    fecha: Date;
+    netoPagar: number;
+    cuentaCodigoContable: string;
+    userId: string;
+  }): Promise<AsientoContable> {
+    const { periodoNombre, fecha, netoPagar, cuentaCodigoContable, userId } = params;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
+      const cuentaBanco = await this.obtenerCuentaPorCodigo(cuentaCodigoContable);
+
+      const detalles: DetalleAsiento[] = [
+        { cuentaId: cuentaObligacionesLab.id, debito: netoPagar, credito: 0, descripcion: 'Pago nómina' },
+        { cuentaId: cuentaBanco.id, debito: 0, credito: netoPagar, descripcion: `Pago nómina ${periodoNombre}` },
+      ];
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.PAGO_NOMINA,
+          fecha,
+          referencia: periodoNombre,
+          descripcion: `Pago nómina - ${periodoNombre}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento PAGO_NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error asiento pago nómina: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de pago de nómina: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async anularAsientoNomina(params: {
+    periodoNombre: string;
+    fecha: Date;
+    asientoOriginal: AsientoContable;
+    userId: string;
+  }): Promise<AsientoContable> {
+    const { periodoNombre, fecha, asientoOriginal, userId } = params;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const detalles: DetalleAsiento[] = asientoOriginal.detalles.map(d => ({
+        cuentaId: d.cuentaId,
+        debito: d.credito,
+        credito: d.debito,
+        descripcion: `ANULACIÓN: ${d.descripcion}`,
+      }));
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.ANULACION_NOMINA,
+          fecha,
+          referencia: `${periodoNombre} (anula #${asientoOriginal.numero})`,
+          descripcion: `Anulación provisión nómina - ${periodoNombre}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Asiento ANULACION_NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      return asiento;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error anulación asiento nómina: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al anular asiento de nómina: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findOneAsientoConDetalles(id: string): Promise<AsientoContable> {
+    const asiento = await this.asientoRepository.findOne({
+      where: { id },
+      relations: ['detalles', 'detalles.cuenta'],
+    });
+    if (!asiento) {
+      throw new Error(`Asiento contable '${id}' no encontrado`);
+    }
+    return asiento;
+  }
+
   private async generarNumeroAsiento(queryRunner: any): Promise<string> {
     const ultimoAsiento = await queryRunner.manager.findOne(AsientoContable, {
       where: {},

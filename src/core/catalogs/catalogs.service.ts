@@ -13,6 +13,8 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { UpdateCategoryArticleDto } from './dtos/update-category.dto';
 import { NotFoundException } from '@nestjs/common';
 import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
+import { EntidadSeguridadSocial } from 'src/nomina/entities/entidad-seguridad-social.entity';
+import { ENTIDADES_SEGURO_SOCIAL } from 'src/common/constants/entidades-ss.config';
 
 @Injectable()
 export class CatalogsService {
@@ -31,9 +33,11 @@ export class CatalogsService {
         private categoriasArticulosRepo: Repository<CategoriaArticulo>,
         @InjectRepository(CuentaContable)
         private cuentaContableRepo: Repository<CuentaContable>,
-        @InjectRepository(ConceptoCorreccion)
-        private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
-    ) { }
+    @InjectRepository(ConceptoCorreccion)
+    private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
+    @InjectRepository(EntidadSeguridadSocial)
+    private entidadSSRepo: Repository<EntidadSeguridadSocial>,
+) { }
 
     async findAllDocumentTypes() {
         return this.tipoDocumentoRepo.find({ where: { state: true } });
@@ -185,6 +189,7 @@ export class CatalogsService {
         await this.seedUnitsMeasure();
         await this.seedCategoriesArticles();
         await this.seedConceptsCorrections();
+        await this.seedEntidadesSeguridadSocial();
         this.logger.log('✅ Todos los catálogos han sido sincronizados');
     }
 
@@ -336,6 +341,23 @@ export class CatalogsService {
             }
         }
         this.logger.log('✔ Categorías de artículos sincronizadas');
+    }
+
+    private async seedEntidadesSeguridadSocial() {
+        const data = Object.values(ENTIDADES_SEGURO_SOCIAL);
+
+        for (const item of data) {
+            const exists = await this.entidadSSRepo.findOne({ where: { codigo: item.codigo } });
+            if (!exists) {
+                await this.entidadSSRepo.save({
+                    codigo: item.codigo,
+                    nombre: item.nombre,
+                    tipo: item.tipo as any,
+                    activo: true,
+                });
+            }
+        }
+        this.logger.log('✔ Entidades de seguridad social sincronizadas');
     }
 
     private generarCodigo(nombre: string): string {

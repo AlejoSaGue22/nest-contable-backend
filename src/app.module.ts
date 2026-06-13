@@ -34,6 +34,7 @@ import { ImpuestosModule } from './settings/impuestos/impuestos.module';
 import { ImpuestosService } from './settings/impuestos/impuestos.service';
 import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-compras.module';
 import { VendedoresModule } from './settings/vendedores/vendedores.module';
+import { NominaModule } from './nomina/nomina.module';
 
 @Module({
     imports: [TypeOrmModule.forRoot({
@@ -77,7 +78,8 @@ import { VendedoresModule } from './settings/vendedores/vendedores.module';
     NotasAjusteModule,
     ImpuestosModule,
     NotasAjusteComprasModule,
-    VendedoresModule
+    VendedoresModule,
+    NominaModule
   ],
   controllers: [],
 })

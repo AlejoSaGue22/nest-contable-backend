@@ -102,6 +102,20 @@ export enum Permission {
   // Contabilidad
   ACCOUNTING_VIEW = 'accounting:view',
   ACCOUNTING_MANAGE = 'accounting:manage',
+
+  // Nómina
+  NOMINA_ACCESS = 'nomina:access',
+  NOMINA_EMPLOYEE_CREATE = 'nomina:employee_create',
+  NOMINA_EMPLOYEE_READ = 'nomina:employee_read',
+  NOMINA_EMPLOYEE_UPDATE = 'nomina:employee_update',
+  NOMINA_EMPLOYEE_DELETE = 'nomina:employee_delete',
+  NOMINA_PERIOD_CREATE = 'nomina:period_create',
+  NOMINA_PERIOD_READ = 'nomina:period_read',
+  NOMINA_PERIOD_LIQUIDATE = 'nomina:period_liquidate',
+  NOMINA_PERIOD_PAY = 'nomina:period_pay',
+  NOMINA_PERIOD_ANUL = 'nomina:period_anul',
+  NOMINA_DIAN_SEND = 'nomina:dian_send',
+  NOMINA_REPORT_READ = 'nomina:report_read',
 }
 
 export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
@@ -119,6 +133,12 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,Permission.PAGO_READ, Permission.PAGO_CREATE, Permission.PAGO_UPDATE,
     Permission.PAGO_DELETE, Permission.PAGO_EXPORT,Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
     Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_MANAGE,
+    Permission.NOMINA_ACCESS, Permission.NOMINA_EMPLOYEE_CREATE, Permission.NOMINA_EMPLOYEE_READ,
+    Permission.NOMINA_EMPLOYEE_UPDATE, Permission.NOMINA_EMPLOYEE_DELETE,
+    Permission.NOMINA_PERIOD_CREATE, Permission.NOMINA_PERIOD_READ, Permission.NOMINA_PERIOD_LIQUIDATE,
+    Permission.NOMINA_PERIOD_PAY, Permission.NOMINA_PERIOD_ANUL,
+    Permission.NOMINA_DIAN_SEND,
+    Permission.NOMINA_REPORT_READ,
   ],
   [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
