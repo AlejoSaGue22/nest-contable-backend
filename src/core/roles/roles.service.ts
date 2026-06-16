@@ -80,9 +80,9 @@ export class RolesService {
     const role = await this.findOne(id);
 
     // Verificar si es un rol del sistema
-    if (role.isSystem) {
-      throw new BadRequestException('No se pueden modificar los roles del sistema');
-    }
+    // if (role.isSystem) {
+    //   throw new BadRequestException('No se pueden modificar los roles del sistema');
+    // }
 
     // Verificar si se está cambiando el nombre
     if (updateRoleDto.name && updateRoleDto.name !== role.name) {

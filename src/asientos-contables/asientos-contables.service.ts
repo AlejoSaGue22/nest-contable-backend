@@ -75,7 +75,7 @@ export class AsientosContablesService {
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let codigoDebito: string;
       if (isContado) {
-        codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
+        codigoDebito = factura.cuentaBancaria.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
           : this.resolverCuentaContado(factura.metodoPago || undefined);
       } else {
@@ -180,15 +180,11 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento FACTURA_VENTA generado: ${asiento.numero}`);
       return asiento;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento factura venta: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        `Error al generar asiento contable de factura de venta: ${error.message}`,
-      );
+      this.logger.error(`Error asiento factura venta: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento contable de factura de venta: ${error.message}`);
     } finally {
       await queryRunner.release();
     }

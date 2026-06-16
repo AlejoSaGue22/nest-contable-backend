@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { XMLBuilder } from 'fast-xml-parser';
+// import { XMLBuilder } from 'fast-xml-parser';
 import { PeriodoNomina } from '../entities/periodo-nomina.entity';
 import { Liquidacion } from '../entities/liquidacion.entity';
 import { Empleado } from '../entities/empleado.entity';
@@ -15,7 +15,7 @@ const CUNE_SEED = 'N6a6o6m6i6n6a6E6l6e6c6t6r6o6n6i6c6a6';
 @Injectable()
 export class NominaDianService {
     private readonly logger = new Logger(NominaDianService.name);
-    private readonly xmlBuilder: XMLBuilder;
+    // private readonly xmlBuilder: XMLBuilder;
 
     constructor(
         @InjectRepository(PeriodoNomina)
@@ -26,12 +26,12 @@ export class NominaDianService {
         private readonly empleadoRepo: Repository<Empleado>,
         private readonly configService: ConfigService,
     ) {
-        this.xmlBuilder = new XMLBuilder({
-            format: true,
-            indentBy: '  ',
-            ignoreAttributes: false,
-            suppressEmptyNode: true,
-        });
+        // this.xmlBuilder = new XMLBuilder({
+        //     format: true,
+        //     indentBy: '  ',
+        //     ignoreAttributes: false,
+        //     suppressEmptyNode: true,
+        // });
     }
 
     async generarEnviarDian(periodoId: string, userId: string) {
@@ -159,8 +159,9 @@ export class NominaDianService {
             }
         };
 
-        const rawXml = this.xmlBuilder.build(xmlObj);
-        return rawXml;
+        // const rawXml = this.xmlBuilder.build(xmlObj);
+        // return xmlObj;
+        return '';
     }
 
     private construirEmpleadoXml(liq: Liquidacion) {

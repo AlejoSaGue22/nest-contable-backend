@@ -82,7 +82,7 @@ export class ArticulosService {
     if (venta_compra) {
       const tiposFiltro: Record<string, string[]> = {
         'costo': ['costo', 'gasto'],
-        'venta': ['venta'],
+        'venta': ['venta', 'servicio'],
       };
 
       const tiposAFiltrar = tiposFiltro[venta_compra];

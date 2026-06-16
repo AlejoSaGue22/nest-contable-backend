@@ -18,7 +18,7 @@ export class CreateRoleDto {
 
   @IsArray()
   @ArrayNotEmpty()
-  @IsEnum(Permission, { each: true })
+  // @IsEnum(Permission, { each: true })
   permissions: Permission[];
 
   @IsOptional()

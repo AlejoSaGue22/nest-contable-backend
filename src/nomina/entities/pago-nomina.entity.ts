@@ -31,7 +31,7 @@ export class PagoNomina {
     @Column({ nullable: true })
     bancoId: string | null;
 
-    @Column({ nullable: true })
+    @Column({ type: 'varchar', length: 255, nullable: true })
     numeroComprobante: string | null;
 
     @Column({ type: 'text', nullable: true })
