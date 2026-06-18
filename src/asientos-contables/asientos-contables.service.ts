@@ -63,7 +63,10 @@ export class AsientosContablesService {
   // TARJETA/OTROS: DÉBITO Bancos 1110   | CRÉDITO Ingresos (x artículo) + IVA 2408
   // CRÉDITO:       DÉBITO Clientes 1305 | CRÉDITO Ingresos (x artículo) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+  async generarAsientoFacturaVenta(
+    factura: FacturasVenta,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -97,7 +100,12 @@ export class AsientosContablesService {
       for (const item of factura.items) {
         const producto = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaVentas',
+          ],
         });
 
         if (!producto?.categoriaArticulo?.cuentaPrincipal) {
@@ -107,7 +115,10 @@ export class AsientosContablesService {
         }
 
         const cuentaId = producto.categoriaArticulo.cuentaPrincipalId;
-        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,);
+        ingresosAgrupados.set(
+          cuentaId,
+          (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,
+        );
 
         const valorIva = (item as any).valor_iva || 0;
         if (valorIva > 0) {
@@ -125,7 +136,10 @@ export class AsientosContablesService {
           } else {
             cuentaIvaId = '2408';
           }
-          ivaAgrupados.set(cuentaIvaId,(ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,);
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
         }
       }
 
@@ -180,11 +194,15 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento FACTURA_VENTA generado: ${asiento.numero}`);
       return asiento;
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento factura venta: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento contable de factura de venta: ${error.message}`);
+      this.logger.error(
+        `Error asiento factura venta: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento contable de factura de venta: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -216,7 +234,12 @@ export class AsientosContablesService {
       for (const item of gasto.items) {
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaCompras',
+          ],
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
@@ -296,13 +319,13 @@ export class AsientosContablesService {
       }
 
       const codigoCredito = isContado
-        ? (gasto.cuentaBancaria?.codigoCuentaContable
-            ? gasto.cuentaBancaria.codigoCuentaContable
-            : this.resolverCuentaContado(gasto.metodoPago ?? undefined))
+        ? gasto.cuentaBancaria?.codigoCuentaContable
+          ? gasto.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(gasto.metodoPago ?? undefined)
         : codigoCxP;
 
       const descCredito = isContado
-        ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedorId}`
+        ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedor.identificacion}`
         : `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCredito);
@@ -379,7 +402,12 @@ export class AsientosContablesService {
       for (const item of factura.items) {
         const producto = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaVentas',
+          ],
         });
 
         if (!producto?.categoriaArticulo?.cuentaPrincipal) {
@@ -517,7 +545,12 @@ export class AsientosContablesService {
       for (const item of gasto.items) {
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaCompras',
+          ],
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
@@ -572,13 +605,13 @@ export class AsientosContablesService {
       }
 
       const codigoDebito = isContado
-        ? (gasto.cuentaBancaria?.codigoCuentaContable
-            ? gasto.cuentaBancaria.codigoCuentaContable
-            : this.resolverCuentaContado(gasto.metodoPago!))
+        ? gasto.cuentaBancaria?.codigoCuentaContable
+          ? gasto.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(gasto.metodoPago!)
         : codigoCxP;
 
       const descDebito = isContado
-        ? `ANULACIÓN contado - Proveedor: ${gasto.proveedorId}`
+        ? `ANULACIÓN contado - Proveedor: ${gasto.proveedor.identificacion}`
         : `ANULACIÓN ${codigoCxP === '2335' ? 'gasto por pagar' : 'deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       const cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
@@ -648,7 +681,10 @@ export class AsientosContablesService {
   // NC (CRÉDITO): DÉBITO Ingresos (xArt) + IVA 2408 | CRÉDITO Clientes 1305 / Caja-Bancos
   // ND (DÉBITO):  DÉBITO Clientes 1305 / Caja-Bancos | CRÉDITO Ingresos (xArt) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoNotaAjuste(nota: NotaAjuste, userId: string): Promise<AsientoContable> {
+  async generarAsientoNotaAjuste(
+    nota: NotaAjuste,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -664,22 +700,35 @@ export class AsientosContablesService {
 
       for (const item of nota.items) {
         if (!item.articuloId) {
-          throw new Error('El item de la nota no tiene un artículo vinculado (articuloId)');
+          throw new Error(
+            'El item de la nota no tiene un artículo vinculado (articuloId)',
+          );
         }
 
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaVentas'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaVentas',
+          ],
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         // Para NC: usar subtotal menos descuento aplicado
-        const valorIngreso = Number(item.subtotal) - Number(item.valorDescuento);
-        ingresosAgrupados.set(cuentaId, (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso);
+        const valorIngreso =
+          Number(item.subtotal) - Number(item.valorDescuento);
+        ingresosAgrupados.set(
+          cuentaId,
+          (ingresosAgrupados.get(cuentaId) ?? 0) + valorIngreso,
+        );
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
@@ -698,7 +747,10 @@ export class AsientosContablesService {
           } else {
             cuentaIvaId = '2408';
           }
-          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
         }
       }
 
@@ -729,12 +781,13 @@ export class AsientosContablesService {
       // 4. Contrapartida (Crédito para NC, Débito para ND): Clientes o Caja/Bancos
       const isContado = factura.formaPago === FormaPago.CONTADO;
       const codigoCuentaContra = isContado
-        ? (factura.cuentaBancaria?.codigoCuentaContable
-            ? factura.cuentaBancaria.codigoCuentaContable
-            : this.resolverCuentaContado(factura.metodoPago!))
+        ? factura.cuentaBancaria?.codigoCuentaContable
+          ? factura.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(factura.metodoPago!)
         : '1305';
 
-      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+      const cuentaContra =
+        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       detalles.push({
         cuentaId: cuentaContra.id,
@@ -816,7 +869,7 @@ export class AsientosContablesService {
           cuentaId: cuentaCredito.id,
           debito: 0,
           credito: monto,
-          descripcion: `Abono CxC - Fact: ${facturaVenta.comprobante_completo} | Cliente: ${facturaVenta.clientId}`,
+          descripcion: `Abono CxC - Fact: ${facturaVenta.comprobante_completo} | Cliente: ${facturaVenta.client.numeroDocumento}`,
         },
       ];
 
@@ -884,7 +937,7 @@ export class AsientosContablesService {
           cuentaId: cuentaDebito.id,
           debito: monto,
           credito: 0,
-          descripcion: `Pago CxP - Compra: ${facturaCompra.numero} | Proveedor: ${facturaCompra.proveedorId}`,
+          descripcion: `Pago CxP - Compra: ${facturaCompra.numero} | Proveedor: ${facturaCompra.proveedor.identificacion}`,
         },
         {
           cuentaId: cuentaCredito.id,
@@ -1023,12 +1076,15 @@ export class AsientosContablesService {
     return asientoGuardado;
   }
 
-  async generarAsientoNotaAjusteCompra(nota: NotaAjusteCompra, userId: string): Promise<AsientoContable> {
+  async generarAsientoNotaAjusteCompra(
+    nota: NotaAjusteCompra,
+    userId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    try {      
+    try {
       const factura = nota.facturaOriginal;
       const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
       const detalles: DetalleAsiento[] = [];
@@ -1041,16 +1097,26 @@ export class AsientosContablesService {
         if (!item.articuloId) continue;
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaCompras',
+          ],
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-           throw new Error(`Artículo no tiene cuenta contable principal configurada`);
+          throw new Error(
+            `Artículo no tiene cuenta contable principal configurada`,
+          );
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
-        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto);
+        gastosAgrupados.set(
+          cuentaId,
+          (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto,
+        );
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
@@ -1069,14 +1135,19 @@ export class AsientosContablesService {
           } else {
             cuentaIvaId = '1355';
           }
-          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
         }
       }
 
       // Para Nota Crédito de Compra: se revierte el gasto
       // Crédito: Gasto (para NC) | Débito: Gasto (para ND)
       for (const [cuentaId, valor] of gastosAgrupados) {
-        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
         detalles.push({
           cuentaId,
           debito: isNotaCredito ? 0 : valor,
@@ -1101,18 +1172,22 @@ export class AsientosContablesService {
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
-        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, { where: { id: In(Array.from(gastosAgrupados.keys())) } });
+        const cuentasInvolucradas = await queryRunner.manager.find(
+          CuentaContable,
+          { where: { id: In(Array.from(gastosAgrupados.keys())) } },
+        );
         if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
           codigoCxP = '2335';
         }
       }
 
       const codigoCuentaContra = isContado
-        ? (factura.cuentaBancaria?.codigoCuentaContable
-            ? factura.cuentaBancaria.codigoCuentaContable
-            : this.resolverCuentaContado(factura.metodoPago!))
+        ? factura.cuentaBancaria?.codigoCuentaContable
+          ? factura.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(factura.metodoPago!)
         : codigoCxP;
-      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+      const cuentaContra =
+        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       detalles.push({
         cuentaId: cuentaContra.id,
@@ -1121,27 +1196,37 @@ export class AsientosContablesService {
         descripcion: `${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Fact: ${factura.numero} | Nota: ${nota.numeroCompleto}`,
       });
 
-      const asiento = await this.crearAsiento({
-        tipo: isNotaCredito ? TipoAsiento.NOTA_CREDITO_COMPRA : TipoAsiento.NOTA_DEBITO_COMPRA,
-        fecha: nota.fecha,
-        referencia: nota.numeroCompleto,
-        descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} Compra ${nota.numeroCompleto}`,
-        detalles,
-        userId,
-      }, queryRunner);
+      const asiento = await this.crearAsiento(
+        {
+          tipo: isNotaCredito
+            ? TipoAsiento.NOTA_CREDITO_COMPRA
+            : TipoAsiento.NOTA_DEBITO_COMPRA,
+          fecha: nota.fecha,
+          referencia: nota.numeroCompleto,
+          descripcion: `Asiento automático - ${isNotaCredito ? 'Nota Crédito' : 'Nota Débito'} Compra ${nota.numeroCompleto}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
 
       await queryRunner.commitTransaction();
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento nota compra: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error asiento nota compra: ${error.message}`,
+        error.stack,
+      );
       throw error;
     } finally {
       await queryRunner.release();
     }
   }
 
-  async generarAsientoAnulacionNotaAjusteCompra(notaId: string): Promise<AsientoContable> {
+  async generarAsientoAnulacionNotaAjusteCompra(
+    notaId: string,
+  ): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1149,10 +1234,11 @@ export class AsientosContablesService {
     try {
       const nota = await queryRunner.manager.findOne(NotaAjusteCompra, {
         where: { id: notaId },
-        relations: ['facturaOriginal', 'items']
+        relations: ['facturaOriginal', 'items'],
       });
 
-      if (!nota) throw new Error(`Nota de ajuste compra ${notaId} no encontrada`);
+      if (!nota)
+        throw new Error(`Nota de ajuste compra ${notaId} no encontrada`);
 
       const factura = nota.facturaOriginal;
       const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
@@ -1166,16 +1252,26 @@ export class AsientosContablesService {
         if (!item.articuloId) continue;
         const articulo = await queryRunner.manager.findOne(Articulo, {
           where: { id: item.articuloId },
-          relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal', 'impuestoRel', 'impuestoRel.cuentaCompras'],
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaCompras',
+          ],
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-           throw new Error(`Artículo no tiene cuenta contable principal configurada`);
+          throw new Error(
+            `Artículo no tiene cuenta contable principal configurada`,
+          );
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
         const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
-        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto);
+        gastosAgrupados.set(
+          cuentaId,
+          (gastosAgrupados.get(cuentaId) ?? 0) + valorGasto,
+        );
 
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
@@ -1194,14 +1290,19 @@ export class AsientosContablesService {
           } else {
             cuentaIvaId = '1355';
           }
-          ivaAgrupados.set(cuentaIvaId, (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva);
+          ivaAgrupados.set(
+            cuentaIvaId,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + valorIva,
+          );
         }
       }
 
       // Revertir (invertir débitos y créditos del asiento original)
       // Para Nota Crédito original: Gasto fue Crédito -> Ahora es Débito
       for (const [cuentaId, valor] of gastosAgrupados) {
-        const cuenta = await queryRunner.manager.findOne(CuentaContable, { where: { id: cuentaId } });
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
         detalles.push({
           cuentaId,
           debito: isNotaCredito ? valor : 0,
@@ -1222,18 +1323,22 @@ export class AsientosContablesService {
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
-        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable, { where: { id: In(Array.from(gastosAgrupados.keys())) } });
+        const cuentasInvolucradas = await queryRunner.manager.find(
+          CuentaContable,
+          { where: { id: In(Array.from(gastosAgrupados.keys())) } },
+        );
         if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
           codigoCxP = '2335';
         }
       }
 
       const codigoCuentaContra = isContado
-        ? (factura.cuentaBancaria?.codigoCuentaContable
-            ? factura.cuentaBancaria.codigoCuentaContable
-            : this.resolverCuentaContado(factura.metodoPago!))
+        ? factura.cuentaBancaria?.codigoCuentaContable
+          ? factura.cuentaBancaria.codigoCuentaContable
+          : this.resolverCuentaContado(factura.metodoPago!)
         : codigoCxP;
-      const cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+      const cuentaContra =
+        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
 
       // Para Nota Crédito original: CxP fue Débito -> Ahora es Crédito
       detalles.push({
@@ -1243,20 +1348,26 @@ export class AsientosContablesService {
         descripcion: `ANULACIÓN - ${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Fact: ${factura.numero} | Nota: ${nota.numeroCompleto}`,
       });
 
-      const asiento = await this.crearAsiento({
-        tipo: TipoAsiento.ANULACION_NOTA_COMPRA,
-        fecha: new Date(),
-        referencia: nota.numeroCompleto,
-        descripcion: `Asiento automático - Anulación Nota Compra ${nota.numeroCompleto}`,
-        detalles,
-        userId: nota.createdById,
-      }, queryRunner);
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.ANULACION_NOTA_COMPRA,
+          fecha: new Date(),
+          referencia: nota.numeroCompleto,
+          descripcion: `Asiento automático - Anulación Nota Compra ${nota.numeroCompleto}`,
+          detalles,
+          userId: nota.createdById,
+        },
+        queryRunner,
+      );
 
       await queryRunner.commitTransaction();
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento anulación nota compra: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error asiento anulación nota compra: ${error.message}`,
+        error.stack,
+      );
       throw error;
     } finally {
       await queryRunner.release();
@@ -1289,7 +1400,9 @@ export class AsientosContablesService {
 
     try {
       const cuentaBancos = await this.obtenerCuentaPorCodigo('1110');
-      const cuentaContrapartida = await this.obtenerCuentaPorCodigo(cuentaContrapartidaCodigo);
+      const cuentaContrapartida = await this.obtenerCuentaPorCodigo(
+        cuentaContrapartidaCodigo,
+      );
 
       const detalles: DetalleAsiento[] = [
         {
@@ -1319,12 +1432,19 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento SALDO_INICIAL generado: ${asiento.numero} | $${monto} | ${nombreCuenta}`);
+      this.logger.log(
+        `Asiento SALDO_INICIAL generado: ${asiento.numero} | $${monto} | ${nombreCuenta}`,
+      );
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento saldo inicial: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de saldo inicial: ${error.message}`);
+      this.logger.error(
+        `Error asiento saldo inicial: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de saldo inicial: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -1373,12 +1493,19 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento TRANSFERENCIA generado: ${asiento.numero} | $${monto} | ${nombreOrigen} -> ${nombreDestino}`);
+      this.logger.log(
+        `Asiento TRANSFERENCIA generado: ${asiento.numero} | $${monto} | ${nombreOrigen} -> ${nombreDestino}`,
+      );
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento transferencia: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de transferencia: ${error.message}`);
+      this.logger.error(
+        `Error asiento transferencia: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de transferencia: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -1436,7 +1563,17 @@ export class AsientosContablesService {
     retencionFuente: number;
     userId: string;
   }): Promise<AsientoContable> {
-    const { periodoNombre, fecha, totalDevengado, totalProvisiones, totalAportes, netoPagar, saludPensionEmpleado, retencionFuente, userId } = params;
+    const {
+      periodoNombre,
+      fecha,
+      totalDevengado,
+      totalProvisiones,
+      totalAportes,
+      netoPagar,
+      saludPensionEmpleado,
+      retencionFuente,
+      userId,
+    } = params;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1445,20 +1582,56 @@ export class AsientosContablesService {
     try {
       const cuentaGastosPersonal = await this.obtenerCuentaPorCodigo('5105');
       const cuentaPrestaciones = await this.obtenerCuentaPorCodigo('5110');
-      const cuentaAportesParafiscales = await this.obtenerCuentaPorCodigo('5115');
+      const cuentaAportesParafiscales =
+        await this.obtenerCuentaPorCodigo('5115');
       const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
       const cuentaRetencionNomina = await this.obtenerCuentaPorCodigo('2370');
       const cuentaRetefuente = await this.obtenerCuentaPorCodigo('2365');
       const cuentaAportesXPagar = await this.obtenerCuentaPorCodigo('2368');
 
       const detalles: DetalleAsiento[] = [
-        { cuentaId: cuentaGastosPersonal.id, debito: totalDevengado, credito: 0, descripcion: 'Sueldos y salarios' },
-        { cuentaId: cuentaPrestaciones.id, debito: totalProvisiones, credito: 0, descripcion: 'Prestaciones sociales' },
-        { cuentaId: cuentaAportesParafiscales.id, debito: totalAportes, credito: 0, descripcion: 'Aportes parafiscales' },
-        { cuentaId: cuentaObligacionesLab.id, debito: 0, credito: netoPagar + totalProvisiones, descripcion: 'Obligaciones laborales' },
-        { cuentaId: cuentaRetencionNomina.id, debito: 0, credito: saludPensionEmpleado, descripcion: 'Retenciones salud y pensión' },
-        { cuentaId: cuentaRetefuente.id, debito: 0, credito: retencionFuente, descripcion: 'Retención en la fuente' },
-        { cuentaId: cuentaAportesXPagar.id, debito: 0, credito: totalAportes, descripcion: 'Aportes parafiscales por pagar' },
+        {
+          cuentaId: cuentaGastosPersonal.id,
+          debito: totalDevengado,
+          credito: 0,
+          descripcion: 'Sueldos y salarios',
+        },
+        {
+          cuentaId: cuentaPrestaciones.id,
+          debito: totalProvisiones,
+          credito: 0,
+          descripcion: 'Prestaciones sociales',
+        },
+        {
+          cuentaId: cuentaAportesParafiscales.id,
+          debito: totalAportes,
+          credito: 0,
+          descripcion: 'Aportes parafiscales',
+        },
+        {
+          cuentaId: cuentaObligacionesLab.id,
+          debito: 0,
+          credito: netoPagar + totalProvisiones,
+          descripcion: 'Obligaciones laborales',
+        },
+        {
+          cuentaId: cuentaRetencionNomina.id,
+          debito: 0,
+          credito: saludPensionEmpleado,
+          descripcion: 'Retenciones salud y pensión',
+        },
+        {
+          cuentaId: cuentaRetefuente.id,
+          debito: 0,
+          credito: retencionFuente,
+          descripcion: 'Retención en la fuente',
+        },
+        {
+          cuentaId: cuentaAportesXPagar.id,
+          debito: 0,
+          credito: totalAportes,
+          descripcion: 'Aportes parafiscales por pagar',
+        },
       ];
 
       const asiento = await this.crearAsiento(
@@ -1474,12 +1647,16 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      this.logger.log(
+        `Asiento NOMINA generado: ${asiento.numero} | ${periodoNombre}`,
+      );
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento nómina: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de nómina: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de nómina: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -1492,7 +1669,8 @@ export class AsientosContablesService {
     cuentaCodigoContable: string;
     userId: string;
   }): Promise<AsientoContable> {
-    const { periodoNombre, fecha, netoPagar, cuentaCodigoContable, userId } = params;
+    const { periodoNombre, fecha, netoPagar, cuentaCodigoContable, userId } =
+      params;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1500,11 +1678,22 @@ export class AsientosContablesService {
 
     try {
       const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
-      const cuentaBanco = await this.obtenerCuentaPorCodigo(cuentaCodigoContable);
+      const cuentaBanco =
+        await this.obtenerCuentaPorCodigo(cuentaCodigoContable);
 
       const detalles: DetalleAsiento[] = [
-        { cuentaId: cuentaObligacionesLab.id, debito: netoPagar, credito: 0, descripcion: 'Pago nómina' },
-        { cuentaId: cuentaBanco.id, debito: 0, credito: netoPagar, descripcion: `Pago nómina ${periodoNombre}` },
+        {
+          cuentaId: cuentaObligacionesLab.id,
+          debito: netoPagar,
+          credito: 0,
+          descripcion: 'Pago nómina',
+        },
+        {
+          cuentaId: cuentaBanco.id,
+          debito: 0,
+          credito: netoPagar,
+          descripcion: `Pago nómina ${periodoNombre}`,
+        },
       ];
 
       const asiento = await this.crearAsiento(
@@ -1520,12 +1709,19 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento PAGO_NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      this.logger.log(
+        `Asiento PAGO_NOMINA generado: ${asiento.numero} | ${periodoNombre}`,
+      );
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error asiento pago nómina: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al generar asiento de pago de nómina: ${error.message}`);
+      this.logger.error(
+        `Error asiento pago nómina: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al generar asiento de pago de nómina: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -1544,7 +1740,7 @@ export class AsientosContablesService {
     await queryRunner.startTransaction();
 
     try {
-      const detalles: DetalleAsiento[] = asientoOriginal.detalles.map(d => ({
+      const detalles: DetalleAsiento[] = asientoOriginal.detalles.map((d) => ({
         cuentaId: d.cuentaId,
         debito: d.credito,
         credito: d.debito,
@@ -1564,12 +1760,19 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento ANULACION_NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
+      this.logger.log(
+        `Asiento ANULACION_NOMINA generado: ${asiento.numero} | ${periodoNombre}`,
+      );
       return asiento;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error anulación asiento nómina: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Error al anular asiento de nómina: ${error.message}`);
+      this.logger.error(
+        `Error anulación asiento nómina: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error al anular asiento de nómina: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }

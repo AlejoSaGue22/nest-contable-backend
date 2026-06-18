@@ -1,4 +1,4 @@
-import { Permission } from "./roles.constants";
+import { Permission } from './roles.constants';
 
 export const DEFAULT_MENU_ITEMS = [
   {
@@ -10,7 +10,7 @@ export const DEFAULT_MENU_ITEMS = [
     isActive: true,
     isVisible: true,
     other: 'NO',
-    metadata: { badge: null }
+    metadata: { badge: null },
   },
   {
     title: 'Ventas',
@@ -32,17 +32,17 @@ export const DEFAULT_MENU_ITEMS = [
         order: 0,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
-        title: "Nota Credito",
-        icon: "receipt",
-        route: "/panel/ventas/notas-ajuste",
+        title: 'Nota Credito',
+        icon: 'receipt',
+        route: '/panel/ventas/notas-ajuste',
         requiredPermission: Permission.INVOICE_READ,
         order: 1,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       // INVOICES
       {
@@ -53,7 +53,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 2,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       // PRODUCTS
       {
@@ -64,8 +64,8 @@ export const DEFAULT_MENU_ITEMS = [
         order: 3,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
-      }
+        metadata: { badge: null },
+      },
     ],
   },
   {
@@ -88,17 +88,17 @@ export const DEFAULT_MENU_ITEMS = [
         order: 0,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
-        title: "Nota Credito",
-        icon: "receipt",
-        route: "/panel/compras/notas-ajuste",
+        title: 'Nota Credito',
+        icon: 'receipt',
+        route: '/panel/compras/notas-ajuste',
         requiredPermission: Permission.PURCHASE_READ,
         order: 1,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       // INVOICES - PURCHASES
       {
@@ -109,7 +109,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 2,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       // PRODUCTS PURCHASES
       {
@@ -120,8 +120,8 @@ export const DEFAULT_MENU_ITEMS = [
         order: 3,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
-      }
+        metadata: { badge: null },
+      },
     ],
   },
   {
@@ -143,7 +143,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 0,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
         title: 'Períodos',
@@ -153,7 +153,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 1,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
         title: 'Reportes',
@@ -163,69 +163,69 @@ export const DEFAULT_MENU_ITEMS = [
         order: 2,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
     ],
   },
   {
-      title: 'Pagos',
-      icon: '<i class="fa-solid fa-money-bill-transfer"></i>',
-      route: '/panel/pagos',
-      requiredPermission: Permission.PAGO_READ,
-      order: 6,
-      isActive: true,
-      isVisible: true,
-      other: 'NO',
-      metadata: { badge: null },
-      children: [          
-          {
-            title: 'Cuentas por Cobrar',
-            icon: 'arrow_downward',
-            route: '/panel/pagos/cxc',
-            requiredPermission: Permission.PAGO_READ,
-            order: 0,
-            isActive: true,
-            isVisible: true,
-            metadata: { badge: null }
-          },
-          {
-            title: 'Cuentas por Pagar',
-            icon: 'arrow_upward',
-            route: '/panel/pagos/cxp',
-            requiredPermission: Permission.PAGO_READ,
-            order: 1,
-            isActive: true,
-            isVisible: true,
-            metadata: { badge: null }
-          },
-          {
-            title: 'Antigüedad Cartera',
-            icon: 'bar_chart',
-            route: '/panel/pagos/aging',
-            requiredPermission: Permission.PAGO_READ,
-            order: 2,
-            isActive: true,
-            isVisible: true,
-            metadata: { badge: null }
-          },
-          {
-            title: 'Movimientos',
-            icon: 'swap_horiz',
-            route: '/panel/pagos/movimientos',
-            requiredPermission: Permission.PAGO_READ,
-            order: 3,
-            isActive: true,
-            isVisible: true,
-            metadata: { badge: null }
-          }
-      ]
+    title: 'Pagos',
+    icon: '<i class="fa-solid fa-money-bill-transfer"></i>',
+    route: '/panel/pagos',
+    requiredPermission: Permission.PAGO_READ,
+    order: 4,
+    isActive: true,
+    isVisible: true,
+    other: 'NO',
+    metadata: { badge: null },
+    children: [
+      {
+        title: 'Cuentas por Cobrar',
+        icon: 'arrow_downward',
+        route: '/panel/pagos/cxc',
+        requiredPermission: Permission.PAGO_READ,
+        order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Cuentas por Pagar',
+        icon: 'arrow_upward',
+        route: '/panel/pagos/cxp',
+        requiredPermission: Permission.PAGO_READ,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Antigüedad Cartera',
+        icon: 'bar_chart',
+        route: '/panel/pagos/aging',
+        requiredPermission: Permission.PAGO_READ,
+        order: 2,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Movimientos',
+        icon: 'swap_horiz',
+        route: '/panel/pagos/movimientos',
+        requiredPermission: Permission.PAGO_READ,
+        order: 3,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+    ],
   },
   {
     title: 'Reportes',
     icon: '<i class="fa-solid fa-chart-line"></i>',
     route: '/panel/reports',
     requiredPermission: Permission.REPORT_VIEW,
-    order: 4,
+    order: 5,
     isActive: true,
     isVisible: true,
     other: 'NO',
@@ -239,7 +239,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 0,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
         title: 'Reportes Cartera',
@@ -249,7 +249,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 1,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
         title: 'Resumen Financiero',
@@ -259,60 +259,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 2,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
-      }
-    ]
-  },
-  {
-    title: 'Administración',
-    icon: '<i class="fa-solid fa-user-gear"></i>',
-    route: '/panel/admin',
-    requiredPermission: Permission.USER_MANAGE,
-    order: 5,
-    isActive: true,
-    isVisible: true,
-    other: 'NO',
-    metadata: { badge: null },
-    children: [
-      {
-        title: 'Usuarios',
-        icon: '<i class="fa-solid fa-manage_accounts"></i>',
-        route: '/panel/admin/users',
-        requiredPermission: Permission.USER_MANAGE,
-        order: 0,
-        isActive: true,
-        isVisible: true,
-        metadata: { badge: null }
-      },
-      {
-        title: 'Roles',
-        icon: '<i class="fa-solid fa-shield"></i>',
-        route: '/panel/admin/roles',
-        requiredPermission: Permission.ROLE_READ,
-        order: 1,
-        isActive: true,
-        isVisible: true,
-        metadata: { badge: null }
-      },
-      {
-        title: 'Gestion Menú',
-        icon: '<i class="fa-solid fa-menu"></i>',
-        route: '/panel/admin/menu',
-        requiredPermission: Permission.MENU_MANAGE,
-        order: 2,
-        isActive: true,
-        isVisible: true,
-        metadata: { badge: null }
-      },
-      {
-        title: 'Configuración',
-        icon: '<i class="fa-solid fa-settings"></i>',
-        route: '/panel/admin/settings',
-        requiredPermission: Permission.SETTINGS_VIEW,
-        order: 3,
-        isActive: true,
-        isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
     ],
   },
@@ -321,7 +268,7 @@ export const DEFAULT_MENU_ITEMS = [
     icon: '<i class="fa-solid fa-book"></i>',
     route: '/panel/contabilidad',
     requiredPermission: Permission.ACCOUNTING_VIEW,
-    order: 4,
+    order: 6,
     isActive: true,
     isVisible: true,
     other: 'NO',
@@ -335,7 +282,7 @@ export const DEFAULT_MENU_ITEMS = [
         order: 0,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
+        metadata: { badge: null },
       },
       {
         title: 'Bancos y Cajas',
@@ -345,9 +292,61 @@ export const DEFAULT_MENU_ITEMS = [
         order: 1,
         isActive: true,
         isVisible: true,
-        metadata: { badge: null }
-      }
-      
-    ]
+        metadata: { badge: null },
+      },
+    ],
+  },
+  {
+    title: 'Administración',
+    icon: '<i class="fa-solid fa-user-gear"></i>',
+    route: '/panel/admin',
+    requiredPermission: Permission.USER_MANAGE,
+    order: 7,
+    isActive: true,
+    isVisible: true,
+    other: 'NO',
+    metadata: { badge: null },
+    children: [
+      {
+        title: 'Usuarios',
+        icon: '<i class="fa-solid fa-manage_accounts"></i>',
+        route: '/panel/admin/users',
+        requiredPermission: Permission.USER_MANAGE,
+        order: 0,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Roles',
+        icon: '<i class="fa-solid fa-shield"></i>',
+        route: '/panel/admin/roles',
+        requiredPermission: Permission.ROLE_READ,
+        order: 1,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Gestion Menú',
+        icon: '<i class="fa-solid fa-menu"></i>',
+        route: '/panel/admin/menu',
+        requiredPermission: Permission.MENU_MANAGE,
+        order: 2,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      {
+        title: 'Configuración',
+        icon: '<i class="fa-solid fa-settings"></i>',
+        route: '/panel/admin/settings',
+        requiredPermission: Permission.SETTINGS_VIEW,
+        order: 3,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+    ],
   },
 ];

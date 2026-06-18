@@ -38,21 +38,24 @@ import { NominaModule } from './nomina/nomina.module';
 import { ParametrizacionContableModule } from './settings/parametrizacion-contable/parametrizacion-contable.module';
 
 @Module({
-    imports: [TypeOrmModule.forRoot({
-        type: 'postgres',
-        host: process.env.DB_HOST || 'localhost', 
-        port: Number(process.env.DB_PORT) || 5432,
-        username: process.env.DB_USERNAME || 'postgres',     
-        password: process.env.DB_PASSWORD?.toString() || 'MySecr3tPassWord@as2',  
-        database: process.env.DB_DATABASE || 'finance_tejo',
-        autoLoadEntities: true,
-        synchronize: true,
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: Number(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD?.toString() || '2201',
+      database: process.env.DB_DATABASE || 'finance_tejo',
+      autoLoadEntities: true,
+      synchronize: true,
     }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{
-      ttl: Number(process.env.THROTTLE_TTL) || 60000,
-      limit: Number(process.env.THROTTLE_LIMIT) || 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.THROTTLE_TTL) || 60000,
+        limit: Number(process.env.THROTTLE_LIMIT) || 100,
+      },
+    ]),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -81,13 +84,11 @@ import { ParametrizacionContableModule } from './settings/parametrizacion-contab
     NotasAjusteComprasModule,
     VendedoresModule,
     NominaModule,
-    ParametrizacionContableModule
+    ParametrizacionContableModule,
   ],
   controllers: [],
 })
-
 export class AppModule implements OnModuleInit {
-
   constructor(
     private readonly rolesService: RolesService,
     private readonly menuService: MenuService,
@@ -95,8 +96,8 @@ export class AppModule implements OnModuleInit {
     private readonly municipalitiesService: MunicipalitiesService,
     private readonly catalogsService: CatalogsService,
     private readonly impuestosService: ImpuestosService,
-    private datasource: DataSource
-  ) { }
+    private datasource: DataSource,
+  ) {}
 
   async onModuleInit() {
     // Seed roles por defecto
@@ -105,7 +106,7 @@ export class AppModule implements OnModuleInit {
     // Seed menu por defecto
     // await this.menuService.seedDefaultMenu();
 
-    // await this.cuentasService.seedCuentasBasicasSincronizacion(this.datasource)
+    // await this.cuentasService.seedCuentasBasicasSincronizacion(this.datasource);
 
     // Seed impuestos por defecto
     // await this.impuestosService.seedDefaultTaxes();
@@ -122,7 +123,4 @@ export class AppModule implements OnModuleInit {
 
     console.log('Sistema inicializado con datos por defecto');
   }
-
 }
-
-
