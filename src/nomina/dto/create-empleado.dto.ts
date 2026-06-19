@@ -51,6 +51,10 @@ export class CreateEmpleadoDto {
     @IsOptional()
     fechaRetiro?: string;
 
+    @IsString()
+    @IsOptional()
+    tipoContratoId?: string;
+
     @IsEnum(TipoContrato)
     @IsNotEmpty()
     tipoContrato: TipoContrato;
@@ -87,6 +91,10 @@ export class CreateEmpleadoDto {
     @IsBoolean()
     @IsOptional()
     auxilioTransporte?: boolean;
+
+    @IsString()
+    @IsOptional()
+    metodoPago?: string;
 
     @IsString()
     @IsOptional()

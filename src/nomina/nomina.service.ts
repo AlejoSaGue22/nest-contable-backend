@@ -41,16 +41,24 @@ export class NominaService {
         private readonly cargoRepo: Repository<Cargo>,
         @InjectRepository(CentroCosto)
         private readonly centroCostoRepo: Repository<CentroCosto>,
-        @InjectRepository(PagoNomina)
-        private readonly pagoNominaRepo: Repository<PagoNomina>,
-        private readonly asientosContablesService: AsientosContablesService,
-    ) { }
+    @InjectRepository(PagoNomina)
+    private readonly pagoNominaRepo: Repository<PagoNomina>,
+    @InjectRepository(TipoContratoEntity)
+    private readonly tipoContratoRepo: Repository<TipoContratoEntity>,
+    private readonly asientosContablesService: AsientosContablesService,
+) { }
 
     // ═══════════════════════════════════════════════════════════════════
     //  EMPLEADOS
     // ═══════════════════════════════════════════════════════════════════
 
     async createEmpleado(dto: CreateEmpleadoDto) {
+        if (dto.tipoContratoId) {
+            const tipo = await this.tipoContratoRepo.findOne({ where: { id: dto.tipoContratoId } });
+            if (tipo) {
+                (dto as any).tipoContrato = tipo.codigo as any;
+            }
+        }
         const empleado = this.empleadoRepo.create(dto);
         const saved = await this.empleadoRepo.save(empleado);
         return this.findOneEmpleado(saved.id);
@@ -63,7 +71,7 @@ export class NominaService {
 
         const [empleados, total] = await this.empleadoRepo.findAndCount({
             where: { activo: true },
-            relations: ['eps', 'afp', 'ccf', 'cargo', 'centroCosto', 'banco'],
+            relations: ['eps', 'afp', 'ccf', 'cargo', 'centroCosto', 'banco', 'tipoContratoRel'],
             order: { primerApellido: 'ASC' },
             take: limit,
             skip,
@@ -79,13 +87,19 @@ export class NominaService {
     async findOneEmpleado(id: string) {
         const empleado = await this.empleadoRepo.findOne({
             where: { id },
-            relations: ['eps', 'afp', 'ccf', 'cargo', 'centroCosto', 'banco'],
+            relations: ['eps', 'afp', 'ccf', 'cargo', 'centroCosto', 'banco', 'tipoContratoRel'],
         });
         if (!empleado) throw new NotFoundException('Empleado no encontrado');
         return empleado;
     }
 
     async updateEmpleado(id: string, dto: UpdateEmpleadoDto) {
+        if (dto.tipoContratoId) {
+            const tipo = await this.tipoContratoRepo.findOne({ where: { id: dto.tipoContratoId } });
+            if (tipo) {
+                (dto as any).tipoContrato = tipo.codigo as any;
+            }
+        }
         const empleado = await this.findOneEmpleado(id);
         this.empleadoRepo.merge(empleado, dto);
         return this.empleadoRepo.save(empleado);
@@ -333,7 +347,7 @@ export class NominaService {
     }
 
     async findAllTiposContrato() {
-        return Object.entries(TipoContrato).map(([key, value]) => ({ key, value }));
+        return this.tipoContratoRepo.find({ where: { activo: true }, order: { nombre: 'ASC' } });
     }
 
     // ═══════════════════════════════════════════════════════════════════

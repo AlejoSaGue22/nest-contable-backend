@@ -14,6 +14,7 @@ import { UpdateCategoryArticleDto } from './dtos/update-category.dto';
 import { NotFoundException } from '@nestjs/common';
 import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
 import { EntidadSeguridadSocial } from 'src/nomina/entities/entidad-seguridad-social.entity';
+import { TipoContratoEntity } from 'src/nomina/entities/tipo-contrato.entity';
 import { ENTIDADES_SEGURO_SOCIAL } from 'src/common/constants/entidades-ss.config';
 
 @Injectable()
@@ -37,6 +38,8 @@ export class CatalogsService {
     private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
     @InjectRepository(EntidadSeguridadSocial)
     private entidadSSRepo: Repository<EntidadSeguridadSocial>,
+    @InjectRepository(TipoContratoEntity)
+    private tipoContratoRepo: Repository<TipoContratoEntity>,
 ) { }
 
     async findAllDocumentTypes() {
@@ -190,6 +193,7 @@ export class CatalogsService {
         await this.seedCategoriesArticles();
         await this.seedConceptsCorrections();
         await this.seedEntidadesSeguridadSocial();
+        await this.seedTiposContrato();
         this.logger.log('✅ Todos los catálogos han sido sincronizados');
     }
 
@@ -358,6 +362,24 @@ export class CatalogsService {
             }
         }
         this.logger.log('✔ Entidades de seguridad social sincronizadas');
+    }
+
+    private async seedTiposContrato() {
+        const data = [
+            { codigo: 'FIJO', nombre: 'Término Fijo' },
+            { codigo: 'INDEFINIDO', nombre: 'Término Indefinido' },
+            { codigo: 'OBRA_LABOR', nombre: 'Obra / Labor' },
+            { codigo: 'APRENDIZAJE', nombre: 'Aprendizaje' },
+            { codigo: 'PRESTACION', nombre: 'Prestación de Servicios' },
+        ];
+
+        for (const item of data) {
+            const exists = await this.tipoContratoRepo.findOne({ where: { codigo: item.codigo } });
+            if (!exists) {
+                await this.tipoContratoRepo.save(item);
+            }
+        }
+        this.logger.log('✔ Tipos de contrato sincronizados');
     }
 
     private generarCodigo(nombre: string): string {
