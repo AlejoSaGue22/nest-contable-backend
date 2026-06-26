@@ -53,15 +53,37 @@ export class NominaService {
     // ═══════════════════════════════════════════════════════════════════
 
     async createEmpleado(dto: CreateEmpleadoDto) {
-        if (dto.tipoContratoId) {
-            const tipo = await this.tipoContratoRepo.findOne({ where: { id: dto.tipoContratoId } });
-            if (tipo) {
-                (dto as any).tipoContrato = tipo.codigo as any;
+        try {
+            const cleanedDto = this.cleanEmptyStrings(dto);
+
+            const exists = await this.empleadoRepo.findOne({ where: { numeroDocumento: cleanedDto.numeroDocumento } });
+            if (exists) {
+                throw new BadRequestException(`Ya existe un empleado con el número de documento ${cleanedDto.numeroDocumento}`);
             }
+
+            if (cleanedDto.tipoContratoId) {
+                const tipo = await this.tipoContratoRepo.findOne({ where: { id: cleanedDto.tipoContratoId } });
+                if (!tipo) throw new NotFoundException('Tipo de contrato no encontrado');
+                (cleanedDto as any).tipoContrato = tipo.codigo;
+            }
+
+            if (cleanedDto.epsId) {
+                const eps = await this.entidadSSRepo.findOne({ where: { id: cleanedDto.epsId } });
+                if (!eps) throw new NotFoundException('Entidad EPS no encontrada');
+            }
+
+            if (cleanedDto.afpId) {
+                const afp = await this.entidadSSRepo.findOne({ where: { id: cleanedDto.afpId } });
+                if (!afp) throw new NotFoundException('Entidad AFP no encontrada');
+            }
+
+            const empleado = this.empleadoRepo.create(cleanedDto);
+            const saved = await this.empleadoRepo.save(empleado);
+            return await this.findOneEmpleado(saved.id);
+        } catch (error) {
+            this.logger.error(`Error al crear empleado: ${error.message}`, error.stack);
+            throw error;
         }
-        const empleado = this.empleadoRepo.create(dto);
-        const saved = await this.empleadoRepo.save(empleado);
-        return this.findOneEmpleado(saved.id);
     }
 
     async findAllEmpleados(paginationDto: PaginatioDto) {
@@ -94,15 +116,43 @@ export class NominaService {
     }
 
     async updateEmpleado(id: string, dto: UpdateEmpleadoDto) {
-        if (dto.tipoContratoId) {
-            const tipo = await this.tipoContratoRepo.findOne({ where: { id: dto.tipoContratoId } });
-            if (tipo) {
-                (dto as any).tipoContrato = tipo.codigo as any;
+        try {
+            const cleanedDto = this.cleanEmptyStrings(dto);
+
+            if (cleanedDto.tipoContratoId) {
+                const tipo = await this.tipoContratoRepo.findOne({ where: { id: cleanedDto.tipoContratoId } });
+                if (!tipo) throw new NotFoundException('Tipo de contrato no encontrado');
+                (cleanedDto as any).tipoContrato = tipo.codigo;
+            }
+
+            if (cleanedDto.epsId) {
+                const eps = await this.entidadSSRepo.findOne({ where: { id: cleanedDto.epsId } });
+                if (!eps) throw new NotFoundException('Entidad EPS no encontrada');
+            }
+
+            if (cleanedDto.afpId) {
+                const afp = await this.entidadSSRepo.findOne({ where: { id: cleanedDto.afpId } });
+                if (!afp) throw new NotFoundException('Entidad AFP no encontrada');
+            }
+
+            const empleado = await this.findOneEmpleado(id);
+            this.empleadoRepo.merge(empleado, cleanedDto);
+            return await this.empleadoRepo.save(empleado);
+        } catch (error) {
+            this.logger.error(`Error al actualizar empleado: ${error.message}`, error.stack);
+            throw error;
+        }
+    }
+
+    private cleanEmptyStrings<T>(obj: T): T {
+        if (!obj) return obj;
+        const cleaned = { ...obj };
+        for (const key of Object.keys(cleaned as any)) {
+            if ((cleaned as any)[key] === '') {
+                (cleaned as any)[key] = null;
             }
         }
-        const empleado = await this.findOneEmpleado(id);
-        this.empleadoRepo.merge(empleado, dto);
-        return this.empleadoRepo.save(empleado);
+        return cleaned;
     }
 
     async removeEmpleado(id: string) {

@@ -1,110 +1,121 @@
-import { IsString, IsNotEmpty, IsEnum, IsNumber, IsBoolean, IsOptional, IsDateString, Min } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEnum,
+  IsNumber,
+  IsBoolean,
+  IsOptional,
+  IsDateString,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { TipoDocumentoIdentidad } from '../enums/tipo-documento.enum';
 import { TipoContrato } from '../enums/tipo-contrato.enum';
 
 export class CreateEmpleadoDto {
-    @IsEnum(TipoDocumentoIdentidad)
-    @IsNotEmpty()
-    tipoDocumento: TipoDocumentoIdentidad;
+  @IsEnum(TipoDocumentoIdentidad)
+  @IsNotEmpty()
+  tipoDocumento: TipoDocumentoIdentidad;
 
-    @IsString()
-    @IsNotEmpty()
-    numeroDocumento: string;
+  @IsString()
+  @IsNotEmpty()
+  numeroDocumento: string;
 
-    @IsString()
-    @IsNotEmpty()
-    primerNombre: string;
+  @IsString()
+  @IsNotEmpty()
+  primerNombre: string;
 
-    @IsString()
-    @IsOptional()
-    segundoNombre?: string;
+  @IsString()
+  @IsOptional()
+  segundoNombre?: string;
 
-    @IsString()
-    @IsNotEmpty()
-    primerApellido: string;
+  @IsString()
+  @IsNotEmpty()
+  primerApellido: string;
 
-    @IsString()
-    @IsOptional()
-    segundoApellido?: string;
+  @IsString()
+  @IsOptional()
+  segundoApellido?: string;
 
-    @IsString()
-    @IsOptional()
-    email?: string;
+  @IsString()
+  @IsOptional()
+  email?: string;
 
-    @IsString()
-    @IsOptional()
-    telefono?: string;
+  @IsString()
+  @IsOptional()
+  telefono?: string;
 
-    @IsString()
-    @IsOptional()
-    direccion?: string;
+  @IsString()
+  @IsOptional()
+  direccion?: string;
 
-    @IsString()
-    @IsOptional()
-    centroCostoId?: string;
+  @IsString()
+  @IsOptional()
+  centroCostoId?: string;
 
-    @IsDateString()
-    @IsNotEmpty()
-    fechaIngreso: string;
+  @IsDateString()
+  @IsNotEmpty()
+  fechaIngreso: string;
 
-    @IsDateString()
-    @IsOptional()
-    fechaRetiro?: string;
+  @IsOptional()
+  @IsString()
+  fechaRetiro?: string;
 
-    @IsString()
-    @IsOptional()
-    tipoContratoId?: string;
+  @IsString()
+  @IsOptional()
+  tipoContratoId?: string;
 
-    @IsEnum(TipoContrato)
-    @IsNotEmpty()
-    tipoContrato: TipoContrato;
+  @IsEnum(TipoContrato)
+  @IsOptional()
+  tipoContrato?: TipoContrato;
 
-    @IsString()
-    @IsOptional()
-    cargoId?: string;
+  @IsString()
+  @IsOptional()
+  cargoId?: string;
 
-    @IsNumber()
-    @Min(0)
-    salarioBase: number;
+  @IsNumber()
+  @Min(0)
+  salarioBase: number;
 
-    @IsBoolean()
-    @IsOptional()
-    salarioIntegral?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  salarioIntegral?: boolean;
 
-    @IsString()
-    @IsNotEmpty()
-    epsId: string;
+  @IsString()
+  @IsNotEmpty()
+  epsId: string;
 
-    @IsString()
-    @IsNotEmpty()
-    afpId: string;
+  @IsString()
+  @IsNotEmpty()
+  afpId: string;
 
-    @IsString()
-    @IsOptional()
-    ccfId?: string;
+  @IsString()
+  @IsOptional()
+  ccfId?: string;
 
-    @IsNumber()
-    @IsOptional()
-    @Min(1)
-    arlNivelRiesgo?: number;
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  arlNivelRiesgo?: number;
 
-    @IsBoolean()
-    @IsOptional()
-    auxilioTransporte?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  auxilioTransporte?: boolean;
 
-    @IsString()
-    @IsOptional()
-    metodoPago?: string;
+  @IsString()
+  @IsOptional()
+  metodoPago?: string;
 
-    @IsString()
-    @IsOptional()
-    bancoId?: string;
+  @IsString()
+  @IsOptional()
+  bancoId?: string;
 
-    @IsString()
-    @IsOptional()
-    tipoCuentaBancaria?: string;
+  @IsString()
+  @IsOptional()
+  tipoCuentaBancaria?: string;
 
-    @IsString()
-    @IsOptional()
-    numeroCuentaBancaria?: string;
+  @IsString()
+  @IsOptional()
+  numeroCuentaBancaria?: string;
 }
