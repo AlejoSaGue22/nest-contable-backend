@@ -36,6 +36,8 @@ import { NotasAjusteComprasModule } from './notas-ajuste-compras/notas-ajuste-co
 import { VendedoresModule } from './settings/vendedores/vendedores.module';
 import { NominaModule } from './nomina/nomina.module';
 import { ParametrizacionContableModule } from './settings/parametrizacion-contable/parametrizacion-contable.module';
+import { CargosModule } from './settings/cargos/cargos.module';
+import { CentrosCostosModule } from './settings/centros-costos/centros-costos.module';
 
 @Module({
   imports: [
@@ -44,7 +46,7 @@ import { ParametrizacionContableModule } from './settings/parametrizacion-contab
       host: process.env.DB_HOST || 'localhost',
       port: Number(process.env.DB_PORT) || 5432,
       username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD?.toString() || 'MySecr3tPassWord@as2',
+      password: process.env.DB_PASSWORD?.toString() || '2201',
       database: process.env.DB_DATABASE || 'finance_tejo',
       autoLoadEntities: true,
       synchronize: true,
@@ -85,6 +87,8 @@ import { ParametrizacionContableModule } from './settings/parametrizacion-contab
     VendedoresModule,
     NominaModule,
     ParametrizacionContableModule,
+    CargosModule,
+    CentrosCostosModule,
   ],
   controllers: [],
 })
