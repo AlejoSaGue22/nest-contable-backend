@@ -1,4 +1,15 @@
-import { BadRequestException, Controller, Get, Post, Body, Param, Query, ParseUUIDPipe, Request, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  ParseUUIDPipe,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { PagosService } from './pagos.service';
 import { MedioPago, PaymentStatus, TipoPago } from './enums/pago.enum';
 import { CxcService } from 'src/common/services/cxc.service';
@@ -41,8 +52,8 @@ import { Permission } from 'src/common/constants/roles.constants';
 export class PagosController {
   constructor(
     private readonly pagosService: PagosService,
-    private readonly cxcService:   CxcService,
-    private readonly cxpService:   CxpService,
+    private readonly cxcService: CxcService,
+    private readonly cxpService: CxpService,
   ) {}
 
   // ════════════════════════════════════════════════════════════
@@ -59,18 +70,18 @@ export class PagosController {
    */
   @Get('cxc')
   async listarCxC(
-    @Query('clienteId')     clienteId?: string,
+    @Query('clienteId') clienteId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
-    @Query('soloVencidas')  soloVencidas?: string,
+    @Query('soloVencidas') soloVencidas?: string,
     @Query('page') page?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
   ): Promise<PagoResponseDto<any>> {
     const data = await this.cxcService.findAll({
       clienteId,
       paymentStatus,
       soloVencidas: soloVencidas === 'true',
       page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 1
+      limit: limit ? parseInt(limit) : 1,
     });
     return toPagoResponse(data, 'Cuentas por cobrar obtenidas exitosamente');
   }
@@ -127,7 +138,11 @@ export class PagosController {
     @Request() req: AuthenticatedRequest,
   ): Promise<PagoResponseDto<any>> {
     const userId = req.user.sub;
-    const data = await this.pagosService.registrarCobro(facturaVentaId, dto, userId);
+    const data = await this.pagosService.registrarCobro(
+      facturaVentaId,
+      dto,
+      userId,
+    );
     return toPagoResponse(data, 'Cobro registrado exitosamente');
   }
 
@@ -145,9 +160,9 @@ export class PagosController {
    */
   @Get('cxp')
   async listarCxP(
-    @Query('proveedorId')   proveedorId?: string,
+    @Query('proveedorId') proveedorId?: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus,
-    @Query('soloVencidas')  soloVencidas?: string,
+    @Query('soloVencidas') soloVencidas?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<PagoResponseDto<any>> {
@@ -213,7 +228,11 @@ export class PagosController {
     @Request() req: AuthenticatedRequest,
   ): Promise<PagoResponseDto<any>> {
     const userId = req.user?.sub;
-    const data = await this.pagosService.registrarPago(facturaCompraId, dto, userId);
+    const data = await this.pagosService.registrarPago(
+      facturaCompraId,
+      dto,
+      userId,
+    );
     return toPagoResponse(data, 'Pago registrado exitosamente');
   }
 
@@ -236,7 +255,10 @@ export class PagosController {
     @Param('clienteId', ParseUUIDPipe) clienteId: string,
   ): Promise<PagoResponseDto<any>> {
     const data = await this.pagosService.obtenerEstadoCuentaCliente(clienteId);
-    return toPagoResponse(data, 'Estado de cuenta del cliente obtenido exitosamente');
+    return toPagoResponse(
+      data,
+      'Estado de cuenta del cliente obtenido exitosamente',
+    );
   }
 
   @Get('estado-cuenta/cliente-por-documento')
@@ -246,16 +268,25 @@ export class PagosController {
     if (!documento?.trim()) {
       throw new BadRequestException('El número de documento es requerido');
     }
-    const data = await this.pagosService.obtenerEstadoCuentaClientePorDocumento(documento.trim());
-    return toPagoResponse(data, 'Estado de cuenta del cliente obtenido exitosamente');
+    const data = await this.pagosService.obtenerEstadoCuentaClientePorDocumento(
+      documento.trim(),
+    );
+    return toPagoResponse(
+      data,
+      'Estado de cuenta del cliente obtenido exitosamente',
+    );
   }
 
   @Get('estado-cuenta/proveedor/:proveedorId')
   async obtenerEstadoCuentaProveedor(
     @Param('proveedorId', ParseUUIDPipe) proveedorId: string,
   ): Promise<PagoResponseDto<any>> {
-    const data = await this.pagosService.obtenerEstadoCuentaProveedor(proveedorId);
-    return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido exitosamente');
+    const data =
+      await this.pagosService.obtenerEstadoCuentaProveedor(proveedorId);
+    return toPagoResponse(
+      data,
+      'Estado de cuenta del proveedor obtenido exitosamente',
+    );
   }
 
   @Get('estado-cuenta/proveedor-por-documento')
@@ -265,8 +296,14 @@ export class PagosController {
     if (!documento?.trim()) {
       throw new BadRequestException('El número de documento es requerido');
     }
-    const data = await this.pagosService.obtenerEstadoCuentaProveedorPorDocumento(documento.trim());
-    return toPagoResponse(data, 'Estado de cuenta del proveedor obtenido exitosamente');
+    const data =
+      await this.pagosService.obtenerEstadoCuentaProveedorPorDocumento(
+        documento.trim(),
+      );
+    return toPagoResponse(
+      data,
+      'Estado de cuenta del proveedor obtenido exitosamente',
+    );
   }
 
   // ════════════════════════════════════════════════════════════
@@ -296,7 +333,11 @@ export class PagosController {
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 20,
     });
-    return toPagoResponse(data, 'Movimientos obtenidos exitosamente', data.meta);
+    return toPagoResponse(
+      data,
+      'Movimientos obtenidos exitosamente',
+      data.meta,
+    );
   }
 
   // ════════════════════════════════════════════════════════════

@@ -1,6 +1,7 @@
 import { Column, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { TipoDocumento } from "src/core/catalogs/entities/tipo-documento.entity";
 import { Municipality } from "src/core/municipalities/entities/municipality.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 
 @Entity({ name: 'clientes' })
 export class Cliente {
@@ -54,6 +55,13 @@ export class Cliente {
 
     @Column({ comment: 'Indica si el cliente es responsable de IVA S=Si, N=No' })
     tributo: string;
+
+    @ManyToOne(() => CuentaContable, { nullable: true })
+    @JoinColumn({ name: 'cuentaContableId' })
+    cuentaContable: CuentaContable;
+
+    @Column({ nullable: true })
+    cuentaContableId: string;
 
     @Column('bool', { default: true })
     isActive: boolean;

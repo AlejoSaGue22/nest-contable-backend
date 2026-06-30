@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { validate as isUUID } from 'uuid';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
+import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
 @Injectable()
 export class ClientesService {
@@ -14,11 +15,20 @@ export class ClientesService {
     @InjectRepository(Cliente)
     private readonly clientesRepository: Repository<Cliente>,
     @InjectRepository(TipoDocumento)
-    private readonly tipoDocumentoRepo: Repository<TipoDocumento>
+    private readonly tipoDocumentoRepo: Repository<TipoDocumento>,
+    private readonly parametrizacionService: ParametrizacionContableService,
   ) { }
 
   async create(createClienteDto: CreateClienteDto) {
-    const cliente = this.clientesRepository.create(createClienteDto);
+    let { cuentaContableId, ...rest } = createClienteDto;
+    if (!cuentaContableId || cuentaContableId.trim() === '') {
+      const config = await this.parametrizacionService.getConfiguracion();
+      cuentaContableId = config?.cuentaCobrarClientesId || undefined;
+    }
+    const cliente = this.clientesRepository.create({
+      ...rest,
+      cuentaContableId,
+    });
     const saved = await this.clientesRepository.save(cliente);
     return this.findOne(saved.id);
   }
@@ -43,6 +53,7 @@ export class ClientesService {
     queryBuilder.orderBy('cliente.id', 'DESC');
     queryBuilder.leftJoinAndSelect('cliente.tipoDocumentoRel', 'tipoDocumentoRel');
     queryBuilder.leftJoinAndSelect('cliente.ciudadRel', 'ciudadRel');
+    queryBuilder.leftJoinAndSelect('cliente.cuentaContable', 'cuentaContable');
 
     const clientes = await queryBuilder.getMany();
     const totalClients = await queryBuilder.getCount();
@@ -73,7 +84,8 @@ export class ClientesService {
       where: { id },
       relations: {
         tipoDocumentoRel: true,
-        ciudadRel: true
+        ciudadRel: true,
+        cuentaContable: true,
       }
     });
 

@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { AsientosContablesService } from './asientos-contables.service';
 import { CreateAsientosContableDto } from './dto/create-asientos-contable.dto';
 import { UpdateAsientosContableDto } from './dto/update-asientos-contable.dto';
@@ -8,7 +17,9 @@ import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 @Controller('asientos-contables')
 @UseGuards(AuthGuard, RolesGuard)
 export class AsientosContablesController {
-  constructor(private readonly asientosContablesService: AsientosContablesService) { }
+  constructor(
+    private readonly asientosContablesService: AsientosContablesService,
+  ) {}
 
   @Post()
   create(@Body() createAsientosContableDto: CreateAsientosContableDto) {

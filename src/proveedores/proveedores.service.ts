@@ -6,6 +6,7 @@ import { Proveedor } from './entities/proveedor.entity';
 import { Repository } from 'typeorm';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
+import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
 @Injectable()
 export class ProveedoresService {
@@ -13,11 +14,18 @@ export class ProveedoresService {
         @InjectRepository(Proveedor)
         private readonly proveedorRepository: Repository<Proveedor>,
         @InjectRepository(TipoDocumento)
-        private readonly tipoDocumentoRepo: Repository<TipoDocumento>
+        private readonly tipoDocumentoRepo: Repository<TipoDocumento>,
+        private readonly parametrizacionService: ParametrizacionContableService,
     ) { }
     async create(createProveedorDto: CreateProveedorDto) {
+        let { cuentaContableId, ...rest } = createProveedorDto;
+        if (!cuentaContableId || cuentaContableId.trim() === '') {
+            const config = await this.parametrizacionService.getConfiguracion();
+            cuentaContableId = config?.cuentaPagarProveedoresId || undefined;
+        }
         const proveedor = this.proveedorRepository.create({
-            ...createProveedorDto,
+            ...rest,
+            cuentaContableId,
             isActive: true
         });
         const saved = await this.proveedorRepository.save(proveedor);
@@ -39,7 +47,8 @@ export class ProveedoresService {
             },
             relations: {
                 tipoDocumentoRel: true,
-                ciudadRel: true
+                ciudadRel: true,
+                cuentaContable: true,
             }
         });
 
@@ -65,7 +74,8 @@ export class ProveedoresService {
             where: { id },
             relations: {
                 tipoDocumentoRel: true,
-                ciudadRel: true
+                ciudadRel: true,
+                cuentaContable: true,
             }
         });
         if (!proveedor) {

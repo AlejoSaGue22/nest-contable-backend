@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, IsUUID } from "class-validator";
 
 export class CreateClienteDto {
 
@@ -60,5 +60,9 @@ export class CreateClienteDto {
     @IsString()
     @IsNotEmpty()
     tributo: string;
+
+    @IsUUID()
+    @IsOptional()
+    cuentaContableId?: string;
 
 }

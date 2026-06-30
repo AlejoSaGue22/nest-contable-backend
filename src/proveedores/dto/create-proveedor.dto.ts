@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class CreateProveedorDto {
     @IsString()
@@ -56,6 +56,10 @@ export class CreateProveedorDto {
     @IsString()
     @IsOptional()
     observaciones?: string;
+
+    @IsUUID()
+    @IsOptional()
+    cuentaContableId?: string;
 
     // @IsBoolean()
     // @IsOptional()

@@ -7,8 +7,8 @@ import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
 import { Permission } from 'src/common/constants/roles.constants';
-import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
+import { CuentasBancariasPaginationDto } from './dto/cuentas-bancarias-pagination.dto';
 
 @Controller('cuentas-bancarias')
 @UseGuards(AuthGuard, RolesGuard)
@@ -29,7 +29,7 @@ export class CuentasBancariasController {
 
   @Get()
   @Permissions(Permission.ACCOUNTING_MANAGE)
-  findAll(@Query() paginationDto: PaginatioDto) {
+  findAll(@Query() paginationDto: CuentasBancariasPaginationDto) {
     return this.cuentasBancariasService.findAll(paginationDto);
   }
 
@@ -37,6 +37,12 @@ export class CuentasBancariasController {
   @Permissions(Permission.ACCOUNTING_MANAGE)
   findOne(@Param('id') id: string) {
     return this.cuentasBancariasService.findOne(id);
+  }
+
+  @Patch('toggle-status/:id')
+  @Permissions(Permission.ACCOUNTING_MANAGE)
+  toggleStatus(@Param('id') id: string) {
+    return this.cuentasBancariasService.toggleStatus(id);
   }
 
   @Patch(':id')

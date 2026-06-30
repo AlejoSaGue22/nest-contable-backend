@@ -1,5 +1,6 @@
 import { TipoDocumento } from "src/core/catalogs/entities/tipo-documento.entity";
 import { Municipality } from "src/core/municipalities/entities/municipality.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity('proveedores')
@@ -56,6 +57,13 @@ export class Proveedor {
 
     @Column({ nullable: true })
     observaciones: string;
+
+    @ManyToOne(() => CuentaContable, { nullable: true })
+    @JoinColumn({ name: 'cuentaContableId' })
+    cuentaContable: CuentaContable;
+
+    @Column({ nullable: true })
+    cuentaContableId: string;
 
     @Column({ default: true })
     isActive: boolean;

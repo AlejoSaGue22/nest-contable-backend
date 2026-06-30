@@ -4,9 +4,13 @@ import { ProveedoresController } from './proveedores.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Proveedor } from './entities/proveedor.entity';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
+import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Proveedor, TipoDocumento])],
+    imports: [
+        TypeOrmModule.forFeature([Proveedor, TipoDocumento]),
+        ParametrizacionContableModule,
+    ],
     controllers: [ProveedoresController],
     providers: [ProveedoresService],
     exports: [ProveedoresService]
