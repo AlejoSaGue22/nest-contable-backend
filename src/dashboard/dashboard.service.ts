@@ -150,7 +150,7 @@ export class DashboardService {
             cuentasCajaBancos.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
 
             const balanceGeneral = await this.reportesService.generarBalanceGeneral(referenceDate);
-            const totalDisponible = balanceGeneral.activos.corrientes; 
+            const totalDisponible = balanceGeneral.activos.corrientes;
 
             // 6. Recent Transactions
             const recentSales = await this.facturaVentaRepository.find({
@@ -231,7 +231,7 @@ export class DashboardService {
     private async getMonthlyHistory(startDate: Date, endDate: Date, period: string) {
         const months: any[] = [];
         const now = new Date();
-        
+
         let count = 6;
         let startRef = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 

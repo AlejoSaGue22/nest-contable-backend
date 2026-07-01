@@ -20,9 +20,9 @@ import { TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste-compra.entity';
 import { TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
-import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
+import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
 interface DetalleAsiento {
   cuentaId: string;
@@ -50,7 +50,7 @@ export class AsientosContablesService {
 
     private dataSource: DataSource,
     private readonly parametrizacionService: ParametrizacionContableService,
-  ) {}
+  ) { }
 
   async findByReferencia(referencia: string) {
     return this.asientoRepository.find({
@@ -79,7 +79,7 @@ export class AsientosContablesService {
       if (isContado) {
         const codigoDebito = factura.cuentaBancaria.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(factura.metodoPago || undefined);
+          : await this.resolverCuentaContado(factura.metodoPago || undefined);
         cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
       } else {
         let client: Cliente | null = factura.client;
@@ -255,9 +255,7 @@ export class AsientosContablesService {
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
-          );
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
@@ -333,18 +331,16 @@ export class AsientosContablesService {
       const codigoCreditoPlaceholder = isContado
         ? gasto.cuentaBancaria.codigoCuentaContable
           ? gasto.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(gasto.metodoPago ?? undefined)
+          : await this.resolverCuentaContado(gasto.metodoPago ?? undefined)
         : codigoCxP;
 
       const descCredito = isContado
-        ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedor?.identificacion ?? ''}`
+        ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedor.identificacion}`
         : `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       let cuentaCredito: CuentaContable;
       if (isContado) {
-        cuentaCredito = await this.obtenerCuentaPorCodigo(
-          codigoCreditoPlaceholder,
-        );
+        cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCreditoPlaceholder);
       } else {
         let proveedor: Proveedor | null = gasto.proveedor;
         if (!proveedor || !proveedor.cuentaContableId) {
@@ -361,8 +357,7 @@ export class AsientosContablesService {
             const temp = await queryRunner.manager.findOne(CuentaContable, {
               where: { id: config.cuentaPagarProveedoresId },
             });
-            cuentaCredito =
-              temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
+            cuentaCredito = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
           } else {
             cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCxP);
           }
@@ -422,7 +417,7 @@ export class AsientosContablesService {
       if (isContado) {
         const codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(factura.metodoPago!);
+          : await this.resolverCuentaContado(factura.metodoPago!);
         cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
       } else {
         let client: Cliente | null = factura.client;
@@ -666,7 +661,7 @@ export class AsientosContablesService {
       const codigoDebitoPlaceholder = isContado
         ? gasto.cuentaBancaria?.codigoCuentaContable
           ? gasto.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(gasto.metodoPago!)
+          : await this.resolverCuentaContado(gasto.metodoPago!)
         : codigoCxP;
 
       const descDebito = isContado
@@ -871,7 +866,7 @@ export class AsientosContablesService {
       if (isContado) {
         const codigoCuentaContra = factura.cuentaBancaria?.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(factura.metodoPago!);
+          : await this.resolverCuentaContado(factura.metodoPago!);
         cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
       } else {
         let client: Cliente | null = factura.client;
@@ -1135,7 +1130,7 @@ export class AsientosContablesService {
   ): Promise<AsientoContable> {
     this.logger.warn(
       `[DEPRECATED] generarAsientoPagoFacturaVenta() → ` +
-        `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
+      `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
     );
     return this.generarAsientoCobro({
       facturaVenta: factura,
@@ -1157,19 +1152,24 @@ export class AsientosContablesService {
    *
    * Si el código no está definido (contado sin método especificado) se asume efectivo (1105).
    */
-  private resolverCuentaContado(codigoMetodoPago?: string): string {
-    if (!codigoMetodoPago) return '1105'; // fallback: efectivo
-    console.log('codigoMetodoPago: ', codigoMetodoPago);
-    const metodoUpper = codigoMetodoPago;
+  private async resolverCuentaContado(codigoMetodoPago?: string): Promise<string> {
+    const config = await this.parametrizacionService.getConfiguracion();
+    const METODOS_BANCO = ['47', '42', '49', '48', '20'];
+    const esBanco = codigoMetodoPago && METODOS_BANCO.some((m) => codigoMetodoPago === m);
 
-    const METODOS_BANCO = ['47', '42', '49', '48', '20']; // 47: Transferencia, 42: Consignación, 49: Tarjeta Débito, 48: Tarjeta Crédito, 20: Cheque
-
-    if (METODOS_BANCO.some((m) => metodoUpper === m)) {
-      return '1110'; // Bancos
+    const cuentaId = esBanco ? config.cuentaBancosDefectoId : config.cuentaCajaDefectoId;
+    if (!cuentaId) {
+      throw new Error("Falta parametrizar la cuenta por defecto para  en la Configuración Global.");
     }
 
-    return '1105'; // Caja (efectivo u otros no identificados)
+    const cuenta = await this.cuentaRepository.findOne({ where: { id: cuentaId } });
+    if (!cuenta) {
+      throw new Error("La cuenta configurada para  no existe o está inactiva.");
+    }
+    return cuenta.codigo;
   }
+
+
 
   private async crearAsiento(
     data: {
@@ -1331,7 +1331,7 @@ export class AsientosContablesService {
       const codigoCuentaContra = isContado
         ? factura.cuentaBancaria?.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(factura.metodoPago!)
+          : await this.resolverCuentaContado(factura.metodoPago!)
         : codigoCxP;
       const cuentaContra =
         await this.obtenerCuentaPorCodigo(codigoCuentaContra);
@@ -1482,7 +1482,7 @@ export class AsientosContablesService {
       const codigoCuentaContra = isContado
         ? factura.cuentaBancaria?.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : this.resolverCuentaContado(factura.metodoPago!)
+          : await this.resolverCuentaContado(factura.metodoPago!)
         : codigoCxP;
       const cuentaContra =
         await this.obtenerCuentaPorCodigo(codigoCuentaContra);

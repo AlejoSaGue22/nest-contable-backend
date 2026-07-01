@@ -46,6 +46,30 @@ export class ParametrizacionContable {
   @Column({ nullable: true })
   cuentaDevolucionIvaComprasId: string;
 
+  // Cuenta de Caja por defecto
+  @ManyToOne(() => CuentaContable, { nullable: true })
+  @JoinColumn({ name: 'cuentaCajaDefectoId' })
+  cuentaCajaDefecto: CuentaContable;
+
+  @Column({ nullable: true })
+  cuentaCajaDefectoId: string;
+
+  // Cuenta de Bancos por defecto
+  @ManyToOne(() => CuentaContable, { nullable: true })
+  @JoinColumn({ name: 'cuentaBancosDefectoId' })
+  cuentaBancosDefecto: CuentaContable;
+
+  @Column({ nullable: true })
+  cuentaBancosDefectoId: string;
+
+  // Cuenta de CxP Gastos (Costos y gastos por pagar)
+  @ManyToOne(() => CuentaContable, { nullable: true })
+  @JoinColumn({ name: 'cuentaPagarGastosId' })
+  cuentaPagarGastos: CuentaContable;
+
+  @Column({ nullable: true })
+  cuentaPagarGastosId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
