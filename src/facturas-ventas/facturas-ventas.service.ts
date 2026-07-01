@@ -22,6 +22,7 @@ import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
@@ -50,6 +51,7 @@ export class FacturasVentasService {
     private dataSource: DataSource,
 
     private asientosContablesService: AsientosContablesService,
+    private contabilizacionEngine: ContabilizacionEngine,
 
     private factusService: FactusService,
   ) { }
@@ -171,7 +173,7 @@ export class FacturasVentasService {
               savedInvoice.cuentaBancaria = facturaVentaConRelacion.cuentaBancaria;
             }
           }
-          await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
+          await this.contabilizacionEngine.contabilizarDocumento('FACTURA_VENTA', savedInvoice.id, userId, queryRunner);
           this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
         } catch (asientoError) {
           await queryRunner.manager.update(FacturasVenta, { id: savedInvoice.id }, {
@@ -284,10 +286,7 @@ export class FacturasVentasService {
     }
   }
 
-  async update(
-    id: string,
-    updateDto: UpdateFacturasVentaDto,
-  ): Promise<FacturasVenta> {
+  async update(id: string, updateDto: UpdateFacturasVentaDto): Promise<FacturasVenta> {
     if (updateDto.items && updateDto.items.length === 0) {
       throw new BadRequestException('La factura debe tener al menos un item');
     }
@@ -295,9 +294,7 @@ export class FacturasVentasService {
     if (updateDto.fechaVencimiento) {
       const fechaVencimiento = new Date(updateDto.fechaVencimiento);
       if (fechaVencimiento < new Date()) {
-        throw new BadRequestException(
-          'La fecha de vencimiento no puede ser menor a la fecha actual',
-        );
+        throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
       }
     }
 
@@ -316,19 +313,13 @@ export class FacturasVentasService {
       }
 
       if (!invoice.puedeEditarse()) {
-        throw new BadRequestException(
-          `No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`,
-        );
+        throw new BadRequestException(`No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`);
       }
 
       let subtotal = invoice.subtotal;
       let iva = invoice.iva;
       let descuento = invoice.descuento;
       let total = invoice.total;
-
-      // =========================
-      // Recalcular items si vienen
-      // =========================
 
       if (updateDto.items && updateDto.items.length > 0) {
         const calc = await this.calcularTotales(queryRunner, updateDto.items);
@@ -443,19 +434,14 @@ export class FacturasVentasService {
     const invoice = await this.findOne(id);
 
     if (invoice.status != InvoiceStatus.DRAFT) {
-      throw new BadRequestException(
-        'No se puede eliminar una factura que no está en estado borrador',
-      );
+      throw new BadRequestException('No se puede eliminar una factura que no está en estado borrador');
     }
 
     try {
       await this.facturaVentaRepository.softDelete(id);
       this.logger.log(`Factura eliminada: ${id}`);
     } catch (error) {
-      this.logger.error(
-        `Error eliminando factura ${id}: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error eliminando factura ${id}: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al eliminar la factura');
     }
   }
@@ -526,8 +512,9 @@ export class FacturasVentasService {
         }
 
         try {
-          await this.asientosContablesService.generarAsientoFacturaVenta(
-            facturaParaAsiento,
+          await this.contabilizacionEngine.contabilizarDocumento(
+            'FACTURA_VENTA',
+            facturaParaAsiento.id,
             userId,
           );
           this.logger.log(
@@ -659,9 +646,11 @@ export class FacturasVentasService {
       }
 
       try {
-        await this.asientosContablesService.generarAsientoFacturaVenta(
-          updatedInvoice,
+        await this.contabilizacionEngine.contabilizarDocumento(
+          'FACTURA_VENTA',
+          updatedInvoice.id,
           userId,
+          queryRunner,
         );
         this.logger.log(
           `Asiento contable generado para factura estándar ${updatedInvoice.comprobante_completo}`,
@@ -965,8 +954,9 @@ export class FacturasVentasService {
     }
 
     try {
-      await this.asientosContablesService.generarAsientoFacturaVenta(
-        factura,
+      await this.contabilizacionEngine.contabilizarDocumento(
+        'FACTURA_VENTA',
+        factura.id,
         userId,
       );
 

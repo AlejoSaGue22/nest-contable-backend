@@ -7,6 +7,10 @@ import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
+import { ContabilizacionEngine } from './engine/contabilizacion.engine';
+import { NotaAjusteStrategy } from './engine/strategies/nota-ajuste.strategy';
+import { FacturaVentaStrategy } from './engine/strategies/factura-venta.strategy';
+import { FacturaCompraStrategy } from './engine/strategies/factura-compra.strategy';
 
 @Module({
   imports: [
@@ -19,7 +23,13 @@ import { ParametrizacionContableModule } from 'src/settings/parametrizacion-cont
     ParametrizacionContableModule
   ],
   controllers: [AsientosContablesController],
-  providers: [AsientosContablesService],
-  exports: [AsientosContablesService],
+  providers: [
+    AsientosContablesService,
+    ContabilizacionEngine,
+    NotaAjusteStrategy,
+    FacturaVentaStrategy,
+    FacturaCompraStrategy,
+  ],
+  exports: [AsientosContablesService, ContabilizacionEngine],
 })
 export class AsientosContablesModule { }

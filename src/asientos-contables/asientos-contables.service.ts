@@ -8,11 +8,12 @@ import {
   AsientoContable,
   TipoAsiento,
 } from './entities/asientos-contable.entity';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, QueryRunner } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
+import { DefinicionAsientoDto } from './dto/definicion-asiento.dto';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
@@ -50,7 +51,7 @@ export class AsientosContablesService {
 
     private dataSource: DataSource,
     private readonly parametrizacionService: ParametrizacionContableService,
-  ) {}
+  ) { }
 
   async findByReferencia(referencia: string) {
     return this.asientoRepository.find({
@@ -76,8 +77,6 @@ export class AsientosContablesService {
       // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let cuentaDebito: CuentaContable;
-      console.log('Asiento Factura ', factura);
-      console.log('Asiento Factura CUENTA BANCARIA: ', factura.cuentaBancaria);
       if (isContado) {
         const codigoDebito = factura.cuentaBancaria.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
@@ -576,17 +575,7 @@ export class AsientosContablesService {
   //
   // 6. ANULACIÓN FACTURA DE COMPRA  (reversa exacta del asiento original)
   //
-  // El asiento original de una compra a CRÉDITO fue:
-  //   DÉBITO:  Gastos (xArt) + IVA 1355
-  //   CRÉDITO: Proveedores 2205
-  //
-  // El asiento original de una compra CONTADO fue:
-  //   DÉBITO:  Gastos (xArt) + IVA 1355
-  //   CRÉDITO: Caja 1105
-  //
-  // La reversa INVIERTE cada línea:
-  //   DÉBITO:  Proveedores 2205 / Caja 1105   (lo que era crédito)
-  //   CRÉDITO: Gastos (xArt) + IVA 1355       (lo que era débito)
+
   // ══════════════════════════════════════════════════════════════════════════
   async generarAsientoAnulacionFacturaCompra(
     gasto: FacturaCompra,
@@ -677,9 +666,7 @@ export class AsientosContablesService {
 
       let cuentaDebito: CuentaContable;
       if (isContado) {
-        cuentaDebito = await this.obtenerCuentaPorCodigo(
-          codigoDebitoPlaceholder,
-        );
+        cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebitoPlaceholder);
       } else {
         let proveedor: Proveedor | null = gasto.proveedor;
         if (!proveedor || !proveedor.cuentaContableId) {
@@ -696,8 +683,7 @@ export class AsientosContablesService {
             const temp = await queryRunner.manager.findOne(CuentaContable, {
               where: { id: config.cuentaPagarProveedoresId },
             });
-            cuentaDebito =
-              temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
+            cuentaDebito = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
           } else {
             cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCxP);
           }
@@ -750,15 +736,12 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento ANULACION_COMPRA generado: ${asiento.numero}`);
       return asiento;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento anulación compra: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        `Error al generar asiento de anulación de compra: ${error.message}`,
-      );
+      this.logger.error(`Error asiento anulación compra: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de anulación de compra: ${error.message}`);
+
     } finally {
       await queryRunner.release();
     }
@@ -770,10 +753,7 @@ export class AsientosContablesService {
   // NC (CRÉDITO): DÉBITO Ingresos (xArt) + IVA 2408 | CRÉDITO Clientes 1305 / Caja-Bancos
   // ND (DÉBITO):  DÉBITO Clientes 1305 / Caja-Bancos | CRÉDITO Ingresos (xArt) + IVA 2408
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoNotaAjuste(
-    nota: NotaAjuste,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoNotaAjuste(nota: NotaAjuste, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -922,15 +902,12 @@ export class AsientosContablesService {
       await queryRunner.commitTransaction();
       this.logger.log(`Asiento ${asiento.tipo} generado: ${asiento.numero}`);
       return asiento;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento nota ajuste: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        `Error al generar asiento contable de nota de ajuste: ${error.message}`,
-      );
+      this.logger.error(`Error asiento nota ajuste: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento contable de nota de ajuste: ${error.message}`);
+
     } finally {
       await queryRunner.release();
     }
@@ -1069,16 +1046,13 @@ export class AsientosContablesService {
       } else {
         const config = await this.parametrizacionService.getConfiguracion();
         if (config?.cuentaPagarProveedoresId) {
-          const temp = await queryRunner.manager.findOne(CuentaContable, {
-            where: { id: config.cuentaPagarProveedoresId },
-          });
+          const temp = await queryRunner.manager.findOne(CuentaContable, { where: { id: config.cuentaPagarProveedoresId } });
           cuentaDebito = temp || (await this.obtenerCuentaPorCodigo('2205'));
         } else {
           cuentaDebito = await this.obtenerCuentaPorCodigo('2205');
         }
       }
-      const cuentaCredito =
-        await this.obtenerCuentaPorCodigo(cuentaCreditoCodigo);
+      const cuentaCredito = await this.obtenerCuentaPorCodigo(cuentaCreditoCodigo);
       const medioPagoLabel = cuentaCreditoCodigo === '1105' ? 'Caja' : 'Banco';
 
       const detalles: DetalleAsiento[] = [
@@ -1109,19 +1083,14 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(
-        `Asiento PAGO_PROVEEDOR generado: ${asiento.numero} | $${monto} | Compra: ${facturaCompra.numero}`,
-      );
+      this.logger.log(`Asiento PAGO_PROVEEDOR generado: ${asiento.numero} | $${monto} | Compra: ${facturaCompra.numero}`);
       return asiento;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento pago proveedor: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        `Error al generar asiento de pago a proveedor: ${error.message}`,
-      );
+      this.logger.error(`Error asiento pago proveedor: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al generar asiento de pago a proveedor: ${error.message}`);
+
     } finally {
       await queryRunner.release();
     }
@@ -1131,14 +1100,8 @@ export class AsientosContablesService {
   // LEGACY — mantenido por compatibilidad con facturas-ventas.service.ts
   // @deprecated Usar PagosService.registrarCobro() → generarAsientoCobro()
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoPagoFacturaVenta(
-    factura: FacturasVenta,
-    userId: string,
-  ): Promise<AsientoContable> {
-    this.logger.warn(
-      `[DEPRECATED] generarAsientoPagoFacturaVenta() → ` +
-        `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
-    );
+  async generarAsientoPagoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
+    this.logger.warn(`[DEPRECATED] generarAsientoPagoFacturaVenta() → Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`);
     return this.generarAsientoCobro({
       facturaVenta: factura,
       monto: factura.total,
@@ -1159,9 +1122,7 @@ export class AsientosContablesService {
    *
    * Si el código no está definido (contado sin método especificado) se asume efectivo (1105).
    */
-  private async resolverCuentaContado(
-    codigoMetodoPago?: string,
-  ): Promise<string> {
+  public async resolverCuentaContado(codigoMetodoPago?: string): Promise<string> {
     const config = await this.parametrizacionService.getConfiguracion();
     const METODOS_BANCO = ['47', '42', '49', '48', '20'];
     const esBanco =
@@ -1171,9 +1132,7 @@ export class AsientosContablesService {
       ? config.cuentaBancosDefectoId
       : config.cuentaCajaDefectoId;
     if (!cuentaId) {
-      throw new Error(
-        'Falta parametrizar la cuenta por defecto para  en la Configuración Global.',
-      );
+      throw new Error('Falta parametrizar la cuenta por defecto para  en la Configuración Global.');
     }
 
     const cuenta = await this.cuentaRepository.findOne({
@@ -1183,6 +1142,52 @@ export class AsientosContablesService {
       throw new Error('La cuenta configurada para  no existe o está inactiva.');
     }
     return cuenta.codigo;
+  }
+
+  async crearAsientoDesdeDefinicion(
+    definicion: DefinicionAsientoDto,
+    userId: string,
+    queryRunner: QueryRunner,
+  ): Promise<AsientoContable> {
+    const totalDebito = definicion.detalles.reduce((s, d) => s + d.debito, 0);
+    const totalCredito = definicion.detalles.reduce((s, d) => s + d.credito, 0);
+
+    if (Math.abs(totalDebito - totalCredito) > 0.01) {
+      throw new Error(
+        `Asiento descuadrado [${definicion.tipo}]. Débito: ${totalDebito}, Crédito: ${totalCredito}`,
+      );
+    }
+
+    const numero = await this.generarNumeroAsiento(queryRunner);
+
+    const asiento = queryRunner.manager.create(AsientoContable, {
+      numero,
+      tipo: definicion.tipo as TipoAsiento,
+      fecha: definicion.fecha,
+      referencia: definicion.referencia,
+      descripcion: definicion.descripcion,
+      totalDebito,
+      totalCredito,
+      createdById: userId,
+    });
+
+    const asientoGuardado = await queryRunner.manager.save(
+      AsientoContable,
+      asiento,
+    );
+
+    for (const detalle of definicion.detalles) {
+      const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {
+        asientoId: asientoGuardado.id,
+        cuentaId: detalle.cuentaId,
+        debito: detalle.debito,
+        credito: detalle.credito,
+        descripcion: detalle.concepto,
+      });
+      await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
+    }
+
+    return asientoGuardado;
   }
 
   private async crearAsiento(
@@ -1535,7 +1540,7 @@ export class AsientosContablesService {
     }
   }
 
-  private async obtenerCuentaPorCodigo(
+  public async obtenerCuentaPorCodigo(
     codigo: string,
   ): Promise<CuentaContable> {
     const cuenta = await this.cuentaRepository.findOne({
@@ -1676,7 +1681,7 @@ export class AsientosContablesService {
    * Busca la cuenta contable configurada para un impuesto.
    * Prioriza búsqueda por impuestoId (UUID), con fallback por tarifa + tipo.
    */
-  private async obtenerCuentaImpuesto(params: {
+  public async obtenerCuentaImpuesto(params: {
     impuestoId?: string;
     tarifa?: number;
     tipo?: string;
@@ -1808,16 +1813,14 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(
-        `Asiento NOMINA generado: ${asiento.numero} | ${periodoNombre}`,
-      );
+      this.logger.log(`Asiento NOMINA generado: ${asiento.numero} | ${periodoNombre}`);
       return asiento;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error asiento nómina: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Error al generar asiento de nómina: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Error al generar asiento de nómina: ${error.message}`);
+
     } finally {
       await queryRunner.release();
     }

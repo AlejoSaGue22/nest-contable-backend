@@ -32,8 +32,8 @@ export class CreateFacturaCompraDto {
     @IsOptional()
     metodoPago?: string;
 
-    @IsUUID()
     @IsOptional()
+    @IsString()
     cuentaBancariaId?: string;
 
     @IsArray()

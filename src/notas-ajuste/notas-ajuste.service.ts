@@ -11,6 +11,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
@@ -30,6 +31,7 @@ export class NotasAjusteService {
     private readonly dataSource: DataSource,
     private readonly factusService: FactusService,
     private readonly asientosService: AsientosContablesService,
+    private readonly contabilizacionEngine: ContabilizacionEngine,
   ) {}
  
   /**
@@ -117,7 +119,7 @@ export class NotasAjusteService {
         try {
           notaGuardada.items = itemsToSave;
           notaGuardada.facturaOriginal = factura;
-          await this.asientosService.generarAsientoNotaAjuste(notaGuardada, notaGuardada.createdById);
+          await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', notaGuardada.id, notaGuardada.createdById, queryRunner);
           this.logger.log(`Asiento contable generado automáticamente para notas credito ${notaGuardada.numeroCompleto}`);
 
         } catch (error) {
@@ -327,7 +329,7 @@ export class NotasAjusteService {
 
         // Generar asiento contable
         try {
-          await this.asientosService.generarAsientoNotaAjuste(nota, userId);
+          await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', nota.id, userId, queryRunner);
           this.logger.log(`Asiento contable generado automáticamente para ${nota.tipo} ${nota.numeroCompleto}`);
         } catch (asientoError) {
           updateAceptada.estado = EstadoNota.ERROR_ASIENTO;
@@ -378,7 +380,7 @@ export class NotasAjusteService {
     }
 
     try {
-      await this.asientosService.generarAsientoNotaAjuste(nota, nota.createdById);
+      await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', nota.id, nota.createdById);
       
       await this.notaRepository.update(id, {
         estado: EstadoNota.ACCEPTED,
@@ -434,7 +436,7 @@ export class NotasAjusteService {
           
           // Intentar generar asiento si no existe
           try {
-            await this.asientosService.generarAsientoNotaAjuste(nota, userId);
+            await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', nota.id, userId);
           } catch (error) {
             nota.estado = EstadoNota.ERROR_ASIENTO;
             nota.asientoError = error.message;

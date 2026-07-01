@@ -8,6 +8,7 @@ import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
 import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
 import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
@@ -41,6 +42,7 @@ export class FacturasComprasService {
 
         private dataSource: DataSource,
         private asientosContablesService: AsientosContablesService,
+        private contabilizacionEngine: ContabilizacionEngine,
     ) { }
 
     async create(createFacturaCompraDto: CreateFacturaCompraDto, userId: string): Promise<FacturaCompra> {
@@ -73,9 +75,9 @@ export class FacturasComprasService {
                     throw new NotFoundException(`Artículo ${itemDto.articuloId} no encontrado`);
                 }
 
-                if(createFacturaCompraDto.fechaVencimiento){
+                if (createFacturaCompraDto.fechaVencimiento) {
                     const fechaVencimiento = new Date(createFacturaCompraDto.fechaVencimiento);
-                    if(fechaVencimiento < new Date()){
+                    if (fechaVencimiento < new Date()) {
                         throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
                     }
                 }
@@ -126,7 +128,7 @@ export class FacturasComprasService {
                 }
 
                 const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
-                
+
                 // (itemSubtotal - descuentoValor) + valorIva 
                 const itemTotal = MathUtil.sum(itemSubtotal, valorIva);
 
@@ -159,20 +161,20 @@ export class FacturasComprasService {
             let totalPagado: number;
 
             if (isDraft == true) {
-              // Para BORRADORES: siempre PENDING con saldo = 0
-              paymentStatus = PaymentStatus.PENDING;
-              saldoPendiente = 0;
-              totalPagado = 0;
+                // Para BORRADORES: siempre PENDING con saldo = 0
+                paymentStatus = PaymentStatus.PENDING;
+                saldoPendiente = 0;
+                totalPagado = 0;
             } else {
-              // Para NO-BORRADORES: aplicar lógica de formaPago
-              paymentStatus = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
-              saldoPendiente = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0;
-              totalPagado = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total;
+                // Para NO-BORRADORES: aplicar lógica de formaPago
+                paymentStatus = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
+                saldoPendiente = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0;
+                totalPagado = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total;
             }
 
             // Crear gasto - Extraemos datos para evitar pasar el array de items del DTO directamente a la entidad
             const { items, ...dtoRest } = createFacturaCompraDto;
-            
+
             const gasto = queryRunner.manager.create(FacturaCompra, {
                 ...dtoRest,
                 numero: numero || null,
@@ -197,7 +199,7 @@ export class FacturasComprasService {
 
             const gastoGuardado = await queryRunner.manager.save(FacturaCompra, gasto);
 
-            const itemsToSave = detalles.map(item => 
+            const itemsToSave = detalles.map(item =>
                 queryRunner.manager.create(FacturaCompraDetalle, {
                     ...item,
                     facturaCompraId: gastoGuardado.id
@@ -209,7 +211,8 @@ export class FacturasComprasService {
             // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO
             if (!isDraft) {
                 try {
-                    gastoGuardado.items = itemsToSave
+                    gastoGuardado.items = itemsToSave;
+                    gastoGuardado.proveedor = proveedor;
                     if (gastoGuardado.cuentaBancariaId) {
                         const gastoConRelacion = await queryRunner.manager.findOne(FacturaCompra, {
                             where: { id: gastoGuardado.id },
@@ -219,7 +222,7 @@ export class FacturasComprasService {
                             gastoGuardado.cuentaBancaria = gastoConRelacion.cuentaBancaria;
                         }
                     }
-                    await this.asientosContablesService.generarAsientoGasto(gastoGuardado, userId);
+                    await this.contabilizacionEngine.contabilizarDocumento('FACTURA_COMPRA', gastoGuardado.id, userId, queryRunner);
                     this.logger.log(`Asiento contable generado para gasto ${gastoGuardado.numero}`);
                 } catch (asientoError) {
                     await queryRunner.manager.update(
@@ -359,7 +362,7 @@ export class FacturasComprasService {
                 throw new BadRequestException('Solo se pueden registrar facturas en estado borrador');
             }
 
-            
+
             const numero = await this.generarNumeroGasto(queryRunner);
 
             // ✅ FIX: update() selectivo — no toca campos financieros (subtotal, iva, descuento, total)
@@ -375,9 +378,9 @@ export class FacturasComprasService {
                 relations: ['items', 'items.articulo', 'proveedor']
             });
 
-            
+
             try {
-                await this.asientosContablesService.generarAsientoGasto(facturaActualizada!, userId);
+                await this.contabilizacionEngine.contabilizarDocumento('FACTURA_COMPRA', facturaActualizada!.id, userId, queryRunner);
                 this.logger.log(`Asiento contable generado para factura registrada ${numero}`);
             } catch (asientoError) {
                 await queryRunner.manager.update(
@@ -460,9 +463,9 @@ export class FacturasComprasService {
             throw new BadRequestException('La factura debe tener al menos un item');
         }
 
-        if(updateFacturaCompraDto.fechaVencimiento){
+        if (updateFacturaCompraDto.fechaVencimiento) {
             const fechaVencimiento = new Date(updateFacturaCompraDto.fechaVencimiento);
-            if(fechaVencimiento < new Date()){
+            if (fechaVencimiento < new Date()) {
                 throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
             }
         }
@@ -529,9 +532,9 @@ export class FacturasComprasService {
 
             // ⭐ Si la factura sigue siendo BORRADOR, resetear estados de pago
             if (factura.estado === GastoEstado.BORRADOR) {
-              updatePayload.paymentStatus = PaymentStatus.PENDING;
-              updatePayload.saldoPendiente = 0;
-              updatePayload.totalPagado = 0;
+                updatePayload.paymentStatus = PaymentStatus.PENDING;
+                updatePayload.saldoPendiente = 0;
+                updatePayload.totalPagado = 0;
             }
 
             this.logger.debug(`Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`);
@@ -587,7 +590,7 @@ export class FacturasComprasService {
 
             await queryRunner.manager.softRemove(factura);
             await queryRunner.manager.softRemove(factura.items);
-            
+
 
             await queryRunner.commitTransaction();
             this.logger.log(`Factura ${id} eliminada exitosamente`);
@@ -601,8 +604,8 @@ export class FacturasComprasService {
         }
     }
 
-    private async calcularTotales(queryRunner: QueryRunner, items: CreateFacturaCompraItemDto[]): 
-            Promise<{ subtotal: number; totalIva: number; descuento: number, detalles: Partial<FacturaCompraDetalle>[] }> {
+    private async calcularTotales(queryRunner: QueryRunner, items: CreateFacturaCompraItemDto[]):
+        Promise<{ subtotal: number; totalIva: number; descuento: number, detalles: Partial<FacturaCompraDetalle>[] }> {
 
         let subtotal = 0;
         let totalIva = 0;
@@ -637,7 +640,7 @@ export class FacturasComprasService {
             const itemSubtotal = MathUtil.mul(precioUnitario, cantidad);
             const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
             const descuentoValor = MathUtil.percentage(itemSubtotal, porcentajeDescuento);
-            
+
             // itemSubtotal + valorIva - descuentoValor
             const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, valorIva), descuentoValor);
 
@@ -645,7 +648,7 @@ export class FacturasComprasService {
                 articuloId: articulo.id,
                 descripcion: item.descripcion || '',
                 quantity: cantidad,
-                unitPrice: precioUnitario,  
+                unitPrice: precioUnitario,
                 porcentajeIva: porcentajeIva,
                 impuestoId: impuestoIdSeleccionado,
                 descuento: porcentajeDescuento,
@@ -671,7 +674,7 @@ export class FacturasComprasService {
         }
 
         try {
-            await this.asientosContablesService.generarAsientoGasto(gasto, userId);
+            await this.contabilizacionEngine.contabilizarDocumento('FACTURA_COMPRA', gasto.id, userId);
 
             // ✅ FIX: update() selectivo — restaurar estado sin tocar campos financieros
             await this.facturaCompraRepository.update(
