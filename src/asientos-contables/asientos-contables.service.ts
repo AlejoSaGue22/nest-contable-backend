@@ -50,7 +50,7 @@ export class AsientosContablesService {
 
     private dataSource: DataSource,
     private readonly parametrizacionService: ParametrizacionContableService,
-  ) { }
+  ) {}
 
   async findByReferencia(referencia: string) {
     return this.asientoRepository.find({
@@ -76,6 +76,8 @@ export class AsientosContablesService {
       // ── Débito: Caja / Bancos (contado) o Clientes (crédito) ─────────
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let cuentaDebito: CuentaContable;
+      console.log('Asiento Factura ', factura);
+      console.log('Asiento Factura CUENTA BANCARIA: ', factura.cuentaBancaria);
       if (isContado) {
         const codigoDebito = factura.cuentaBancaria.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
@@ -255,7 +257,9 @@ export class AsientosContablesService {
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+          );
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
@@ -340,7 +344,9 @@ export class AsientosContablesService {
 
       let cuentaCredito: CuentaContable;
       if (isContado) {
-        cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCreditoPlaceholder);
+        cuentaCredito = await this.obtenerCuentaPorCodigo(
+          codigoCreditoPlaceholder,
+        );
       } else {
         let proveedor: Proveedor | null = gasto.proveedor;
         if (!proveedor || !proveedor.cuentaContableId) {
@@ -357,7 +363,8 @@ export class AsientosContablesService {
             const temp = await queryRunner.manager.findOne(CuentaContable, {
               where: { id: config.cuentaPagarProveedoresId },
             });
-            cuentaCredito = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
+            cuentaCredito =
+              temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
           } else {
             cuentaCredito = await this.obtenerCuentaPorCodigo(codigoCxP);
           }
@@ -1130,7 +1137,7 @@ export class AsientosContablesService {
   ): Promise<AsientoContable> {
     this.logger.warn(
       `[DEPRECATED] generarAsientoPagoFacturaVenta() → ` +
-      `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
+        `Migrar a PagosService.registrarCobro(). Factura: ${factura.comprobante_completo}`,
     );
     return this.generarAsientoCobro({
       facturaVenta: factura,
@@ -1152,24 +1159,31 @@ export class AsientosContablesService {
    *
    * Si el código no está definido (contado sin método especificado) se asume efectivo (1105).
    */
-  private async resolverCuentaContado(codigoMetodoPago?: string): Promise<string> {
+  private async resolverCuentaContado(
+    codigoMetodoPago?: string,
+  ): Promise<string> {
     const config = await this.parametrizacionService.getConfiguracion();
     const METODOS_BANCO = ['47', '42', '49', '48', '20'];
-    const esBanco = codigoMetodoPago && METODOS_BANCO.some((m) => codigoMetodoPago === m);
+    const esBanco =
+      codigoMetodoPago && METODOS_BANCO.some((m) => codigoMetodoPago === m);
 
-    const cuentaId = esBanco ? config.cuentaBancosDefectoId : config.cuentaCajaDefectoId;
+    const cuentaId = esBanco
+      ? config.cuentaBancosDefectoId
+      : config.cuentaCajaDefectoId;
     if (!cuentaId) {
-      throw new Error("Falta parametrizar la cuenta por defecto para  en la Configuración Global.");
+      throw new Error(
+        'Falta parametrizar la cuenta por defecto para  en la Configuración Global.',
+      );
     }
 
-    const cuenta = await this.cuentaRepository.findOne({ where: { id: cuentaId } });
+    const cuenta = await this.cuentaRepository.findOne({
+      where: { id: cuentaId },
+    });
     if (!cuenta) {
-      throw new Error("La cuenta configurada para  no existe o está inactiva.");
+      throw new Error('La cuenta configurada para  no existe o está inactiva.');
     }
     return cuenta.codigo;
   }
-
-
 
   private async crearAsiento(
     data: {

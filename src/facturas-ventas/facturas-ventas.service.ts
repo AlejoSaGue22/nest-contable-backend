@@ -52,12 +52,9 @@ export class FacturasVentasService {
     private asientosContablesService: AsientosContablesService,
 
     private factusService: FactusService,
-  ) {}
+  ) { }
 
-  async create(
-    createFacturasVentaDto: CreateFacturasVentaDto,
-    userId: string,
-  ): Promise<FacturasVenta> {
+  async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -71,17 +68,10 @@ export class FacturasVentasService {
         throw new NotFoundException('Cliente no encontrado');
       }
 
-      if (
-        createFacturasVentaDto.fechaVencimiento &&
-        createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
-      ) {
-        const fechaVencimiento = new Date(
-          createFacturasVentaDto.fechaVencimiento,
-        );
+      if (createFacturasVentaDto.fechaVencimiento && createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA) {
+        const fechaVencimiento = new Date(createFacturasVentaDto.fechaVencimiento);
         if (fechaVencimiento < new Date()) {
-          throw new BadRequestException(
-            'La fecha de vencimiento no puede ser menor a la fecha actual',
-          );
+          throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
         }
       }
 
@@ -97,24 +87,21 @@ export class FacturasVentasService {
         createFacturasVentaDto.metodoPago = metodoPago.codigo;
       }
 
-      const { subtotal, iva, descuento, itemsCalculados } =
-        await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
+      const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
       const numberFactura = await this.generateInvoiceNumber();
-      const prefijo =
-        createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
-          ? 'FE'
-          : 'FV';
+      const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+        ? 'FE'
+        : 'FV';
 
       const { items, ...createDtoRest } = createFacturasVentaDto;
 
-      const statusInvoice =
-        createFacturasVentaDto.saveAsDraft === true
+      const statusInvoice = createFacturasVentaDto.saveAsDraft === true
+        ? InvoiceStatus.DRAFT
+        : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
           ? InvoiceStatus.DRAFT
-          : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
-            ? InvoiceStatus.DRAFT
-            : InvoiceStatus.ISSUED;
+          : InvoiceStatus.ISSUED;
       // ⭐ Determinar estado de pago según si es borrador o no
       let paymentStatus: PaymentStatus;
       let saldoPendiente: number;
@@ -129,18 +116,14 @@ export class FacturasVentasService {
         dianStatus = DianStatus.PENDING;
       } else {
         // Para NO-BORRADORES: aplicar lógica de formaPago
-        paymentStatus =
-          createFacturasVentaDto.formaPago === FormaPago.CREDITO
-            ? PaymentStatus.PENDING
-            : PaymentStatus.PAID;
-        saldoPendiente =
-          createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0;
-        totalPagado =
-          createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total;
-        dianStatus =
-          createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
-            ? DianStatus.PENDING
-            : DianStatus.ACCEPTED;
+        paymentStatus = createFacturasVentaDto.formaPago === FormaPago.CREDITO
+          ? PaymentStatus.PENDING
+          : PaymentStatus.PAID;
+        saldoPendiente = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0;
+        totalPagado = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total;
+        dianStatus = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+          ? DianStatus.PENDING
+          : DianStatus.ACCEPTED;
       }
 
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
@@ -150,10 +133,7 @@ export class FacturasVentasService {
         cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || null,
         vendedor: createFacturasVentaDto.vendedor || null,
         comprobante: statusInvoice === InvoiceStatus.DRAFT ? '' : numberFactura,
-        comprobante_completo:
-          statusInvoice === InvoiceStatus.DRAFT
-            ? ''
-            : `${prefijo}-${numberFactura}`,
+        comprobante_completo: statusInvoice === InvoiceStatus.DRAFT ? '' : `${prefijo}-${numberFactura}`,
         prefijo: statusInvoice === InvoiceStatus.DRAFT ? '' : prefijo,
         createdById: userId,
         subtotal,
@@ -167,10 +147,7 @@ export class FacturasVentasService {
         dianStatus,
       });
 
-      const savedInvoice = await queryRunner.manager.save(
-        FacturasVenta,
-        facturaVenta,
-      );
+      const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
 
       // Guardar items explícitamente para asegurar persistencia
       const itemsToSave = itemsCalculados.map((item) =>
@@ -182,36 +159,31 @@ export class FacturasVentasService {
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
 
       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
-      if (
-        savedInvoice.tipoFactura === TipoFactura.STANDARD &&
-        savedInvoice.status !== InvoiceStatus.DRAFT
-      ) {
+      if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
           savedInvoice.items = itemsToSave;
-          await this.asientosContablesService.generarAsientoFacturaVenta(
-            savedInvoice,
-            userId,
-          );
-          this.logger.log(
-            `Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`,
-          );
+          if (savedInvoice.cuentaBancariaId) {
+            const facturaVentaConRelacion = await queryRunner.manager.findOne(FacturasVenta, {
+              where: { id: savedInvoice.id },
+              relations: ['cuentaBancaria'],
+            });
+            if (facturaVentaConRelacion) {
+              savedInvoice.cuentaBancaria = facturaVentaConRelacion.cuentaBancaria;
+            }
+          }
+          await this.asientosContablesService.generarAsientoFacturaVenta(savedInvoice, userId);
+          this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
         } catch (asientoError) {
-          await queryRunner.manager.update(
-            FacturasVenta,
-            { id: savedInvoice.id },
-            {
-              status: InvoiceStatus.ERROR_ASIENTO,
-              asientoError: asientoError.message,
-              fechaAsientoError: new Date(),
-            },
-          );
+          await queryRunner.manager.update(FacturasVenta, { id: savedInvoice.id }, {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          });
         }
       }
 
       await queryRunner.commitTransaction();
-      this.logger.log(
-        `Factura creada exitosamente: ${savedInvoice.comprobante_completo}`,
-      );
+      this.logger.log(`Factura creada exitosamente: ${savedInvoice.comprobante_completo}`);
       return savedInvoice;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -228,9 +200,7 @@ export class FacturasVentasService {
     }
   }
 
-  async findAll(
-    options: InvoiceFilterDto,
-  ): Promise<{ data: FacturasVenta[]; meta: any }> {
+  async findAll(options: InvoiceFilterDto): Promise<{ data: FacturasVenta[]; meta: any }> {
     try {
       const { page = 1, limit = 10, ...where } = options;
       const skip = (page - 1) * limit;
