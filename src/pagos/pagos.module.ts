@@ -15,5 +15,6 @@ import { CxpService } from 'src/common/services/cxp.service';
   imports: [AsientosContablesModule, TypeOrmModule.forFeature([FacturaCompra, FacturasVenta, Pago, CuentasBancarias])],
   controllers: [PagosController],
   providers: [PagosService, PagosSchedulerService, CxcService, CxpService],
+  exports: [PagosService],
 })
 export class PagosModule { }

@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FacturaCompra, GastoEstado } from './entities/factura-compra.entity';
 import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { Pago } from 'src/pagos/entities/pago.entity';
-import { PaymentStatus } from 'src/pagos/enums/pago.enum';
+import { PaymentStatus, MedioPago } from 'src/pagos/enums/pago.enum';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -18,6 +18,7 @@ import { ComprasFilterDto } from './dto/compras-filter.dto';
 import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
+import { PagosService } from 'src/pagos/pagos.service';
 
 
 @Injectable()
@@ -43,6 +44,7 @@ export class FacturasComprasService {
         private dataSource: DataSource,
         private asientosContablesService: AsientosContablesService,
         private contabilizacionEngine: ContabilizacionEngine,
+        private pagosService: PagosService,
     ) { }
 
     async create(createFacturaCompraDto: CreateFacturaCompraDto, userId: string): Promise<FacturaCompra> {
@@ -166,10 +168,11 @@ export class FacturasComprasService {
                 saldoPendiente = 0;
                 totalPagado = 0;
             } else {
-                // Para NO-BORRADORES: aplicar lógica de formaPago
-                paymentStatus = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? PaymentStatus.PENDING : PaymentStatus.PAID;
-                saldoPendiente = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? total : 0;
-                totalPagado = createFacturaCompraDto.formaPago === FormaPago.CREDITO ? 0 : total;
+                // Para NO-BORRADORES: la factura de compra nace con saldo pendiente
+                // y el pago automático posterior la liquidará.
+                paymentStatus = PaymentStatus.PENDING;
+                saldoPendiente = total;
+                totalPagado = 0;
             }
 
             // Crear gasto - Extraemos datos para evitar pasar el array de items del DTO directamente a la entidad
@@ -236,6 +239,27 @@ export class FacturasComprasService {
                     );
 
                     this.logger.error(`Error generando asiento para gasto ${gastoGuardado.numero}: ${asientoError.message}`);
+                }
+
+                // Pago automático si es contado (dentro de la misma transacción)
+                if (createFacturaCompraDto.formaPago === FormaPago.CONTADO) {
+                    const medioPago = createFacturaCompraDto.metodoPago === '47' || createFacturaCompraDto.metodoPago === '42'
+                        ? MedioPago.BANCO
+                        : MedioPago.CAJA;
+
+                    await this.pagosService.registrarPago(
+                        gastoGuardado.id,
+                        {
+                            monto: total,
+                            fecha: createFacturaCompraDto.fecha || new Date().toISOString(),
+                            medioPago,
+                            cuentaBancariaId: createFacturaCompraDto.cuentaBancariaId || undefined,
+                            referencia: `Pago automático contado - Compra ${gastoGuardado.numero}`,
+                            notas: 'Pago generado de forma automática al registrar compra de contado.',
+                        },
+                        userId,
+                        queryRunner,
+                    );
                 }
             }
 
@@ -364,12 +388,22 @@ export class FacturasComprasService {
 
 
             const numero = await this.generarNumeroGasto(queryRunner);
+            // Nace con saldo pendiente para que el pago posterior la liquide
+            const paymentStatus = PaymentStatus.PENDING;
+            const saldoPendiente = factura.total;
+            const totalPagado = 0;
 
             // ✅ FIX: update() selectivo — no toca campos financieros (subtotal, iva, descuento, total)
             await queryRunner.manager.update(
                 FacturaCompra,
                 { id },
-                { numero, estado: GastoEstado.REGISTRADO },
+                { 
+                    numero, 
+                    estado: GastoEstado.REGISTRADO,
+                    paymentStatus,
+                    saldoPendiente,
+                    totalPagado
+                },
             );
 
             // Re-fetch con datos frescos desde BD para el asiento contable
@@ -385,7 +419,7 @@ export class FacturasComprasService {
             } catch (asientoError) {
                 await queryRunner.manager.update(
                     FacturaCompra,
-                    { id },
+                    { id: facturaActualizada!.id },
                     {
                         estado: GastoEstado.ERROR_ASIENTO,
                         asientoError: asientoError.message,
@@ -393,6 +427,27 @@ export class FacturasComprasService {
                     }
                 );
                 this.logger.error(`Error generando asiento para factura registrada ${numero}: ${asientoError.message}`);
+            }
+
+            // Pago automático si es de contado (dentro de la misma transacción)
+            if (factura.formaPago === FormaPago.CONTADO) {
+                const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+                    ? MedioPago.BANCO
+                    : MedioPago.CAJA;
+
+                await this.pagosService.registrarPago(
+                    factura.id,
+                    {
+                        monto: Number(factura.total),
+                        fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
+                        medioPago,
+                        cuentaBancariaId: factura.cuentaBancariaId || undefined,
+                        referencia: `Pago automático contado - Compra ${numero}`,
+                        notas: 'Pago generado de forma automática al registrar compra de contado.',
+                    },
+                    userId,
+                    queryRunner,
+                );
             }
 
             await queryRunner.commitTransaction();

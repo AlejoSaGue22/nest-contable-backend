@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, DataSource, Repository } from 'typeorm';
+import { Between, DataSource, Repository, QueryRunner } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
 import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
@@ -55,10 +55,14 @@ export class PagosService {
     facturaVentaId: string,
     dto: RegistrarCobroDto,
     userId: string,
+    qr?: QueryRunner,
   ): Promise<{ pago: Pago; factura: FacturasVenta }> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       // ── 1. Obtener y validar la factura ──────────────────────────────
@@ -71,7 +75,7 @@ export class PagosService {
         throw new NotFoundException(`Factura de venta ${facturaVentaId} no encontrada`);
       }
 
-      if (factura.formaPago !== FormaPago.CREDITO) {
+      if (factura.formaPago !== FormaPago.CREDITO && !isCustomRunner) {
         throw new BadRequestException(
           'Solo se pueden registrar cobros en facturas a crédito',
         );
@@ -131,13 +135,16 @@ export class PagosService {
 
       let asientoId: string = '';
       try {
-        const asiento = await this.asientosContablesService.generarAsientoCobro({
-          facturaVenta: factura,
-          monto: dto.monto,
-          fecha: new Date(dto.fecha),
-          cuentaDebitoCodigo: cuentaDebitoCode,
-          userId,
-        });
+        const asiento = await this.asientosContablesService.generarAsientoCobro(
+          {
+            facturaVenta: factura,
+            monto: dto.monto,
+            fecha: new Date(dto.fecha),
+            cuentaDebitoCodigo: cuentaDebitoCode,
+            userId,
+          },
+          queryRunner,
+        );
         asientoId = asiento.id;
         this.logger.log(`Asiento de cobro generado: ${asientoId}`);
       } catch (asientoError) {
@@ -183,9 +190,11 @@ export class PagosService {
         }
       }
 
-      await queryRunner.commitTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
 
-      const facturaActualizada = await this.facturaVentaRepository.findOne({
+      const facturaActualizada = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id: facturaVentaId },
         relations: ['client', 'pagos'],
       });
@@ -202,7 +211,9 @@ export class PagosService {
       return { pago: pagoGuardado, factura: facturaActualizada };
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(`Error registrando cobro: ${error.message}`, error.stack);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -210,7 +221,9 @@ export class PagosService {
       }
       throw new InternalServerErrorException('Error al registrar el cobro');
     } finally {
-      await queryRunner.release();
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -229,10 +242,14 @@ export class PagosService {
     facturaCompraId: string,
     dto: RegistrarPagoDto,
     userId: string,
+    qr?: QueryRunner,
   ): Promise<{ pago: Pago; factura: FacturaCompra }> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       // ── 1. Obtener y validar ─────────────────────────────────────────
@@ -245,7 +262,7 @@ export class PagosService {
         throw new NotFoundException(`Factura de compra ${facturaCompraId} no encontrada`);
       }
 
-      if (factura.formaPago !== 'CREDITO') {
+      if (factura.formaPago !== 'CREDITO' && !isCustomRunner) {
         throw new BadRequestException(
           'Solo se pueden registrar pagos en facturas de compra a crédito',
         );
@@ -300,13 +317,16 @@ export class PagosService {
 
       let asientoId: string = '';
       try {
-        const asiento = await this.asientosContablesService.generarAsientoPagoCompra({
-          facturaCompra: factura,
-          monto: dto.monto,
-          fecha: new Date(dto.fecha),
-          cuentaCreditoCodigo,
-          userId,
-        });
+        const asiento = await this.asientosContablesService.generarAsientoPagoCompra(
+          {
+            facturaCompra: factura,
+            monto: dto.monto,
+            fecha: new Date(dto.fecha),
+            cuentaCreditoCodigo,
+            userId,
+          },
+          queryRunner,
+        );
         asientoId = asiento.id;
         this.logger.log(`Asiento de pago generado: ${asientoId}`);
       } catch (asientoError) {
@@ -342,11 +362,6 @@ export class PagosService {
         paymentStatus:  nuevoPaymentStatus,
       };
 
-      // Si quedó saldo 0, también actualizar el estado general de la compra
-      // if (nuevoPaymentStatus === PaymentStatus.PAID) {
-      //   updatePayload.estado = GastoEstado.PAGADO;
-      // }
-
       await queryRunner.manager.update(FacturaCompra, { id: factura.id }, updatePayload);
 
       // ── 9. Actualizar saldo de cuenta bancaria ─────────────────────
@@ -358,9 +373,11 @@ export class PagosService {
         }
       }
 
-      await queryRunner.commitTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
 
-      const facturaActualizada = await this.facturaCompraRepository.findOne({
+      const facturaActualizada = await queryRunner.manager.findOne(FacturaCompra, {
         where: { id: facturaCompraId },
         relations: ['proveedor', 'pagos'],
       });
@@ -377,7 +394,9 @@ export class PagosService {
       return { pago: pagoGuardado, factura: facturaActualizada };
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(`Error registrando pago: ${error.message}`, error.stack);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -385,7 +404,9 @@ export class PagosService {
       }
       throw new InternalServerErrorException('Error al registrar el pago');
     } finally {
-      await queryRunner.release();
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
     }
   }
 

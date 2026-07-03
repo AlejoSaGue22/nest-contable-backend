@@ -46,35 +46,26 @@ export class FacturaVentaStrategy implements IContabilizacionStrategy {
       ? (factura.client.razonSocial || `${factura.client.nombre || ''} ${factura.client.apellido || ''}`.trim())
       : '';
 
-    // 2. Débito: Caja / Bancos (contado) o Clientes (crédito)
-    const isContado = factura.formaPago === FormaPago.CONTADO;
+    // 2. Débito: Clientes (tanto para contado como crédito, el cobro posterior liquidará el saldo)
     let cuentaDebito: CuentaContable;
-
-    if (isContado) {
-      const codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
-        ? factura.cuentaBancaria.codigoCuentaContable
-        : await this.asientosService.resolverCuentaContado(factura.metodoPago || undefined);
-      cuentaDebito = await this.asientosService.obtenerCuentaPorCodigo(codigoDebito);
+    let client: Cliente | null = factura.client;
+    if (!client || !client.cuentaContableId) {
+      client = await manager.findOne(Cliente, {
+        where: { id: factura.clientId },
+        relations: ['cuentaContable'],
+      });
+    }
+    if (client?.cuentaContable) {
+      cuentaDebito = client.cuentaContable;
     } else {
-      let client: Cliente | null = factura.client;
-      if (!client || !client.cuentaContableId) {
-        client = await manager.findOne(Cliente, {
-          where: { id: factura.clientId },
-          relations: ['cuentaContable'],
+      const config = await this.parametrizacionService.getConfiguracion();
+      if (config?.cuentaCobrarClientesId) {
+        const temp = await manager.findOne(CuentaContable, {
+          where: { id: config.cuentaCobrarClientesId },
         });
-      }
-      if (client?.cuentaContable) {
-        cuentaDebito = client.cuentaContable;
+        cuentaDebito = temp || (await this.asientosService.obtenerCuentaPorCodigo('1305'));
       } else {
-        const config = await this.parametrizacionService.getConfiguracion();
-        if (config?.cuentaCobrarClientesId) {
-          const temp = await manager.findOne(CuentaContable, {
-            where: { id: config.cuentaCobrarClientesId },
-          });
-          cuentaDebito = temp || (await this.asientosService.obtenerCuentaPorCodigo('1305'));
-        } else {
-          cuentaDebito = await this.asientosService.obtenerCuentaPorCodigo('1305');
-        }
+        cuentaDebito = await this.asientosService.obtenerCuentaPorCodigo('1305');
       }
     }
 

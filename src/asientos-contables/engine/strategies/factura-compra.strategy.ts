@@ -129,9 +129,7 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       });
     }
 
-    // 3. Crédito: Caja/Bancos (contado) o Proveedores/Gastos (crédito)
-    const isContado = gasto.formaPago === FormaPago.CONTADO;
-
+    // 3. Crédito: Proveedores/Gastos por pagar (tanto para contado como crédito, el egreso posterior liquidará el saldo)
     // Lógica de Diferenciación CxP:
     let codigoCxP = '2205'; // Default proveedores
     if (gastosAgrupados.size > 0) {
@@ -143,39 +141,27 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       }
     }
 
-    const codigoCreditoPlaceholder = isContado
-      ? gasto.cuentaBancaria?.codigoCuentaContable
-        ? gasto.cuentaBancaria.codigoCuentaContable
-        : await this.asientosService.resolverCuentaContado(gasto.metodoPago ?? undefined)
-      : codigoCxP;
-
-    const descCredito = isContado
-      ? `Pago ${gasto.metodoPago ?? 'contado'} - Proveedor: ${gasto.proveedor?.identificacion ?? ''}`
-      : `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero || 'Borrador'}`;
+    const descCredito = `${codigoCxP === '2335' ? 'Gasto por pagar' : 'Deuda con proveedor'} - Compra: ${gasto.numero || 'Borrador'}`;
 
     let cuentaCredito: CuentaContable;
-    if (isContado) {
-      cuentaCredito = await this.asientosService.obtenerCuentaPorCodigo(codigoCreditoPlaceholder);
+    let proveedor: Proveedor | null = gasto.proveedor;
+    if (!proveedor || !proveedor.cuentaContableId) {
+      proveedor = await manager.findOne(Proveedor, {
+        where: { id: gasto.proveedorId },
+        relations: ['cuentaContable'],
+      });
+    }
+    if (proveedor?.cuentaContable) {
+      cuentaCredito = proveedor.cuentaContable;
     } else {
-      let proveedor: Proveedor | null = gasto.proveedor;
-      if (!proveedor || !proveedor.cuentaContableId) {
-        proveedor = await manager.findOne(Proveedor, {
-          where: { id: gasto.proveedorId },
-          relations: ['cuentaContable'],
+      const config = await this.parametrizacionService.getConfiguracion();
+      if (config?.cuentaPagarProveedoresId) {
+        const temp = await manager.findOne(CuentaContable, {
+          where: { id: config.cuentaPagarProveedoresId },
         });
-      }
-      if (proveedor?.cuentaContable) {
-        cuentaCredito = proveedor.cuentaContable;
+        cuentaCredito = temp || (await this.asientosService.obtenerCuentaPorCodigo(codigoCxP));
       } else {
-        const config = await this.parametrizacionService.getConfiguracion();
-        if (config?.cuentaPagarProveedoresId) {
-          const temp = await manager.findOne(CuentaContable, {
-            where: { id: config.cuentaPagarProveedoresId },
-          });
-          cuentaCredito = temp || (await this.asientosService.obtenerCuentaPorCodigo(codigoCxP));
-        } else {
-          cuentaCredito = await this.asientosService.obtenerCuentaPorCodigo(codigoCxP);
-        }
+        cuentaCredito = await this.asientosService.obtenerCuentaPorCodigo(codigoCxP);
       }
     }
 

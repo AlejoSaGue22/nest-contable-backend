@@ -9,9 +9,10 @@ import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { PagosModule } from 'src/pagos/pagos.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([FacturaCompra, FacturaCompraDetalle, Proveedor, Articulo, Impuesto, CuentasBancarias]), AsientosContablesModule],
+    imports: [TypeOrmModule.forFeature([FacturaCompra, FacturaCompraDetalle, Proveedor, Articulo, Impuesto, CuentasBancarias]), AsientosContablesModule, PagosModule],
     controllers: [FacturasComprasController],
     providers: [FacturasComprasService],
     exports: [FacturasComprasService]

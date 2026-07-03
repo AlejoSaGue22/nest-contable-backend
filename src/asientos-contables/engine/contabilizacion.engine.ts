@@ -76,22 +76,20 @@ export class ContabilizacionEngine implements OnModuleInit {
       }
 
       // Persistir el asiento contable definitivo
-      const asiento = await this.asientosService.crearAsientoDesdeDefinicion(
-        definicion,
-        userId,
-        qr
-      );
+      const asiento = await this.asientosService.crearAsientoDesdeDefinicion(definicion, userId, qr);
 
       if (mustManageTransaction) {
         await qr.commitTransaction();
       }
       return asiento;
+
     } catch (error: any) {
       if (mustManageTransaction) {
         await qr.rollbackTransaction();
       }
       this.logger.error(`Error al contabilizar documento [${tipoDocumento} - ${documentoId}]: ${error.message}`);
       throw error;
+
     } finally {
       if (mustManageTransaction) {
         await qr.release();

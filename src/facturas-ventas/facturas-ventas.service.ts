@@ -17,7 +17,7 @@ import {
 } from './enums/factura-venta.enum';
 import { DataSource, Not, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
-import { PaymentStatus } from 'src/pagos/enums/pago.enum';
+import { PaymentStatus, MedioPago } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
@@ -27,6 +27,7 @@ import { FactusService } from 'src/api-dian/services/factus.service';
 import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
+import { PagosService } from 'src/pagos/pagos.service';
 
 @Injectable()
 export class FacturasVentasService {
@@ -54,6 +55,7 @@ export class FacturasVentasService {
     private contabilizacionEngine: ContabilizacionEngine,
 
     private factusService: FactusService,
+    private pagosService: PagosService,
   ) { }
 
   async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
@@ -117,12 +119,11 @@ export class FacturasVentasService {
         totalPagado = 0;
         dianStatus = DianStatus.PENDING;
       } else {
-        // Para NO-BORRADORES: aplicar lógica de formaPago
-        paymentStatus = createFacturasVentaDto.formaPago === FormaPago.CREDITO
-          ? PaymentStatus.PENDING
-          : PaymentStatus.PAID;
-        saldoPendiente = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? total : 0;
-        totalPagado = createFacturasVentaDto.formaPago === FormaPago.CREDITO ? 0 : total;
+        // Para NO-BORRADORES: la factura nace con saldoPendiente = total y totalPagado = 0,
+        // incluso si es CONTADO, ya que el cobro automático posterior la liquidará.
+        paymentStatus = PaymentStatus.PENDING;
+        saldoPendiente = total;
+        totalPagado = 0;
         dianStatus = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
           ? DianStatus.PENDING
           : DianStatus.ACCEPTED;
@@ -181,6 +182,27 @@ export class FacturasVentasService {
             asientoError: asientoError.message,
             fechaAsientoError: new Date(),
           });
+        }
+
+        // Cobro automático si es contado y estándar (dentro de la misma transacción)
+        if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
+          const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
+            ? MedioPago.BANCO
+            : MedioPago.CAJA;
+
+          await this.pagosService.registrarCobro(
+            savedInvoice.id,
+            {
+              monto: total,
+              fecha: createFacturasVentaDto.fecha || new Date().toISOString(),
+              medioPago,
+              cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || undefined,
+              referencia: `Cobro automático contado - Factura ${savedInvoice.comprobante_completo}`,
+              notas: 'Cobro generado de forma automática al emitir factura de contado.',
+            },
+            userId,
+            queryRunner,
+          );
         }
       }
 
@@ -497,6 +519,9 @@ export class FacturasVentasService {
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: 'FE',
           comprobante: numberFactura,
+          paymentStatus: PaymentStatus.PENDING,
+          saldoPendiente: factura.total,
+          totalPagado: 0,
         };
 
         if (respuesta.numeroCompleto) {
@@ -504,12 +529,11 @@ export class FacturasVentasService {
           factura.comprobante_completo = respuesta.numeroCompleto;
         }
 
+        // Primero actualizamos en BD para que la contabilidad y el cobro lean datos correctos
+        await this.facturaVentaRepository.update({ id }, updateAceptada);
+
         // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
-        // Re-fetch la factura para tener los valores financieros correctos desde la BD
         const facturaParaAsiento = await this.findOne(id);
-        if (respuesta.numeroCompleto) {
-          facturaParaAsiento.comprobante_completo = respuesta.numeroCompleto;
-        }
 
         try {
           await this.contabilizacionEngine.contabilizarDocumento(
@@ -521,15 +545,40 @@ export class FacturasVentasService {
             `Asiento contable generado para factura electrónica ${facturaParaAsiento.comprobante_completo}`,
           );
         } catch (asientoError) {
-          updateAceptada.status = InvoiceStatus.ERROR_ASIENTO;
-          updateAceptada.asientoError = asientoError.message;
-          updateAceptada.fechaAsientoError = new Date();
+          await this.facturaVentaRepository.update({ id }, {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          });
           this.logger.error(
             `Error generando asiento contable para FE: ${asientoError.message}`,
           );
         }
 
-        await this.facturaVentaRepository.update({ id }, updateAceptada);
+        // Si es de contado, registrar cobro automático (usando transacción independiente para cobros de FE)
+        if (factura.formaPago === FormaPago.CONTADO) {
+          try {
+            const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+              ? MedioPago.BANCO
+              : MedioPago.CAJA;
+
+            await this.pagosService.registrarCobro(
+              factura.id,
+              {
+                monto: Number(factura.total),
+                fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
+                medioPago,
+                cuentaBancariaId: factura.cuentaBancariaId || undefined,
+                referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
+                notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
+              },
+              userId,
+            );
+            this.logger.log(`Cobro automático registrado para factura electrónica ${factura.comprobante_completo}`);
+          } catch (cobroError) {
+            this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
+          }
+        }
         this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
       } else {
         // Rechazada
@@ -612,14 +661,10 @@ export class FacturasVentasService {
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = 'FV';
 
-      const paymentStatus =
-        factura.formaPago === FormaPago.CREDITO
-          ? PaymentStatus.PENDING
-          : PaymentStatus.PAID;
-      const saldoPendiente =
-        factura.formaPago === FormaPago.CREDITO ? factura.total : 0;
-      const totalPagado =
-        factura.formaPago === FormaPago.CREDITO ? 0 : factura.total;
+      // Nace con saldo pendiente para que el cobro posterior lo liquide
+      const paymentStatus = PaymentStatus.PENDING;
+      const saldoPendiente = factura.total;
+      const totalPagado = 0;
 
       await queryRunner.manager.update(
         FacturasVenta,
@@ -667,6 +712,27 @@ export class FacturasVentasService {
         );
         this.logger.error(
           `Error generando asiento contable para factura estándar: ${asientoError.message}`,
+        );
+      }
+
+      // Cobro automático si es contado (dentro de la misma transacción)
+      if (factura.formaPago === FormaPago.CONTADO) {
+        const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+          ? MedioPago.BANCO
+          : MedioPago.CAJA;
+
+        await this.pagosService.registrarCobro(
+          factura.id,
+          {
+            monto: Number(factura.total),
+            fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
+            medioPago,
+            cuentaBancariaId: factura.cuentaBancariaId || undefined,
+            referencia: `Cobro automático contado - Factura ${updatedInvoice.comprobante_completo}`,
+            notas: 'Cobro generado de forma automática al emitir factura de contado.',
+          },
+          userId,
+          queryRunner,
         );
       }
 

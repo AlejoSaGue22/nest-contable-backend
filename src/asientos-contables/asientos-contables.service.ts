@@ -63,10 +63,7 @@ export class AsientosContablesService {
 
   // ══════════════════════════════════════════════════════════════════════════
   // 1. FACTURA DE VENTA
-  async generarAsientoFacturaVenta(
-    factura: FacturasVenta,
-    userId: string,
-  ): Promise<AsientoContable> {
+  async generarAsientoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -925,18 +922,24 @@ export class AsientosContablesService {
   //
   // Llamado desde: PagosService.registrarCobro()
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoCobro(params: {
-    facturaVenta: FacturasVenta;
-    monto: number;
-    fecha: Date;
-    cuentaDebitoCodigo: string; // '1105' | '1110'
-    userId: string;
-  }): Promise<AsientoContable> {
+  async generarAsientoCobro(
+    params: {
+      facturaVenta: FacturasVenta;
+      monto: number;
+      fecha: Date;
+      cuentaDebitoCodigo: string; // '1105' | '1110'
+      userId: string;
+    },
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
     const { facturaVenta, monto, fecha, cuentaDebitoCodigo, userId } = params;
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       const cuentaDebito =
@@ -991,19 +994,25 @@ export class AsientosContablesService {
         queryRunner,
       );
 
-      await queryRunner.commitTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
       this.logger.log(
         `Asiento COBRO generado: ${asiento.numero} | $${monto} | Fact: ${facturaVenta.comprobante_completo}`,
       );
       return asiento;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(`Error asiento cobro: ${error.message}`, error.stack);
       throw new InternalServerErrorException(
         `Error al generar asiento de cobro: ${error.message}`,
       );
     } finally {
-      await queryRunner.release();
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -1019,18 +1028,24 @@ export class AsientosContablesService {
   //
   // Llamado desde: PagosService.registrarPago()
   // ══════════════════════════════════════════════════════════════════════════
-  async generarAsientoPagoCompra(params: {
-    facturaCompra: FacturaCompra;
-    monto: number;
-    fecha: Date;
-    cuentaCreditoCodigo: string; // '1105' | '1110'
-    userId: string;
-  }): Promise<AsientoContable> {
+  async generarAsientoPagoCompra(
+    params: {
+      facturaCompra: FacturaCompra;
+      monto: number;
+      fecha: Date;
+      cuentaCreditoCodigo: string; // '1105' | '1110'
+      userId: string;
+    },
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
     const { facturaCompra, monto, fecha, cuentaCreditoCodigo, userId } = params;
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       let cuentaDebito: CuentaContable;
@@ -1082,17 +1097,23 @@ export class AsientosContablesService {
         queryRunner,
       );
 
-      await queryRunner.commitTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
       this.logger.log(`Asiento PAGO_PROVEEDOR generado: ${asiento.numero} | $${monto} | Compra: ${facturaCompra.numero}`);
       return asiento;
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(`Error asiento pago proveedor: ${error.message}`, error.stack);
       throw new InternalServerErrorException(`Error al generar asiento de pago a proveedor: ${error.message}`);
 
     } finally {
-      await queryRunner.release();
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
