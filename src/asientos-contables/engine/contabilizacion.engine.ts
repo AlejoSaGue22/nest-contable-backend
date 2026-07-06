@@ -70,9 +70,7 @@ export class ContabilizacionEngine implements OnModuleInit {
       const definicion = await strategy.generarDefinicion(documentoId, qr);
 
       if (!definicion.estaBalanceado) {
-        throw new BadRequestException(
-          `No se puede contabilizar el documento. El asiento no está balanceado. Diferencia: ${definicion.diferencia}`
-        );
+        throw new BadRequestException(`No se puede contabilizar el documento. El asiento no está balanceado. Diferencia: ${definicion.diferencia}`);
       }
 
       // Persistir el asiento contable definitivo

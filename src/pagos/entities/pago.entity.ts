@@ -4,6 +4,7 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
@@ -11,6 +12,12 @@ import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.enti
 import { User } from 'src/users/entities/user.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
+import { Cliente } from 'src/clientes/entities/cliente.entity';
+import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
+import { PagoFacturaDetalle } from './pago-factura-detalle.entity';
+import { PagoConceptoDetalle } from './pago-concepto-detalle.entity';
+
+import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
 import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
 
@@ -19,15 +26,6 @@ import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
  *
  * Cada registro es UN abono (puede haber varios por factura si es crédito con abonos).
  * Genera automáticamente su propio asiento contable.
- *
- * FLUJO:
- *  Factura Venta crédito → PaymentStatus.PENDING
- *    → registrar cobro parcial  → PaymentStatus.PARTIAL  (crea Pago tipo COBRO)
- *    → registrar cobro total    → PaymentStatus.PAID     (crea Pago tipo COBRO)
- *
- *  Factura Compra crédito → PaymentStatus.PENDING
- *    → registrar pago parcial   → PaymentStatus.PARTIAL  (crea Pago tipo PAGO)
- *    → registrar pago total     → PaymentStatus.PAID     (crea Pago tipo PAGO)
  */
 @Entity('pagos')
 export class Pago {
@@ -39,6 +37,28 @@ export class Pago {
 
   @Column({ type: 'enum', enum: TipoPago })
   tipo: TipoPago;
+
+  // ── Relaciones con Terceros ──────────────────────────────────────────────
+  @ManyToOne(() => Cliente, { nullable: true })
+  @JoinColumn({ name: 'clienteId' })
+  cliente: Cliente;
+
+  @Column({ nullable: true })
+  clienteId: string | null;
+
+  @ManyToOne(() => Proveedor, { nullable: true })
+  @JoinColumn({ name: 'proveedorId' })
+  proveedor: Proveedor;
+
+  @Column({ nullable: true })
+  proveedorId: string | null;
+
+  // ── Detalles de Pagos (Dos tablas) ───────────────────────────────────────
+  @OneToMany(() => PagoFacturaDetalle, (detalle) => detalle.pago)
+  facturasDetalles: PagoFacturaDetalle[];
+
+  @OneToMany(() => PagoConceptoDetalle, (detalle) => detalle.pago)
+  conceptosDetalles: PagoConceptoDetalle[];
 
   // ── Referencia al documento origen (solo uno estará lleno) ──────────────
   @ManyToOne(() => FacturasVenta, { nullable: true })
@@ -65,6 +85,13 @@ export class Pago {
 
   @Column({ type: 'enum', enum: MedioPago })
   medioPago: MedioPago;
+
+  @ManyToOne(() => MetodoPago, { nullable: true })
+  @JoinColumn({ name: 'metodoPagoId' })
+  metodoPago: MetodoPago;
+
+  @Column({ type: 'int', nullable: true })
+  metodoPagoId: number | null;
 
   /**
    * Si medioPago = BANCO | TRANSFERENCIA | CHEQUE,

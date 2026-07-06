@@ -38,6 +38,9 @@ export class ParametrizacionContableService {
             if (data.cuentaPagarProveedoresId !== undefined) config.cuentaPagarProveedoresId = data.cuentaPagarProveedoresId;
             if (data.cuentaDevolucionesProveedoresId !== undefined) config.cuentaDevolucionesProveedoresId = data.cuentaDevolucionesProveedoresId;
             if (data.cuentaDevolucionIvaComprasId !== undefined) config.cuentaDevolucionIvaComprasId = data.cuentaDevolucionIvaComprasId;
+            if (data.cuentaCajaDefectoId !== undefined) config.cuentaCajaDefectoId = data.cuentaCajaDefectoId;
+            if (data.cuentaBancosDefectoId !== undefined) config.cuentaBancosDefectoId = data.cuentaBancosDefectoId;
+            if (data.cuentaPagarGastosId !== undefined) config.cuentaPagarGastosId = data.cuentaPagarGastosId;
 
             return await this.parametrizacionRepository.save(config);
         } catch (error) {

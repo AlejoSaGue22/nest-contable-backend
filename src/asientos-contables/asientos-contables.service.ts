@@ -24,6 +24,8 @@ import { TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-comp
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { TipoPago } from 'src/pagos/enums/pago.enum';
 
 interface DetalleAsiento {
   cuentaId: string;
@@ -62,7 +64,7 @@ export class AsientosContablesService {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 1. FACTURA DE VENTA
+  // 1. FACTURA DE VENTA -- DEPRECADA
   async generarAsientoFacturaVenta(factura: FacturasVenta, userId: string): Promise<AsientoContable> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -186,7 +188,7 @@ export class AsientosContablesService {
 
       // ── Débito: Descuentos (si aplica) ───────────────────────────────
       if (factura.descuento > 0) {
-        const cuentaDescuento = await this.obtenerCuentaPorCodigo('5305');
+        const cuentaDescuento = await this.obtenerCuentaPorCodigo('4175');
         detalles.push({
           cuentaId: cuentaDescuento.id,
           debito: factura.descuento,
@@ -225,7 +227,7 @@ export class AsientosContablesService {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 2. GASTO / FACTURA DE COMPRA
+  // 2. GASTO / FACTURA DE COMPRA -- DEPRECADA
   async generarAsientoGasto(
     gasto: FacturaCompra,
     userId: string,
@@ -253,16 +255,11 @@ export class AsientosContablesService {
         });
 
         if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
-          );
+          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
         }
 
         const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
-        gastosAgrupados.set(
-          cuentaId,
-          (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
-        );
+        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal);
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
@@ -317,11 +314,8 @@ export class AsientosContablesService {
       let codigoCxP = '2205'; // Default
 
       if (gastosAgrupados.size > 0) {
-        const cuentasInvolucradas = await queryRunner.manager.find(
-          CuentaContable,
-          {
-            where: { id: In(Array.from(gastosAgrupados.keys())) },
-          },
+        const cuentasInvolucradas = await queryRunner.manager.find(CuentaContable,
+          { where: { id: In(Array.from(gastosAgrupados.keys())) } }
         );
         if (cuentasInvolucradas.some((c) => c.codigo.startsWith('5'))) {
           codigoCxP = '2335';
@@ -530,7 +524,7 @@ export class AsientosContablesService {
 
       // ── Crédito: reversa de Descuentos ───────────────────────────────
       if (factura.descuento > 0) {
-        const cuentaDescuento = await this.obtenerCuentaPorCodigo('5305');
+        const cuentaDescuento = await this.obtenerCuentaPorCodigo('4175');
         detalles.push({
           cuentaId: cuentaDescuento.id,
           debito: 0,
@@ -927,12 +921,14 @@ export class AsientosContablesService {
       facturaVenta: FacturasVenta;
       monto: number;
       fecha: Date;
-      cuentaDebitoCodigo: string; // '1105' | '1110'
+      cuentaDebitoCodigo?: string; // '1105' | '1110' (legacy/default)
+      cuentaBancariaId?: string;
+      medioPago?: string;
       userId: string;
     },
     qr?: QueryRunner,
   ): Promise<AsientoContable> {
-    const { facturaVenta, monto, fecha, cuentaDebitoCodigo, userId } = params;
+    const { facturaVenta, monto, fecha, cuentaDebitoCodigo, cuentaBancariaId, medioPago, userId } = params;
 
     const queryRunner = qr || this.dataSource.createQueryRunner();
     const isCustomRunner = !!qr;
@@ -942,8 +938,10 @@ export class AsientosContablesService {
     }
 
     try {
-      const cuentaDebito =
-        await this.obtenerCuentaPorCodigo(cuentaDebitoCodigo);
+      const cuentaDebito = await this.resolverCuentaTesoreria(
+        { cuentaBancariaId, medioPago, fallbackCodigo: cuentaDebitoCodigo || '1110' },
+        queryRunner,
+      );
       let cuentaCredito: CuentaContable;
       let client: Cliente | null = facturaVenta.client;
       if (!client || !client.cuentaContableId) {
@@ -965,7 +963,7 @@ export class AsientosContablesService {
           cuentaCredito = await this.obtenerCuentaPorCodigo('1305');
         }
       }
-      const medioPagoLabel = cuentaDebitoCodigo === '1105' ? 'Caja' : 'Banco';
+      const medioPagoLabel = cuentaDebito.codigo === '1105' ? 'Caja' : 'Banco';
 
       const detalles: DetalleAsiento[] = [
         {
@@ -1033,12 +1031,14 @@ export class AsientosContablesService {
       facturaCompra: FacturaCompra;
       monto: number;
       fecha: Date;
-      cuentaCreditoCodigo: string; // '1105' | '1110'
+      cuentaCreditoCodigo?: string; // '1105' | '1110' (legacy/default)
+      cuentaBancariaId?: string;
+      medioPago?: string;
       userId: string;
     },
     qr?: QueryRunner,
   ): Promise<AsientoContable> {
-    const { facturaCompra, monto, fecha, cuentaCreditoCodigo, userId } = params;
+    const { facturaCompra, monto, fecha, cuentaCreditoCodigo, cuentaBancariaId, medioPago, userId } = params;
 
     const queryRunner = qr || this.dataSource.createQueryRunner();
     const isCustomRunner = !!qr;
@@ -1067,8 +1067,11 @@ export class AsientosContablesService {
           cuentaDebito = await this.obtenerCuentaPorCodigo('2205');
         }
       }
-      const cuentaCredito = await this.obtenerCuentaPorCodigo(cuentaCreditoCodigo);
-      const medioPagoLabel = cuentaCreditoCodigo === '1105' ? 'Caja' : 'Banco';
+      const cuentaCredito = await this.resolverCuentaTesoreria(
+        { cuentaBancariaId, medioPago, fallbackCodigo: cuentaCreditoCodigo || '1110' },
+        queryRunner,
+      );
+      const medioPagoLabel = cuentaCredito.codigo === '1105' ? 'Caja' : 'Banco';
 
       const detalles: DetalleAsiento[] = [
         {
@@ -1110,6 +1113,330 @@ export class AsientosContablesService {
       this.logger.error(`Error asiento pago proveedor: ${error.message}`, error.stack);
       throw new InternalServerErrorException(`Error al generar asiento de pago a proveedor: ${error.message}`);
 
+    } finally {
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // NUEVOS MÉTODOS DE CONTABILIZACIÓN FLEXIBLE
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async generarAsientoCobroMultiple(
+    params: {
+      clienteId: string;
+      facturasAbonos: Array<{ facturaVenta: FacturasVenta; monto: number }>;
+      montoTotal: number;
+      fecha: Date;
+      cuentaDebitoCodigo?: string;
+      cuentaBancariaId?: string;
+      medioPago?: string;
+      userId: string;
+    },
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const { clienteId, facturasAbonos, montoTotal, fecha, cuentaDebitoCodigo, cuentaBancariaId, medioPago, userId } = params;
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const cuentaDebito = await this.resolverCuentaTesoreria(
+        { cuentaBancariaId, medioPago, fallbackCodigo: cuentaDebitoCodigo || '1110' },
+        queryRunner,
+      );
+
+      const detalles: DetalleAsiento[] = [];
+      const medioPagoLabel = cuentaDebito.codigo === '1105' ? 'Caja' : 'Banco';
+
+      // 1. Débito a Caja/Banco por el total recibido
+      detalles.push({
+        cuentaId: cuentaDebito.id,
+        debito: montoTotal,
+        credito: 0,
+        descripcion: `Cobro Múltiple en ${medioPagoLabel}`,
+      });
+
+      // 2. Crédito a la cuenta contable de cartera de cada factura de venta abonada
+      for (const item of facturasAbonos) {
+        let cuentaCredito: CuentaContable;
+        let client: Cliente | null = item.facturaVenta.client;
+        if (!client || !client.cuentaContableId) {
+          client = await queryRunner.manager.findOne(Cliente, {
+            where: { id: clienteId },
+            relations: ['cuentaContable'],
+          });
+        }
+        if (client?.cuentaContable) {
+          cuentaCredito = client.cuentaContable;
+        } else {
+          const config = await this.parametrizacionService.getConfiguracion();
+          if (config?.cuentaCobrarClientesId) {
+            const temp = await queryRunner.manager.findOne(CuentaContable, {
+              where: { id: config.cuentaCobrarClientesId },
+            });
+            cuentaCredito = temp || (await this.obtenerCuentaPorCodigo('1305'));
+          } else {
+            cuentaCredito = await this.obtenerCuentaPorCodigo('1305');
+          }
+        }
+
+        detalles.push({
+          cuentaId: cuentaCredito.id,
+          debito: 0,
+          credito: item.monto,
+          descripcion: `Abono CxC - Fact: ${item.facturaVenta.comprobante_completo} | Cliente: ${client?.numeroDocumento ?? ''}`,
+        });
+      }
+
+      const refStr = facturasAbonos.map(fa => fa.facturaVenta.comprobante_completo).join(', ');
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.COBRO,
+          fecha,
+          referencia: refStr.substring(0, 100),
+          descripcion: `Cobro Múltiple $${montoTotal.toLocaleString('es-CO')} - Facturas: ${refStr}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
+      return asiento;
+    } catch (error) {
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Error asiento cobro múltiple: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de cobro múltiple: ${error.message}`,
+      );
+    } finally {
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  async generarAsientoPagoCompraMultiple(
+    params: {
+      proveedorId: string;
+      facturasAbonos: Array<{ facturaCompra: FacturaCompra; monto: number }>;
+      montoTotal: number;
+      fecha: Date;
+      cuentaCreditoCodigo?: string;
+      cuentaBancariaId?: string;
+      medioPago?: string;
+      userId: string;
+    },
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const { proveedorId, facturasAbonos, montoTotal, fecha, cuentaCreditoCodigo, cuentaBancariaId, medioPago, userId } = params;
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const cuentaCredito = await this.resolverCuentaTesoreria(
+        { cuentaBancariaId, medioPago, fallbackCodigo: cuentaCreditoCodigo || '1110' },
+        queryRunner,
+      );
+
+      const detalles: DetalleAsiento[] = [];
+      const medioPagoLabel = cuentaCredito.codigo === '1105' ? 'Caja' : 'Banco';
+
+      // 1. Crédito a Caja/Banco por el total pagado
+      detalles.push({
+        cuentaId: cuentaCredito.id,
+        debito: 0,
+        credito: montoTotal,
+        descripcion: `Pago Múltiple desde ${medioPagoLabel}`,
+      });
+
+      // 2. Débito a la cuenta de proveedor de cada factura abonada
+      for (const item of facturasAbonos) {
+        let cuentaDebito: CuentaContable;
+        let proveedor: Proveedor | null = item.facturaCompra.proveedor;
+        if (!proveedor || !proveedor.cuentaContableId) {
+          proveedor = await queryRunner.manager.findOne(Proveedor, {
+            where: { id: proveedorId },
+            relations: ['cuentaContable'],
+          });
+        }
+        if (proveedor?.cuentaContable) {
+          cuentaDebito = proveedor.cuentaContable;
+        } else {
+          const config = await this.parametrizacionService.getConfiguracion();
+          if (config?.cuentaPagarProveedoresId) {
+            const temp = await queryRunner.manager.findOne(CuentaContable, {
+              where: { id: config.cuentaPagarProveedoresId },
+            });
+            cuentaDebito = temp || (await this.obtenerCuentaPorCodigo('2205'));
+          } else {
+            cuentaDebito = await this.obtenerCuentaPorCodigo('2205');
+          }
+        }
+
+        detalles.push({
+          cuentaId: cuentaDebito.id,
+          debito: item.monto,
+          credito: 0,
+          descripcion: `Pago CxP - Compra: ${item.facturaCompra.numero} | Proveedor: ${proveedor?.identificacion ?? ''}`,
+        });
+      }
+
+      const refStr = facturasAbonos.map(fa => fa.facturaCompra.numero).join(', ');
+      const asiento = await this.crearAsiento(
+        {
+          tipo: TipoAsiento.PAGO_PROVEEDOR,
+          fecha,
+          referencia: refStr.substring(0, 100),
+          descripcion: `Pago Múltiple $${montoTotal.toLocaleString('es-CO')} a proveedor - Facturas: ${refStr}`,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
+      return asiento;
+    } catch (error) {
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Error asiento pago múltiple: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de pago múltiple: ${error.message}`,
+      );
+    } finally {
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  async generarAsientoOtrosMovimientos(
+    params: {
+      tipoPago: TipoPago;
+      conceptos: Array<{
+        cuentaContableId: string;
+        concepto: string;
+        cantidad: number;
+        valorUnitario: number;
+        impuestoId?: string;
+        impuestoPorcentaje?: number;
+      }>;
+      montoTotal: number;
+      fecha: Date;
+      cuentaBancariaId?: string;
+      medioPago?: string;
+      userId: string;
+    },
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const { tipoPago, conceptos, montoTotal, fecha, cuentaBancariaId, medioPago, userId } = params;
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const isIngreso = tipoPago === TipoPago.OTRO_INGRESO;
+
+      // 1. Obtener la cuenta de tesorería (Caja o Banco)
+      const cuentaTesoreria = await this.resolverCuentaTesoreria(
+        { cuentaBancariaId, medioPago, fallbackCodigo: isIngreso ? '1105' : '1110' },
+        queryRunner,
+      );
+
+      const detalles: DetalleAsiento[] = [];
+      const medioPagoLabel = cuentaTesoreria.codigo === '1105' ? 'Caja' : 'Banco';
+
+      // 2. Línea de tesorería
+      detalles.push({
+        cuentaId: cuentaTesoreria.id,
+        debito: isIngreso ? montoTotal : 0,
+        credito: isIngreso ? 0 : montoTotal,
+        descripcion: isIngreso ? `Otros ingresos en ${medioPagoLabel}` : `Otros egresos desde ${medioPagoLabel}`,
+      });
+
+      // 3. Procesar cada línea de concepto
+      for (const c of conceptos) {
+        const base = c.cantidad * c.valorUnitario;
+        const porc = c.impuestoPorcentaje || 0;
+        const impuestoMonto = base * (porc / 100);
+
+        detalles.push({
+          cuentaId: c.cuentaContableId,
+          debito: isIngreso ? 0 : base,
+          credito: isIngreso ? base : 0,
+          descripcion: c.concepto,
+        });
+
+        // Si tiene impuesto, generar la línea contable correspondiente
+        if (impuestoMonto > 0 && c.impuestoId) {
+          const impuesto = await queryRunner.manager.findOne(Impuesto, {
+            where: { id: c.impuestoId },
+          });
+
+          if (impuesto) {
+            const cuentaImpuestoId = isIngreso ? impuesto.cuentaVentasId : impuesto.cuentaComprasId;
+            if (cuentaImpuestoId) {
+              detalles.push({
+                cuentaId: cuentaImpuestoId,
+                debito: isIngreso ? 0 : impuestoMonto,
+                credito: isIngreso ? impuestoMonto : 0,
+                descripcion: `IVA del ${porc}% - ${c.concepto}`,
+              });
+            }
+          }
+        }
+      }
+
+      const tipoAsiento = isIngreso ? TipoAsiento.COBRO : TipoAsiento.GASTO;
+      const descripcionAsiento = isIngreso
+        ? `Otros Ingresos directos - $${montoTotal.toLocaleString('es-CO')}`
+        : `Otros Egresos directos - $${montoTotal.toLocaleString('es-CO')}`;
+
+      const asiento = await this.crearAsiento(
+        {
+          tipo: tipoAsiento,
+          fecha,
+          referencia: isIngreso ? 'RC-OTROS' : 'CE-OTROS',
+          descripcion: descripcionAsiento,
+          detalles,
+          userId,
+        },
+        queryRunner,
+      );
+
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
+      return asiento;
+    } catch (error) {
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Error generando asiento de otros movimientos: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de otros movimientos: ${error.message}`,
+      );
     } finally {
       if (!isCustomRunner) {
         await queryRunner.release();
@@ -1165,18 +1492,56 @@ export class AsientosContablesService {
     return cuenta.codigo;
   }
 
-  async crearAsientoDesdeDefinicion(
-    definicion: DefinicionAsientoDto,
-    userId: string,
+  private async resolverCuentaTesoreria(
+    params: {
+      cuentaBancariaId?: string;
+      medioPago?: string;
+      fallbackCodigo: string; // '1105' o '1110'
+    },
     queryRunner: QueryRunner,
-  ): Promise<AsientoContable> {
+  ): Promise<CuentaContable> {
+    const { cuentaBancariaId, medioPago, fallbackCodigo } = params;
+
+    // 1. Si hay una cuenta bancaria seleccionada, buscarla y ver si tiene cuenta contable
+    if (cuentaBancariaId) {
+      const cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
+        where: { id: cuentaBancariaId },
+      });
+      if (cuentaBancaria && cuentaBancaria.codigoCuentaContable) {
+        try {
+          const cuenta = await this.cuentaRepository.findOne({
+            where: { codigo: cuentaBancaria.codigoCuentaContable, isActive: true },
+          });
+          if (cuenta) return cuenta;
+        } catch (e) {
+          this.logger.warn(`Cuenta contable ${cuentaBancaria.codigoCuentaContable} configurada en banco no encontrada o inactiva.`);
+        }
+      }
+    }
+
+    // 2. Si no tiene cuenta contable o no se encontró, buscar en parametrización contable
+    const config = await this.parametrizacionService.getConfiguracion();
+    if (config) {
+      const esCaja = medioPago === 'caja' || fallbackCodigo === '1105';
+      const cuentaId = esCaja ? config.cuentaCajaDefectoId : config.cuentaBancosDefectoId;
+      if (cuentaId) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: cuentaId },
+        });
+        if (cuenta) return cuenta;
+      }
+    }
+
+    // 3. Fallback final al código por defecto ('1105' o '1110')
+    return this.obtenerCuentaPorCodigo(fallbackCodigo);
+  }
+
+  async crearAsientoDesdeDefinicion(definicion: DefinicionAsientoDto, userId: string, queryRunner: QueryRunner): Promise<AsientoContable> {
     const totalDebito = definicion.detalles.reduce((s, d) => s + d.debito, 0);
     const totalCredito = definicion.detalles.reduce((s, d) => s + d.credito, 0);
 
     if (Math.abs(totalDebito - totalCredito) > 0.01) {
-      throw new Error(
-        `Asiento descuadrado [${definicion.tipo}]. Débito: ${totalDebito}, Crédito: ${totalCredito}`,
-      );
+      throw new Error(`Asiento descuadrado [${definicion.tipo}]. Débito: ${totalDebito}, Crédito: ${totalCredito}`);
     }
 
     const numero = await this.generarNumeroAsiento(queryRunner);
@@ -1192,10 +1557,7 @@ export class AsientosContablesService {
       createdById: userId,
     });
 
-    const asientoGuardado = await queryRunner.manager.save(
-      AsientoContable,
-      asiento,
-    );
+    const asientoGuardado = await queryRunner.manager.save(AsientoContable, asiento);
 
     for (const detalle of definicion.detalles) {
       const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {

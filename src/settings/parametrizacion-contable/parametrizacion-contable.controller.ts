@@ -6,7 +6,7 @@ import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 @UseGuards(AuthGuard)
 @Controller('settings/parametrizacion-contable')
 export class ParametrizacionContableController {
-  constructor(private readonly parametrizacionService: ParametrizacionContableService) {}
+  constructor(private readonly parametrizacionService: ParametrizacionContableService) { }
 
   @Get()
   getConfiguracion() {

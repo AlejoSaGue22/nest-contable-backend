@@ -15,6 +15,7 @@ import { MedioPago, PaymentStatus, TipoPago } from './enums/pago.enum';
 import { CxcService } from 'src/common/services/cxc.service';
 import { CxpService } from 'src/common/services/cxp.service';
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
+import { RegistrarPagoMultipleDto, RegistrarOtrosConceptosDto } from './dto/registrar-pago-multiple.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
@@ -364,5 +365,73 @@ export class PagosController {
   async listarCuentasBancarias(): Promise<PagoResponseDto<any>> {
     const data = await this.pagosService.findCuentasBancarias();
     return toPagoResponse(data, 'Cuentas bancarias obtenidas exitosamente');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // NUEVOS ENDPOINTS DE PAGOS FLEXIBLES
+  // ════════════════════════════════════════════════════════════
+
+  @Post('cxc/cobro-multiple')
+  async registrarCobroMultiple(
+    @Body() dto: RegistrarPagoMultipleDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user.sub;
+    const data = await this.pagosService.registrarCobroMultiple(dto, userId);
+    return toPagoResponse(data, 'Cobro múltiple registrado exitosamente');
+  }
+
+  @Post('cxp/pago-multiple')
+  async registrarPagoMultiple(
+    @Body() dto: RegistrarPagoMultipleDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user?.sub;
+    const data = await this.pagosService.registrarPagoMultiple(dto, userId);
+    return toPagoResponse(data, 'Pago múltiple registrado exitosamente');
+  }
+
+  @Post('otros-ingresos')
+  async registrarOtrosIngresos(
+    @Body() dto: RegistrarOtrosConceptosDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user.sub;
+    const data = await this.pagosService.registrarOtrosMovimientos(
+      dto,
+      TipoPago.OTRO_INGRESO,
+      userId,
+    );
+    return toPagoResponse(data, 'Otros ingresos registrados exitosamente');
+  }
+
+  @Post('otros-egresos')
+  async registrarOtrosEgresos(
+    @Body() dto: RegistrarOtrosConceptosDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user?.sub;
+    const data = await this.pagosService.registrarOtrosMovimientos(
+      dto,
+      TipoPago.OTRO_EGRESO,
+      userId,
+    );
+    return toPagoResponse(data, 'Otros egresos registrados exitosamente');
+  }
+
+  @Get('facturas-pendientes/cliente/:clienteId')
+  async facturasPendientesCliente(
+    @Param('clienteId', ParseUUIDPipe) clienteId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerFacturasPendientesCliente(clienteId);
+    return toPagoResponse(data, 'Facturas pendientes del cliente obtenidas');
+  }
+
+  @Get('facturas-pendientes/proveedor/:proveedorId')
+  async facturasPendientesProveedor(
+    @Param('proveedorId', ParseUUIDPipe) proveedorId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerFacturasPendientesProveedor(proveedorId);
+    return toPagoResponse(data, 'Facturas pendientes del proveedor obtenidas');
   }
 }

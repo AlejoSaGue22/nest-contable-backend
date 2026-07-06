@@ -8,6 +8,7 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
+
   app.setGlobalPrefix('api/v1');
 
   // Helmet: security headers
@@ -15,7 +16,7 @@ async function bootstrap() {
 
   // CORS restrictivo
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
-    'https://45v5dz8r-4200.use2.devtunnels.ms',
+    'http://192.168.1.77:4200',
     'http://localhost:4200',
   ];
   // const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
@@ -27,6 +28,7 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -40,7 +42,9 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  // await app.listen(port);
+  await app.listen(3000, '0.0.0.0');
+
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(`🚀 Server running on http://localhost:${port}`);

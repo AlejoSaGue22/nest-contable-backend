@@ -9,6 +9,8 @@ export enum PaymentStatus {
 export enum TipoPago {
   COBRO = 'cobro', // Recibimos dinero (venta)
   PAGO  = 'pago',  // Pagamos dinero   (compra)
+  OTRO_INGRESO = 'otro_ingreso', // Otros ingresos contables sin factura
+  OTRO_EGRESO = 'otro_egreso',  // Otros egresos contables sin factura
 }
 
 export enum MedioPago {

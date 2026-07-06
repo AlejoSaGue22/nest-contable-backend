@@ -18,7 +18,7 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
     private readonly dataSource: DataSource,
     private readonly asientosService: AsientosContablesService,
     private readonly parametrizacionService: ParametrizacionContableService,
-  ) {}
+  ) { }
 
   async generarDefinicion(
     documentoId: string,
@@ -175,6 +175,22 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       terceroId: gasto.proveedorId,
       terceroNombre,
     });
+
+    // 3.5. Crédito: Descuentos en compras (si aplica)
+    const descuento = Number(gasto.descuento) || 0;
+    if (descuento > 0) {
+      const cuentaDescuento = await this.asientosService.obtenerCuentaPorCodigo('421015');
+      detalles.push({
+        cuentaId: cuentaDescuento.id,
+        cuentaCodigo: cuentaDescuento.codigo,
+        cuentaNombre: cuentaDescuento.nombre,
+        debito: 0,
+        credito: descuento,
+        concepto: 'Descuento obtenido en compra',
+        terceroId: gasto.proveedorId,
+        terceroNombre,
+      });
+    }
 
     // 4. Totales y balanceo
     const totalDebito = detalles.reduce((sum, d) => sum + d.debito, 0);

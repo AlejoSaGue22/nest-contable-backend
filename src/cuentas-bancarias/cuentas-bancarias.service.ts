@@ -30,12 +30,9 @@ export class CuentasBancariasService {
     private readonly bancosRepository: Repository<Banco>,
     private readonly dataSource: DataSource,
     private readonly asientosContablesService: AsientosContablesService,
-  ) {}
+  ) { }
 
-  async create(
-    createCuentasBancariaDto: CreateCuentasBancariaDto,
-    userId: string,
-  ) {
+  async create(createCuentasBancariaDto: CreateCuentasBancariaDto, userId: string) {
     try {
       const {
         bancoId,

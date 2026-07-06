@@ -1638,10 +1638,10 @@ export const PLAN_CUENTAS_MINIMO = [
     },
     {
         codigo: '4175',
-        nombre: 'Administración Pública y Defensa',
-        descripcion: 'Ingresos por administración pública y defensa',
+        nombre: 'Devolucion en Ventas',
+        descripcion: 'Devolucion en Ventas',
         tipo: TipoCuenta.INGRESO,
-        naturaleza: NaturalezaCuenta.CREDITO,
+        naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 3,
         cuentaPadreId: '41',
         aceptaMovimiento: false,
@@ -1792,13 +1792,13 @@ export const PLAN_CUENTAS_MINIMO = [
     },
     {
         codigo: '4250',
-        nombre: 'Participación en Utilidades de Otras Empresas',
-        descripcion: 'Participación en utilidades de otras empresas',
+        nombre: 'Recuperaciones',
+        descripcion: 'Recuperaciones de cuentas deudoras o acreedoras',
         tipo: TipoCuenta.INGRESO,
-        naturaleza: NaturalezaCuenta.CREDITO,
+        naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 3,
         cuentaPadreId: '42',
-        aceptaMovimiento: false,
+        aceptaMovimiento: true,
         isActive: true
     },
     {
@@ -2982,7 +2982,7 @@ export const PLAN_CUENTAS_MINIMO = [
     // ========================================
     // NIVEL 4: Subcuentas
     // ========================================
-    { 
+    {
         codigo: '110505',
         nombre: 'Caja General',
         descripcion: 'Caja General',
@@ -2993,7 +2993,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '110510',
         nombre: 'Cajas Menores',
         descripcion: 'Cajas Menores',
@@ -3004,7 +3004,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '110515',
         nombre: 'Moneda Extranjera',
         descripcion: 'Moneda Extranjera',
@@ -3015,7 +3015,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '111005',
         nombre: 'Moneda Nacional',
         descripcion: 'Bancos Moneda Nacional',
@@ -3026,7 +3026,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '111010',
         nombre: 'Moneda Extranjera',
         descripcion: 'Bancos Moneda Extranjera',
@@ -3037,7 +3037,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '120505',
         nombre: 'Acciones Ordinarias',
         descripcion: 'Acciones ordinarias',
@@ -3048,7 +3048,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '120510',
         nombre: 'Acciones Preferentes',
         descripcion: 'Acciones preferentes',
@@ -3059,7 +3059,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '121005',
         nombre: 'Cuotas o Partes de Interés Social',
         descripcion: 'Cuotas o partes de interés social',
@@ -3070,7 +3070,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '121505',
         nombre: 'Bonos Públicos',
         descripcion: 'Bonos públicos',
@@ -3081,7 +3081,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '121510',
         nombre: 'Bonos Privados',
         descripcion: 'Bonos privados',
@@ -3092,7 +3092,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '122505',
         nombre: 'CDT',
         descripcion: 'Certificados de depósito a término',
@@ -3103,7 +3103,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '123005',
         nombre: 'Cartera Colectiva',
         descripcion: 'Cartera colectiva',
@@ -3114,7 +3114,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '129505',
         nombre: 'Otras Inversiones',
         descripcion: 'Otras inversiones',
@@ -3125,7 +3125,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '130505',
         nombre: 'Nacionales',
         descripcion: 'Clientes Nacionales',
@@ -3136,7 +3136,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '130510',
         nombre: 'Del Exterior',
         descripcion: 'Clientes del Exterior',
@@ -3147,7 +3147,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '135515',
         nombre: 'Retención en la Fuente',
         descripcion: 'Retención en la Fuente a favor',
@@ -3158,7 +3158,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '135517',
         nombre: 'Impuesto a las Ventas Retenido',
         descripcion: 'IVA Retenido a favor',
@@ -3169,7 +3169,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '135518',
         nombre: 'Impuesto de Industria y Comercio Retenido',
         descripcion: 'ICA Retenido a favor',
@@ -3180,7 +3180,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '143501',
         nombre: 'Mercancías no Fabricadas por la Empresa',
         descripcion: 'Inventario general de mercancías',
@@ -3191,7 +3191,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '159205',
         nombre: 'Construcciones y Edificaciones',
         descripcion: 'Depreciación acumulada de construcciones',
@@ -3202,7 +3202,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '159210',
         nombre: 'Maquinaria y Equipo',
         descripcion: 'Depreciación acumulada de maquinaria',
@@ -3213,7 +3213,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '159215',
         nombre: 'Equipo de Oficina',
         descripcion: 'Depreciación acumulada de equipo de oficina',
@@ -3224,7 +3224,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '159220',
         nombre: 'Equipo de Computación y Comunicación',
         descripcion: 'Depreciación acumulada de equipos de computación',
@@ -3235,7 +3235,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '159235',
         nombre: 'Flota y Equipo de Transporte',
         descripcion: 'Depreciación acumulada de flota y equipo de transporte',
@@ -3246,7 +3246,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '160505',
         nombre: 'Crédito Mercantil',
         descripcion: 'Crédito mercantil',
@@ -3257,7 +3257,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '161005',
         nombre: 'Marcas',
         descripcion: 'Marcas registradas',
@@ -3268,7 +3268,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '161010',
         nombre: 'Patentes',
         descripcion: 'Patentes registradas',
@@ -3279,7 +3279,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '161505',
         nombre: 'Concesiones',
         descripcion: 'Concesiones',
@@ -3290,7 +3290,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '161510',
         nombre: 'Franquicias',
         descripcion: 'Franquicias',
@@ -3301,7 +3301,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '162005',
         nombre: 'Derechos de Autor',
         descripcion: 'Derechos de autor',
@@ -3312,7 +3312,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '162505',
         nombre: 'Know How',
         descripcion: 'Conocimientos técnicos',
@@ -3323,7 +3323,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '163005',
         nombre: 'Licencias',
         descripcion: 'Licencias',
@@ -3334,7 +3334,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '163505',
         nombre: 'Software',
         descripcion: 'Software',
@@ -3345,7 +3345,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166505',
         nombre: 'Crédito Mercantil',
         descripcion: 'Amortización acumulada crédito mercantil',
@@ -3356,7 +3356,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166510',
         nombre: 'Marcas y Patentes',
         descripcion: 'Amortización acumulada marcas y patentes',
@@ -3367,7 +3367,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166515',
         nombre: 'Concesiones y Franquicias',
         descripcion: 'Amortización acumulada concesiones y franquicias',
@@ -3378,7 +3378,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166520',
         nombre: 'Derechos de Autor',
         descripcion: 'Amortización acumulada derechos de autor',
@@ -3389,7 +3389,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166525',
         nombre: 'Know How',
         descripcion: 'Amortización acumulada know how',
@@ -3400,7 +3400,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166530',
         nombre: 'Licencias',
         descripcion: 'Amortización acumulada licencias',
@@ -3411,7 +3411,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '166535',
         nombre: 'Software',
         descripcion: 'Amortización acumulada software',
@@ -3422,7 +3422,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '169505',
         nombre: 'Diversos',
         descripcion: 'Otros intangibles',
@@ -3433,7 +3433,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '170505',
         nombre: 'Intereses',
         descripcion: 'Intereses pagados por anticipado',
@@ -3444,7 +3444,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '170510',
         nombre: 'Seguros',
         descripcion: 'Seguros pagados por anticipado',
@@ -3455,7 +3455,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '170515',
         nombre: 'Arrendamientos',
         descripcion: 'Arrendamientos pagados por anticipado',
@@ -3466,7 +3466,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '170595',
         nombre: 'Otros Gastos Anticipados',
         descripcion: 'Otros gastos pagados por anticipado',
@@ -3477,7 +3477,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '171005',
         nombre: 'Costos de Organización',
         descripcion: 'Costos de organización',
@@ -3488,7 +3488,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '171010',
         nombre: 'Costos de Instalación',
         descripcion: 'Costos de instalación',
@@ -3499,7 +3499,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '171095',
         nombre: 'Otros Cargos Diferidos',
         descripcion: 'Otros cargos diferidos',
@@ -3510,7 +3510,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '173005',
         nombre: 'Impuesto de Renta Diferido',
         descripcion: 'Impuesto de renta diferido',
@@ -3521,7 +3521,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '173010',
         nombre: 'ICA Diferido',
         descripcion: 'Impuesto de industria y comercio diferido',
@@ -3532,7 +3532,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '179505',
         nombre: 'Otros Activos Diferidos',
         descripcion: 'Otros activos diferidos',
@@ -3543,7 +3543,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '180505',
         nombre: 'El Pasivo Pensional',
         descripcion: 'Activo por pasivo pensional',
@@ -3554,7 +3554,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '181005',
         nombre: 'Impuesto de Renta Diferido',
         descripcion: 'Activo por impuesto de renta diferido',
@@ -3565,7 +3565,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '181010',
         nombre: 'ICA Diferido',
         descripcion: 'Activo por ICA diferido',
@@ -3576,7 +3576,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '189505',
         nombre: 'Diversos',
         descripcion: 'Otros activos',
@@ -3587,7 +3587,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '190505',
         nombre: 'Acciones',
         descripcion: 'Valorización de acciones',
@@ -3598,7 +3598,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '190510',
         nombre: 'Cuotas o Partes de Interés Social',
         descripcion: 'Valorización de cuotas o partes de interés social',
@@ -3609,7 +3609,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '190595',
         nombre: 'Otras Valorizaciones de Inversiones',
         descripcion: 'Otras valorizaciones de inversiones',
@@ -3620,7 +3620,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '191005',
         nombre: 'Terrenos',
         descripcion: 'Valorización de terrenos',
@@ -3631,7 +3631,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '191010',
         nombre: 'Construcciones y Edificaciones',
         descripcion: 'Valorización de construcciones y edificaciones',
@@ -3642,7 +3642,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '191015',
         nombre: 'Maquinaria y Equipo',
         descripcion: 'Valorización de maquinaria y equipo',
@@ -3653,7 +3653,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '191095',
         nombre: 'Otras Valorizaciones de PP&E',
         descripcion: 'Otras valorizaciones de propiedades, planta y equipo',
@@ -3664,7 +3664,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '191505',
         nombre: 'Otros Activos',
         descripcion: 'Valorización de otros activos',
@@ -3675,7 +3675,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '192005',
         nombre: 'Crédito Mercantil',
         descripcion: 'Valorización de crédito mercantil',
@@ -3686,7 +3686,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '192010',
         nombre: 'Marcas y Patentes',
         descripcion: 'Valorización de marcas y patentes',
@@ -3697,7 +3697,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '192095',
         nombre: 'Otros Intangibles',
         descripcion: 'Valorización de otros intangibles',
@@ -3708,7 +3708,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '220505',
         nombre: 'Nacionales',
         descripcion: 'Proveedores Nacionales',
@@ -3719,7 +3719,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '233525',
         nombre: 'Honorarios',
         descripcion: 'Honorarios por pagar',
@@ -3730,7 +3730,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '233530',
         nombre: 'Servicios',
         descripcion: 'Servicios por pagar',
@@ -3741,7 +3741,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '233540',
         nombre: 'Arrendamientos',
         descripcion: 'Arrendamientos por pagar',
@@ -3752,7 +3752,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '233550',
         nombre: 'Servicios Públicos',
         descripcion: 'Servicios públicos por pagar',
@@ -3763,7 +3763,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '236515',
         nombre: 'Honorarios',
         descripcion: 'Retención por honorarios',
@@ -3774,7 +3774,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '236520',
         nombre: 'Comisiones',
         descripcion: 'Retención por comisiones',
@@ -3785,7 +3785,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '236525',
         nombre: 'Servicios',
         descripcion: 'Retención por servicios',
@@ -3796,7 +3796,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '236530',
         nombre: 'Arrendamientos',
         descripcion: 'Retención por arrendamientos',
@@ -3807,7 +3807,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '236540',
         nombre: 'Compras',
         descripcion: 'Retención por compras',
@@ -3818,7 +3818,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '237005',
         nombre: 'Aportes a Entidades Promotoras de Salud, EPS',
         descripcion: 'Aportes a EPS por pagar',
@@ -3829,7 +3829,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '237006',
         nombre: 'Aportes a Administradoras de Riesgos Laborales, ARL',
         descripcion: 'Aportes a ARL por pagar',
@@ -3840,7 +3840,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '237010',
         nombre: 'Aportes al ICBF, SENA y Cajas de Compensación',
         descripcion: 'Aportes parafiscales por pagar',
@@ -3851,7 +3851,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '240801',
         nombre: 'IVA Generado',
         descripcion: 'IVA Generado en ventas',
@@ -3862,7 +3862,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '240802',
         nombre: 'IVA Descontable',
         descripcion: 'IVA Descontable en compras',
@@ -3873,7 +3873,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '261005',
         nombre: 'Cesantías',
         descripcion: 'Provisión para cesantías',
@@ -3884,7 +3884,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '261010',
         nombre: 'Intereses sobre Cesantías',
         descripcion: 'Provisión para intereses sobre cesantías',
@@ -3895,7 +3895,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '261015',
         nombre: 'Vacaciones',
         descripcion: 'Provisión para vacaciones',
@@ -3906,7 +3906,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '261020',
         nombre: 'Primas de Servicios',
         descripcion: 'Provisión para primas de servicios',
@@ -3917,7 +3917,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '270505',
         nombre: 'Suscripciones',
         descripcion: 'Suscripciones recibidas por anticipado',
@@ -3928,7 +3928,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '270510',
         nombre: 'Arrendamientos',
         descripcion: 'Arrendamientos recibidos por anticipado',
@@ -3939,7 +3939,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '270515',
         nombre: 'Intereses',
         descripcion: 'Intereses recibidos por anticipado',
@@ -3950,7 +3950,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '270595',
         nombre: 'Otros Ingresos Anticipados',
         descripcion: 'Otros ingresos recibidos por anticipado',
@@ -3961,7 +3961,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '271005',
         nombre: 'Abonos Diferidos',
         descripcion: 'Abonos diferidos',
@@ -3972,7 +3972,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '271505',
         nombre: 'Utilidad Diferida',
         descripcion: 'Utilidad diferida en ventas a plazos',
@@ -3983,7 +3983,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '272005',
         nombre: 'Crédito por Arrendamiento',
         descripcion: 'Crédito por arrendamiento',
@@ -3994,7 +3994,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '273005',
         nombre: 'Impuesto de Renta Diferido',
         descripcion: 'Impuesto de renta diferido',
@@ -4005,7 +4005,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '273010',
         nombre: 'ICA Diferido',
         descripcion: 'Impuesto de industria y comercio diferido',
@@ -4016,7 +4016,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '279505',
         nombre: 'Otros Pasivos Diferidos',
         descripcion: 'Otros pasivos diferidos',
@@ -4027,7 +4027,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '280505',
         nombre: 'Acreedores Varios',
         descripcion: 'Acreedores varios',
@@ -4038,7 +4038,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '281005',
         nombre: 'Depósitos Recibidos',
         descripcion: 'Depósitos recibidos',
@@ -4049,7 +4049,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '281505',
         nombre: 'Anticipos Recibidos',
         descripcion: 'Anticipos recibidos',
@@ -4060,7 +4060,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '289505',
         nombre: 'Diversos',
         descripcion: 'Otros pasivos',
@@ -4071,7 +4071,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '290505',
         nombre: 'Bonos Ordinarios',
         descripcion: 'Bonos ordinarios en circulación',
@@ -4082,7 +4082,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '290510',
         nombre: 'Bonos Obligatoriamente Convertibles',
         descripcion: 'Bonos obligatoriamente convertibles en acciones',
@@ -4093,7 +4093,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '291005',
         nombre: 'Papeles Comerciales',
         descripcion: 'Papeles comerciales',
@@ -4104,7 +4104,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '291505',
         nombre: 'Bonos Convertibles en Acciones',
         descripcion: 'Bonos convertibles en acciones',
@@ -4115,7 +4115,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '292005',
         nombre: 'Bonos de Inversión',
         descripcion: 'Bonos de inversión',
@@ -4126,7 +4126,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '299505',
         nombre: 'Otros Títulos',
         descripcion: 'Otros títulos',
@@ -4137,7 +4137,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '310505',
         nombre: 'Capital Autorizado',
         descripcion: 'Capital Autorizado',
@@ -4148,7 +4148,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '310510',
         nombre: 'Capital por Suscribir',
         descripcion: 'Capital por Suscribir',
@@ -4159,7 +4159,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '310515',
         nombre: 'Capital Suscrito por Cobrar',
         descripcion: 'Capital Suscrito por Cobrar',
@@ -4170,7 +4170,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '320505',
         nombre: 'Prima en Colocación de Acciones',
         descripcion: 'Prima en colocación de acciones',
@@ -4181,7 +4181,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '321005',
         nombre: 'Superávit por Valorización de Inversiones',
         descripcion: 'Superávit por valorización de inversiones',
@@ -4192,7 +4192,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '321010',
         nombre: 'Superávit por Valorización de PP&E',
         descripcion: 'Superávit por valorización de propiedades, planta y equipo',
@@ -4203,7 +4203,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '321015',
         nombre: 'Superávit por Valorización de Otros Activos',
         descripcion: 'Superávit por valorización de otros activos',
@@ -4214,7 +4214,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '321020',
         nombre: 'Superávit por Valorización de Intangibles',
         descripcion: 'Superávit por valorización de intangibles',
@@ -4225,7 +4225,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '321505',
         nombre: 'Superávit por Donaciones',
         descripcion: 'Superávit por donaciones',
@@ -4236,7 +4236,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '322005',
         nombre: 'Superávit por Revalorización',
         descripcion: 'Superávit por revalorización',
@@ -4247,7 +4247,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '322505',
         nombre: 'Ajustes por Inflación',
         descripcion: 'Ajustes por inflación',
@@ -4258,7 +4258,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '329505',
         nombre: 'Otros Superávits',
         descripcion: 'Otros superávits de capital',
@@ -4269,7 +4269,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '330505',
         nombre: 'Reserva Legal',
         descripcion: 'Reserva legal',
@@ -4280,7 +4280,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '330510',
         nombre: 'Reserva por Adquisición de Acciones',
         descripcion: 'Reserva por adquisición de acciones',
@@ -4291,7 +4291,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '331005',
         nombre: 'Reservas Estatutarias',
         descripcion: 'Reservas estatutarias',
@@ -4302,7 +4302,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '331505',
         nombre: 'Reservas para Revalorización',
         descripcion: 'Reservas para revalorización',
@@ -4313,7 +4313,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '332005',
         nombre: 'Reservas para Inversiones',
         descripcion: 'Reservas para inversiones',
@@ -4324,7 +4324,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '332505',
         nombre: 'Reservas para Adquisición de Acciones',
         descripcion: 'Reservas para adquisición de acciones',
@@ -4335,7 +4335,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '333005',
         nombre: 'Reservas para Contingencias',
         descripcion: 'Reservas para contingencias',
@@ -4346,7 +4346,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '333505',
         nombre: 'Reservas para Capital de Trabajo',
         descripcion: 'Reservas para capital de trabajo',
@@ -4357,7 +4357,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '334005',
         nombre: 'Reservas Especiales',
         descripcion: 'Reservas especiales',
@@ -4368,7 +4368,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '339505',
         nombre: 'Otras Reservas',
         descripcion: 'Otras reservas',
@@ -4379,7 +4379,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '340505',
         nombre: 'Superávit por Valorización de Inversiones',
         descripcion: 'Superávit por valorización de inversiones',
@@ -4390,7 +4390,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '340510',
         nombre: 'Superávit por Valorización de PP&E',
         descripcion: 'Superávit por valorización de propiedades, planta y equipo',
@@ -4401,7 +4401,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '340515',
         nombre: 'Superávit por Valorización de Otros Activos',
         descripcion: 'Superávit por valorización de otros activos',
@@ -4412,7 +4412,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '340520',
         nombre: 'Superávit por Valorización de Intangibles',
         descripcion: 'Superávit por valorización de intangibles',
@@ -4423,7 +4423,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '341005',
         nombre: 'Superávit por Donaciones',
         descripcion: 'Superávit por donaciones',
@@ -4434,7 +4434,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '349505',
         nombre: 'Otros Superávits por Revalorización',
         descripcion: 'Otros superávits por revalorización',
@@ -4445,7 +4445,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '350505',
         nombre: 'Dividendos Decretados en Acciones',
         descripcion: 'Dividendos decretados en acciones',
@@ -4456,7 +4456,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '410505',
         nombre: 'Agricultura, Ganadería, Caza y Pesca',
         descripcion: 'Ingresos por agricultura, ganadería, caza y pesca',
@@ -4467,7 +4467,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '411005',
         nombre: 'Explotación de Minas y Canteras',
         descripcion: 'Ingresos por explotación de minas y canteras',
@@ -4478,7 +4478,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '411505',
         nombre: 'Industria Manufacturera',
         descripcion: 'Ingresos por industria manufacturera',
@@ -4489,7 +4489,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '412005',
         nombre: 'Suministro de Electricidad, Gas y Agua',
         descripcion: 'Ingresos por suministro de electricidad, gas y agua',
@@ -4500,7 +4500,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '412505',
         nombre: 'Construcción',
         descripcion: 'Ingresos por construcción',
@@ -4511,7 +4511,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '413005',
         nombre: 'Comercio al por Mayor y al por Menor',
         descripcion: 'Ingresos por comercio al por mayor y al por menor',
@@ -4522,7 +4522,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '414005',
         nombre: 'Transporte y Almacenamiento',
         descripcion: 'Ingresos por transporte y almacenamiento',
@@ -4533,7 +4533,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '414505',
         nombre: 'Alojamiento y Servicios de Comida',
         descripcion: 'Ingresos por alojamiento y servicios de comida',
@@ -4544,7 +4544,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '415005',
         nombre: 'Información y Comunicaciones',
         descripcion: 'Ingresos por información y comunicaciones',
@@ -4555,7 +4555,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '415505',
         nombre: 'Prestación de Servicios Financieros',
         descripcion: 'Ingresos por prestación de servicios financieros y de seguros',
@@ -4566,7 +4566,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '416005',
         nombre: 'Actividades Inmobiliarias',
         descripcion: 'Ingresos por actividades inmobiliarias',
@@ -4577,7 +4577,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '416505',
         nombre: 'Actividades Profesionales, Científicas y Técnicas',
         descripcion: 'Ingresos por actividades profesionales, científicas y técnicas',
@@ -4588,7 +4588,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '417005',
         nombre: 'Actividades de Servicios Administrativos',
         descripcion: 'Ingresos por actividades de servicios administrativos',
@@ -4599,18 +4599,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
-        codigo: '417505',
-        nombre: 'Administración Pública y Defensa',
-        descripcion: 'Ingresos por administración pública y defensa',
-        tipo: TipoCuenta.INGRESO,
-        naturaleza: NaturalezaCuenta.CREDITO,
-        nivel: 4,
-        cuentaPadreId: '4175',
-        aceptaMovimiento: true,
-        isActive: true
-    },
-    { 
+    {
         codigo: '418005',
         nombre: 'Educación',
         descripcion: 'Ingresos por educación',
@@ -4621,7 +4610,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '418505',
         nombre: 'Salud Humana y Asistencia Social',
         descripcion: 'Ingresos por salud humana y asistencia social',
@@ -4632,7 +4621,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '419005',
         nombre: 'Actividades Artísticas y de Entretenimiento',
         descripcion: 'Ingresos por actividades artísticas y de entretenimiento',
@@ -4643,7 +4632,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '419505',
         nombre: 'Otras Actividades de Servicios',
         descripcion: 'Ingresos por otras actividades de servicios',
@@ -4654,7 +4643,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '413505',
         nombre: 'Venta de Mercancías',
         descripcion: 'Venta de Mercancías',
@@ -4665,7 +4654,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '420505',
         nombre: 'Rendimientos Financieros',
         descripcion: 'Rendimientos financieros',
@@ -4676,7 +4665,18 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
+        codigo: '421015',
+        nombre: 'Descuentos amortizados',
+        descripcion: 'Descuentos amortizados',
+        tipo: TipoCuenta.INGRESO,
+        naturaleza: NaturalezaCuenta.DEBITO,
+        nivel: 4,
+        cuentaPadreId: '4210',
+        aceptaMovimiento: true,
+        isActive: true
+    },
+    {
         codigo: '421505',
         nombre: 'Rendimientos por Descuentos',
         descripcion: 'Rendimientos por descuentos',
@@ -4687,7 +4687,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '422005',
         nombre: 'Utilidad en Venta de Inversiones',
         descripcion: 'Utilidad en venta de inversiones',
@@ -4698,7 +4698,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '422505',
         nombre: 'Utilidad en Venta de PP&E',
         descripcion: 'Utilidad en venta de propiedades, planta y equipo',
@@ -4709,7 +4709,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '423005',
         nombre: 'Utilidad en Venta de Intangibles',
         descripcion: 'Utilidad en venta de intangibles',
@@ -4720,7 +4720,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '423505',
         nombre: 'Recuperaciones',
         descripcion: 'Recuperaciones',
@@ -4731,7 +4731,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '424005',
         nombre: 'Arrendamientos',
         descripcion: 'Ingresos por arrendamientos',
@@ -4742,7 +4742,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '424505',
         nombre: 'Indemnizaciones',
         descripcion: 'Indemnizaciones',
@@ -4753,18 +4753,29 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '425005',
-        nombre: 'Participación en Utilidades',
-        descripcion: 'Participación en utilidades de otras empresas',
+        nombre: 'Deudas Malas',
+        descripcion: 'Recuperacion de deudas malas',
         tipo: TipoCuenta.INGRESO,
-        naturaleza: NaturalezaCuenta.CREDITO,
+        naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 4,
         cuentaPadreId: '4250',
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
+        codigo: '425030',
+        nombre: 'Descuentos concedidos',
+        descripcion: 'Descuentos concedidos',
+        tipo: TipoCuenta.INGRESO,
+        naturaleza: NaturalezaCuenta.DEBITO,
+        nivel: 4,
+        cuentaPadreId: '4250',
+        aceptaMovimiento: true,
+        isActive: true
+    },
+    {
         codigo: '425505',
         nombre: 'Subvenciones',
         descripcion: 'Subvenciones recibidas',
@@ -4775,7 +4786,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '426005',
         nombre: 'Ingresos por Activos de Baja Intensidad',
         descripcion: 'Ingresos por activos de baja intensidad',
@@ -4786,7 +4797,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510506',
         nombre: 'Sueldos',
         descripcion: 'Sueldos del personal',
@@ -4797,7 +4808,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510515',
         nombre: 'Horas Extras y Recargos',
         descripcion: 'Horas extras y recargos',
@@ -4808,7 +4819,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510527',
         nombre: 'Auxilio de Transporte',
         descripcion: 'Auxilio de transporte',
@@ -4819,7 +4830,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510530',
         nombre: 'Cesantías',
         descripcion: 'Gasto por cesantías',
@@ -4830,7 +4841,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510533',
         nombre: 'Intereses sobre Cesantías',
         descripcion: 'Gasto por intereses sobre cesantías',
@@ -4841,7 +4852,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510536',
         nombre: 'Prima de Servicios',
         descripcion: 'Gasto por prima de servicios',
@@ -4852,7 +4863,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510539',
         nombre: 'Vacaciones',
         descripcion: 'Gasto por vacaciones',
@@ -4863,7 +4874,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510568',
         nombre: 'Aportes a Administradoras de Riesgos Laborales, ARL',
         descripcion: 'Gasto por aportes a ARL',
@@ -4874,7 +4885,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510569',
         nombre: 'Aportes a Entidades Promotoras de Salud, EPS',
         descripcion: 'Gasto por aportes a EPS',
@@ -4885,7 +4896,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510570',
         nombre: 'Aportes a Fondos de Pensiones y/o Cesantías',
         descripcion: 'Gasto por aportes a pensiones',
@@ -4896,7 +4907,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510572',
         nombre: 'Aportes Cajas de Compensación Familiar',
         descripcion: 'Gasto por aportes a CCF',
@@ -4907,7 +4918,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510575',
         nombre: 'Aportes ICBF',
         descripcion: 'Gasto por aportes al ICBF',
@@ -4918,7 +4929,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '510578',
         nombre: 'Aportes SENA',
         descripcion: 'Gasto por aportes al SENA',
@@ -4929,7 +4940,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520506',
         nombre: 'Sueldos',
         descripcion: 'Sueldos área de ventas',
@@ -4940,7 +4951,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520530',
         nombre: 'Cesantías',
         descripcion: 'Cesantías área de ventas',
@@ -4951,7 +4962,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520533',
         nombre: 'Intereses sobre Cesantías',
         descripcion: 'Intereses sobre cesantías área de ventas',
@@ -4962,7 +4973,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520536',
         nombre: 'Prima de Servicios',
         descripcion: 'Prima de servicios área de ventas',
@@ -4973,7 +4984,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520539',
         nombre: 'Vacaciones',
         descripcion: 'Vacaciones área de ventas',
@@ -4984,7 +4995,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520569',
         nombre: 'Aportes EPS',
         descripcion: 'Aportes EPS área de ventas',
@@ -4995,7 +5006,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520570',
         nombre: 'Aportes Pensiones',
         descripcion: 'Aportes pensiones área de ventas',
@@ -5006,7 +5017,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '520572',
         nombre: 'Aportes CCF',
         descripcion: 'Aportes cajas de compensación área de ventas',
@@ -5017,7 +5028,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '521005',
         nombre: 'Prestaciones Sociales',
         descripcion: 'Prestaciones sociales área de ventas',
@@ -5028,7 +5039,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '521505',
         nombre: 'Aportes Parafiscales',
         descripcion: 'Aportes parafiscales área de ventas',
@@ -5039,7 +5050,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '522005',
         nombre: 'Arrendamientos',
         descripcion: 'Arrendamientos área de ventas',
@@ -5050,7 +5061,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '522505',
         nombre: 'Contribuciones y Afiliaciones',
         descripcion: 'Contribuciones y afiliaciones',
@@ -5061,7 +5072,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '523005',
         nombre: 'Seguros',
         descripcion: 'Seguros área de ventas',
@@ -5072,7 +5083,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '523505',
         nombre: 'Servicios',
         descripcion: 'Servicios área de ventas',
@@ -5083,7 +5094,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '524005',
         nombre: 'Gastos Legales',
         descripcion: 'Gastos legales',
@@ -5094,7 +5105,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '524505',
         nombre: 'Mantenimiento y Reparaciones',
         descripcion: 'Mantenimiento y reparaciones área de ventas',
@@ -5105,7 +5116,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '525005',
         nombre: 'Adecuación y Mejoras',
         descripcion: 'Adecuación y mejoras',
@@ -5116,7 +5127,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '525505',
         nombre: 'Gastos de Viaje',
         descripcion: 'Gastos de viaje área de ventas',
@@ -5127,7 +5138,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '526005',
         nombre: 'Depreciación',
         descripcion: 'Depreciación área de ventas',
@@ -5138,7 +5149,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '526505',
         nombre: 'Amortización',
         descripcion: 'Amortización área de ventas',
@@ -5149,7 +5160,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '527005',
         nombre: 'Publicidad y Propaganda',
         descripcion: 'Publicidad y propaganda',
@@ -5160,7 +5171,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '527505',
         nombre: 'Útiles y Papelería',
         descripcion: 'Útiles y papelería área de ventas',
@@ -5171,7 +5182,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '528005',
         nombre: 'Combustibles y Lubricantes',
         descripcion: 'Combustibles y lubricantes',
@@ -5182,7 +5193,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '528505',
         nombre: 'Envases y Empaques',
         descripcion: 'Envases y empaques',
@@ -5193,7 +5204,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '529005',
         nombre: 'Comisiones',
         descripcion: 'Comisiones en ventas',
@@ -5204,7 +5215,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '529505',
         nombre: 'Diversos',
         descripcion: 'Otros gastos de ventas',
@@ -5215,7 +5226,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '530505',
         nombre: 'Intereses Bancarios',
         descripcion: 'Intereses bancarios',
@@ -5226,7 +5237,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '530510',
         nombre: 'Intereses Obligaciones Financieras',
         descripcion: 'Intereses obligaciones financieras',
@@ -5237,7 +5248,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '531005',
         nombre: 'Comisiones Bancarias',
         descripcion: 'Comisiones bancarias',
@@ -5248,7 +5259,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '613505',
         nombre: 'Costo de Mercancía',
         descripcion: 'Costo de la mercancía',
@@ -5259,7 +5270,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '615505',
         nombre: 'Costo de Prestación de Servicios',
         descripcion: 'Costo de prestación de servicios',
@@ -5270,7 +5281,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '610505',
         nombre: 'Agricultura, Ganadería, Caza y Pesca',
         descripcion: 'Costo actividades agrícolas, ganaderas, caza y pesca',
@@ -5281,7 +5292,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '611005',
         nombre: 'Explotación de Minas y Canteras',
         descripcion: 'Costo explotación de minas y canteras',
@@ -5292,7 +5303,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '611505',
         nombre: 'Industria Manufacturera',
         descripcion: 'Costo industria manufacturera',
@@ -5303,7 +5314,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '612005',
         nombre: 'Suministro de Electricidad, Gas y Agua',
         descripcion: 'Costo suministro electricidad, gas y agua',
@@ -5314,7 +5325,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '612505',
         nombre: 'Construcción',
         descripcion: 'Costo construcción',
@@ -5325,7 +5336,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '613005',
         nombre: 'Comercio al por Mayor y al por Menor',
         descripcion: 'Costo comercio al por mayor y al por menor',
@@ -5336,7 +5347,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '614005',
         nombre: 'Transporte y Almacenamiento',
         descripcion: 'Costo transporte y almacenamiento',
@@ -5347,7 +5358,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '614505',
         nombre: 'Alojamiento y Servicios de Comida',
         descripcion: 'Costo alojamiento y servicios de comida',
@@ -5358,7 +5369,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '615005',
         nombre: 'Información y Comunicaciones',
         descripcion: 'Costo información y comunicaciones',
@@ -5369,7 +5380,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '616005',
         nombre: 'Actividades Inmobiliarias',
         descripcion: 'Costo actividades inmobiliarias',
@@ -5380,7 +5391,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '616505',
         nombre: 'Actividades Profesionales, Científicas y Técnicas',
         descripcion: 'Costo actividades profesionales, científicas y técnicas',
@@ -5391,7 +5402,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '617005',
         nombre: 'Actividades de Servicios Administrativos',
         descripcion: 'Costo actividades servicios administrativos',
@@ -5402,7 +5413,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '617505',
         nombre: 'Administración Pública y Defensa',
         descripcion: 'Costo administración pública y defensa',
@@ -5413,7 +5424,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '618005',
         nombre: 'Educación',
         descripcion: 'Costo educación',
@@ -5424,7 +5435,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '618505',
         nombre: 'Salud Humana y Asistencia Social',
         descripcion: 'Costo salud humana y asistencia social',
@@ -5435,7 +5446,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '619005',
         nombre: 'Actividades Artísticas y de Entretenimiento',
         descripcion: 'Costo actividades artísticas y de entretenimiento',
@@ -5446,7 +5457,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '619505',
         nombre: 'Otras Actividades de Servicios',
         descripcion: 'Costo otras actividades de servicios',
@@ -5457,7 +5468,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '620505',
         nombre: 'Costo de Mercancía Vendida',
         descripcion: 'Costo de mercancía vendida',
@@ -5468,7 +5479,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '621005',
         nombre: 'Costo de Producción',
         descripcion: 'Costo de producción',
@@ -5479,7 +5490,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '621505',
         nombre: 'Costo de Transformación',
         descripcion: 'Costo de transformación',
@@ -5490,7 +5501,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '622005',
         nombre: 'Costo de Prestación de Servicios',
         descripcion: 'Costo de prestación de servicios',
@@ -5501,7 +5512,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '629505',
         nombre: 'Otros Costos de Ventas',
         descripcion: 'Otros costos de ventas',
@@ -5512,7 +5523,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '710505',
         nombre: 'Materia Prima Nacional',
         descripcion: 'Materia prima nacional',
@@ -5523,7 +5534,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '710510',
         nombre: 'Materia Prima Importada',
         descripcion: 'Materia prima importada',
@@ -5534,7 +5545,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '710595',
         nombre: 'Otra Materia Prima',
         descripcion: 'Otra materia prima',
@@ -5545,7 +5556,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '711005',
         nombre: 'Materiales Indirectos',
         descripcion: 'Materiales indirectos',
@@ -5556,7 +5567,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '719505',
         nombre: 'Otros Materiales',
         descripcion: 'Otros materiales',
@@ -5567,7 +5578,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720505',
         nombre: 'Sueldos',
         descripcion: 'Sueldos mano de obra directa',
@@ -5578,7 +5589,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720510',
         nombre: 'Horas Extras',
         descripcion: 'Horas extras mano de obra directa',
@@ -5589,7 +5600,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720530',
         nombre: 'Cesantías',
         descripcion: 'Cesantías mano de obra directa',
@@ -5600,7 +5611,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720533',
         nombre: 'Intereses sobre Cesantías',
         descripcion: 'Intereses cesantías mano de obra directa',
@@ -5611,7 +5622,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720536',
         nombre: 'Prima de Servicios',
         descripcion: 'Prima de servicios mano de obra directa',
@@ -5622,7 +5633,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720539',
         nombre: 'Vacaciones',
         descripcion: 'Vacaciones mano de obra directa',
@@ -5633,7 +5644,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720569',
         nombre: 'Aportes EPS',
         descripcion: 'Aportes EPS mano de obra directa',
@@ -5644,7 +5655,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '720570',
         nombre: 'Aportes Pensiones',
         descripcion: 'Aportes pensiones mano de obra directa',
@@ -5655,7 +5666,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '721005',
         nombre: 'Mano de Obra Indirecta',
         descripcion: 'Mano de obra indirecta',
@@ -5666,7 +5677,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '729505',
         nombre: 'Otros Costos de Mano de Obra',
         descripcion: 'Otros costos de mano de obra',
@@ -5677,7 +5688,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '730505',
         nombre: 'Arrendamientos',
         descripcion: 'Arrendamientos planta',
@@ -5688,7 +5699,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '731005',
         nombre: 'Servicios',
         descripcion: 'Servicios planta',
@@ -5699,7 +5710,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '731505',
         nombre: 'Mantenimiento y Reparaciones',
         descripcion: 'Mantenimiento planta',
@@ -5710,7 +5721,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '732005',
         nombre: 'Seguros',
         descripcion: 'Seguros planta',
@@ -5721,7 +5732,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '732505',
         nombre: 'Depreciación',
         descripcion: 'Depreciación planta',
@@ -5732,7 +5743,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '733005',
         nombre: 'Amortización',
         descripcion: 'Amortización planta',
@@ -5743,7 +5754,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '733505',
         nombre: 'Combustibles y Lubricantes',
         descripcion: 'Combustibles y lubricantes planta',
@@ -5754,7 +5765,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '734005',
         nombre: 'Útiles y Papelería',
         descripcion: 'Útiles y papelería planta',
@@ -5765,7 +5776,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '734505',
         nombre: 'Contribuciones y Afiliaciones',
         descripcion: 'Contribuciones y afiliaciones planta',
@@ -5776,7 +5787,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '735005',
         nombre: 'Impuestos',
         descripcion: 'Impuestos planta',
@@ -5787,7 +5798,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '739505',
         nombre: 'Diversos',
         descripcion: 'Otros costos indirectos',
@@ -5798,7 +5809,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '810505',
         nombre: 'Bienes y Valores en Garantía',
         descripcion: 'Bienes y valores recibidos en garantía',
@@ -5809,7 +5820,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '811005',
         nombre: 'Litigios y Demandas',
         descripcion: 'Litigios y demandas en curso',
@@ -5820,7 +5831,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '811505',
         nombre: 'Activos en Arrendamiento Financiero',
         descripcion: 'Activos recibidos en arrendamiento financiero',
@@ -5831,7 +5842,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '819505',
         nombre: 'Otros Derechos Contingentes',
         descripcion: 'Otros derechos contingentes',
@@ -5842,7 +5853,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '820505',
         nombre: 'IVA por Acreditar',
         descripcion: 'IVA por acreditar',
@@ -5853,7 +5864,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '829505',
         nombre: 'Otras Deudoras Fiscales',
         descripcion: 'Otras cuentas de orden fiscales deudoras',
@@ -5864,7 +5875,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '830505',
         nombre: 'PP&E Totalmente Depreciados',
         descripcion: 'Activos fijos depreciados en uso',
@@ -5875,7 +5886,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '831005',
         nombre: 'Bienes Recibidos en Custodia',
         descripcion: 'Bienes recibidos en custodia',
@@ -5886,7 +5897,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '831505',
         nombre: 'Bienes Recibidos en Arrendamiento',
         descripcion: 'Bienes recibidos en arrendamiento operativo',
@@ -5897,7 +5908,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '832005',
         nombre: 'Bienes en Poder de Terceros',
         descripcion: 'Bienes entregados en custodia a terceros',
@@ -5908,7 +5919,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '839505',
         nombre: 'Otras Deudoras de Control',
         descripcion: 'Otras cuentas de orden de control',
@@ -5919,7 +5930,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '840505',
         nombre: 'Derechos Contingentes por Contra',
         descripcion: 'Contrapartida de derechos contingentes',
@@ -5930,7 +5941,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '841005',
         nombre: 'Deudoras Fiscales por Contra',
         descripcion: 'Contrapartida de deudoras fiscales',
@@ -5941,7 +5952,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '842005',
         nombre: 'Deudoras de Control por Contra',
         descripcion: 'Contrapartida de deudoras de control',
@@ -5952,7 +5963,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '849505',
         nombre: 'Otras Cuentas de Orden por Contra',
         descripcion: 'Contrapartida otras cuentas de orden deudoras',
@@ -5963,7 +5974,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '910505',
         nombre: 'Bienes y Valores en Garantía',
         descripcion: 'Garantías otorgadas',
@@ -5974,7 +5985,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '911005',
         nombre: 'Litigios y Demandas',
         descripcion: 'Litigios y demandas en contra',
@@ -5985,7 +5996,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '911505',
         nombre: 'Activos en Arrendamiento Financiero',
         descripcion: 'Obligaciones por arrendamiento financiero',
@@ -5996,7 +6007,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '919505',
         nombre: 'Otras Responsabilidades Contingentes',
         descripcion: 'Otras responsabilidades contingentes',
@@ -6007,7 +6018,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '920505',
         nombre: 'IVA por Pagar',
         descripcion: 'IVA por pagar en cuentas de orden',
@@ -6018,7 +6029,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '929505',
         nombre: 'Otras Acreedoras Fiscales',
         descripcion: 'Otras cuentas de orden fiscales acreedoras',
@@ -6029,7 +6040,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '930505',
         nombre: 'PP&E Totalmente Depreciados',
         descripcion: 'Activos depreciados por contra',
@@ -6040,7 +6051,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '931005',
         nombre: 'Bienes Recibidos en Custodia',
         descripcion: 'Bienes en custodia por contra',
@@ -6051,7 +6062,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '931505',
         nombre: 'Bienes Recibidos en Arrendamiento',
         descripcion: 'Arrendamientos por contra',
@@ -6062,7 +6073,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '932005',
         nombre: 'Bienes en Poder de Terceros',
         descripcion: 'Bienes en poder de terceros por contra',
@@ -6073,7 +6084,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '939505',
         nombre: 'Otras Acreedoras de Control',
         descripcion: 'Otras cuentas de orden de control acreedoras',
@@ -6084,7 +6095,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '940505',
         nombre: 'Responsabilidades Contingentes por Contra',
         descripcion: 'Contrapartida responsabilidades contingentes',
@@ -6095,7 +6106,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '941005',
         nombre: 'Acreedoras Fiscales por Contra',
         descripcion: 'Contrapartida acreedoras fiscales',
@@ -6106,7 +6117,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '942005',
         nombre: 'Acreedoras de Control por Contra',
         descripcion: 'Contrapartida acreedoras de control',
@@ -6117,7 +6128,7 @@ export const PLAN_CUENTAS_MINIMO = [
         aceptaMovimiento: true,
         isActive: true
     },
-    { 
+    {
         codigo: '949505',
         nombre: 'Otras Cuentas de Orden por Contra',
         descripcion: 'Contrapartida otras cuentas de orden acreedoras',
@@ -6131,9 +6142,9 @@ export const PLAN_CUENTAS_MINIMO = [
     // ========================================
     // NIVEL 5: Subcuentas
     // ========================================
-    
-    
 
-    
 
-    ];
+
+
+
+];

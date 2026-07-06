@@ -4,6 +4,14 @@ import { Between, DataSource, Repository, QueryRunner } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
 import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
+import { PagoFacturaDetalle } from './entities/pago-factura-detalle.entity';
+import { PagoConceptoDetalle } from './entities/pago-concepto-detalle.entity';
+import { RegistrarPagoMultipleDto, RegistrarOtrosConceptosDto } from './dto/registrar-pago-multiple.dto';
+import { Cliente } from 'src/clientes/entities/cliente.entity';
+import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
+import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
@@ -19,9 +27,29 @@ import { AsientoContable } from 'src/asientos-contables/entities/asientos-contab
 export class PagosService {
   private readonly logger = new Logger(PagosService.name);
 
+  private getMedioPagoFromCodigo(codigo: string): MedioPago {
+    // 10: Efectivo (caja)
+    // 47: Transferencia bancaria (banco)
+    // 42: Consignacion bancaria (banco)
+    // 20: Cheque (cheque)
+    if (codigo === '47' || codigo === '42' || codigo === '30' || codigo === '48' || codigo === '49') {
+      return MedioPago.BANCO;
+    }
+    if (codigo === '20') {
+      return MedioPago.CHEQUE;
+    }
+    return MedioPago.CAJA;
+  }
+
   constructor(
     @InjectRepository(Pago)
     private readonly pagoRepository: Repository<Pago>,
+
+    @InjectRepository(PagoFacturaDetalle)
+    private readonly pagoFacturaDetalleRepository: Repository<PagoFacturaDetalle>,
+
+    @InjectRepository(PagoConceptoDetalle)
+    private readonly pagoConceptoDetalleRepository: Repository<PagoConceptoDetalle>,
 
     @InjectRepository(CuentasBancarias)
     private readonly cuentaBancariaRepository: Repository<CuentasBancarias>,
@@ -34,7 +62,7 @@ export class PagosService {
 
     private readonly dataSource: DataSource,
     private readonly asientosContablesService: AsientosContablesService,
-  ) {}
+  ) { }
 
   // ═══════════════════════════════════════════════════════════════
   // COBROS (Cuentas por Cobrar — ventas a crédito)
@@ -107,7 +135,19 @@ export class PagosService {
       }
 
       // ── 3. Validar cuenta bancaria si aplica ─────────────────────────
-      if (dto.medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
         throw new BadRequestException(
           'Debe especificar cuentaBancariaId cuando el medio de pago no es caja',
         );
@@ -124,14 +164,14 @@ export class PagosService {
       }
 
       // ── 4. Calcular nuevo saldo ──────────────────────────────────────
-      const nuevoTotalPagado    = MathUtil.sum(factura.totalPagado, dto.monto);
+      const nuevoTotalPagado = MathUtil.sum(factura.totalPagado, dto.monto);
       const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
-      const nuevoPaymentStatus  = nuevoSaldoPendiente === 0
+      const nuevoPaymentStatus = nuevoSaldoPendiente === 0
         ? PaymentStatus.PAID
         : PaymentStatus.PARTIAL;
 
       // ── 5. Generar asiento contable ──────────────────────────────────
-      const cuentaDebitoCode = dto.medioPago === MedioPago.CAJA ? '1105' : '1110';
+      const cuentaDebitoCode = medioPago === MedioPago.CAJA ? '1105' : '1110';
 
       let asientoId: string = '';
       try {
@@ -141,6 +181,8 @@ export class PagosService {
             monto: dto.monto,
             fecha: new Date(dto.fecha),
             cuentaDebitoCodigo: cuentaDebitoCode,
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
             userId,
           },
           queryRunner,
@@ -158,31 +200,32 @@ export class PagosService {
 
       // ── 7. Crear registro de pago ────────────────────────────────────
       const pago = queryRunner.manager.create(Pago, {
-        numero:           numeroComprobante,
-        tipo:             TipoPago.COBRO,
-        facturaVentaId:   factura.id,
-        fecha:            new Date(dto.fecha),
-        monto:            dto.monto,
-        medioPago:        dto.medioPago,
+        numero: numeroComprobante,
+        tipo: TipoPago.COBRO,
+        facturaVentaId: factura.id,
+        fecha: new Date(dto.fecha),
+        monto: dto.monto,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
         cuentaBancariaId: dto.cuentaBancariaId || null,
-        referencia:       dto.referencia || null,
-        notas:            dto.notas || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
         asientoId,
-        creadoPorId:      userId,
-        createdAt:        new Date(),
+        creadoPorId: userId,
+        createdAt: new Date(),
       });
 
       const pagoGuardado = await queryRunner.manager.save(Pago, pago);
 
       // ── 8. Actualizar factura ─────────────────────────────────────
       await queryRunner.manager.update(FacturasVenta, { id: factura.id }, {
-        totalPagado:    nuevoTotalPagado,
+        totalPagado: nuevoTotalPagado,
         saldoPendiente: nuevoSaldoPendiente,
-        paymentStatus:  nuevoPaymentStatus,
+        paymentStatus: nuevoPaymentStatus,
       });
 
       // ── 9. Actualizar saldo de cuenta bancaria ─────────────────────
-      if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
+      if (dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
           cta.saldoActual = MathUtil.sum(cta.saldoActual, dto.monto);
@@ -289,7 +332,19 @@ export class PagosService {
       }
 
       // ── 3. Validar cuenta bancaria si aplica ─────────────────────────
-      if (dto.medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
         throw new BadRequestException(
           'Debe especificar cuentaBancariaId cuando el medio de pago no es caja',
         );
@@ -306,14 +361,14 @@ export class PagosService {
       }
 
       // ── 4. Calcular nuevo saldo ──────────────────────────────────────
-      const nuevoTotalPagado    = MathUtil.sum(factura.totalPagado, dto.monto);
+      const nuevoTotalPagado = MathUtil.sum(factura.totalPagado, dto.monto);
       const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
-      const nuevoPaymentStatus  = nuevoSaldoPendiente === 0
+      const nuevoPaymentStatus = nuevoSaldoPendiente === 0
         ? PaymentStatus.PAID
         : PaymentStatus.PARTIAL;
 
       // ── 5. Generar asiento contable ──────────────────────────────────
-      const cuentaCreditoCodigo = dto.medioPago === MedioPago.CAJA ? '1105' : '1110';
+      const cuentaCreditoCodigo = medioPago === MedioPago.CAJA ? '1105' : '1110';
 
       let asientoId: string = '';
       try {
@@ -323,6 +378,8 @@ export class PagosService {
             monto: dto.monto,
             fecha: new Date(dto.fecha),
             cuentaCreditoCodigo,
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
             userId,
           },
           queryRunner,
@@ -331,7 +388,6 @@ export class PagosService {
         this.logger.log(`Asiento de pago generado: ${asientoId}`);
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de pago: ${asientoError.message}`);
-        
       }
 
       // ── 6. Generar número de comprobante ─────────────────────────────
@@ -339,33 +395,34 @@ export class PagosService {
 
       // ── 7. Crear registro de pago ────────────────────────────────────
       const pago = queryRunner.manager.create(Pago, {
-        numero:           numeroComprobante,
-        tipo:             TipoPago.PAGO,
-        facturaCompraId:  factura.id,
-        fecha:            new Date(dto.fecha),
-        monto:            dto.monto,
-        medioPago:        dto.medioPago,
+        numero: numeroComprobante,
+        tipo: TipoPago.PAGO,
+        facturaCompraId: factura.id,
+        fecha: new Date(dto.fecha),
+        monto: dto.monto,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
         cuentaBancariaId: dto.cuentaBancariaId || null,
-        referencia:       dto.referencia || null,
-        notas:            dto.notas || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
         asientoId,
-        creadoPorId:      userId,
-        createdAt:        new Date(),
+        creadoPorId: userId,
+        createdAt: new Date(),
       });
 
       const pagoGuardado = await queryRunner.manager.save(Pago, pago);
 
       // ── 8. Actualizar factura compra ─────────────────────────────────
       const updatePayload: Partial<FacturaCompra> = {
-        totalPagado:    nuevoTotalPagado,
+        totalPagado: nuevoTotalPagado,
         saldoPendiente: nuevoSaldoPendiente,
-        paymentStatus:  nuevoPaymentStatus,
+        paymentStatus: nuevoPaymentStatus,
       };
 
       await queryRunner.manager.update(FacturaCompra, { id: factura.id }, updatePayload);
 
       // ── 9. Actualizar saldo de cuenta bancaria ─────────────────────
-      if (dto.medioPago !== MedioPago.CAJA && dto.cuentaBancariaId) {
+      if (dto.cuentaBancariaId) {
         const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
         if (cta) {
           cta.saldoActual = MathUtil.sub(cta.saldoActual, dto.monto);
@@ -456,6 +513,8 @@ export class PagosService {
       .leftJoinAndSelect('p.cuentaBancaria', 'cb')
       .leftJoinAndSelect('cb.banco', 'banco')
       .leftJoinAndSelect('p.creadoPor', 'user')
+      .leftJoinAndSelect('p.cliente', 'p_cliente')
+      .leftJoinAndSelect('p.proveedor', 'p_proveedor')
       .leftJoin('p.facturaVenta', 'fv')
       .leftJoin('fv.client', 'client')
       .leftJoin('p.facturaCompra', 'fc')
@@ -482,19 +541,23 @@ export class PagosService {
     }
 
     if (filtros.clienteId) {
-      qb.andWhere('fv.clientId = :clienteId', { clienteId: filtros.clienteId });
+      qb.andWhere('(fv.clientId = :clienteId OR p.clienteId = :clienteId)', { clienteId: filtros.clienteId });
     }
 
     if (filtros.proveedorId) {
-      qb.andWhere('fc.proveedorId = :proveedorId', { proveedorId: filtros.proveedorId });
+      qb.andWhere('(fc.proveedorId = :proveedorId OR p.proveedorId = :proveedorId)', { proveedorId: filtros.proveedorId });
     }
 
     if (filtros.busqueda) {
       qb.andWhere(
         '(LOWER(COALESCE(client.razonSocial, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(client.nombre, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(p_cliente.razonSocial, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(p_cliente.nombre, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(proveedor.razonSocial, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(proveedor.nombre, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(p_proveedor.razonSocial, \'\')) LIKE :b ' +
+        'OR LOWER(COALESCE(p_proveedor.nombre, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(fv.comprobante_completo, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(fc.numero, \'\')) LIKE :b ' +
         'OR LOWER(COALESCE(p.referencia, \'\')) LIKE :b)',
@@ -507,9 +570,20 @@ export class PagosService {
     const [pagos, total] = await qb.skip(skip).take(limit).getManyAndCount();
 
     const items = pagos.map(p => {
-      const isCobro = p.tipo === TipoPago.COBRO;
-      const factura = isCobro ? (p as any).facturaVenta : (p as any).facturaCompra;
-      const tercero = isCobro ? factura?.client : factura?.proveedor;
+      const esIngreso = p.tipo === TipoPago.COBRO || p.tipo === TipoPago.OTRO_INGRESO;
+      const factura = esIngreso ? p.facturaVenta : p.facturaCompra;
+      const tercero = p.cliente || p.proveedor || (esIngreso ? p.facturaVenta?.client : p.facturaCompra?.proveedor);
+
+      let numeroFactura = '—';
+      if (p.tipo === TipoPago.COBRO || p.tipo === TipoPago.PAGO) {
+        if (esIngreso) {
+          const fv = factura as FacturasVenta;
+          numeroFactura = fv?.comprobante_completo || 'Múltiples';
+        } else {
+          const fc = factura as FacturaCompra;
+          numeroFactura = fc?.numero || 'Múltiples';
+        }
+      }
 
       return {
         id: p.id,
@@ -521,23 +595,21 @@ export class PagosService {
         referencia: p.referencia,
         notas: p.notas,
         asientoId: p.asientoId,
-        numeroFactura: isCobro
-          ? (factura?.comprobante_completo || '—')
-          : (factura?.numero || '—'),
-        facturaId: isCobro ? p.facturaVentaId : p.facturaCompraId,
+        numeroFactura,
+        facturaId: esIngreso ? p.facturaVentaId : p.facturaCompraId,
         contraparteId: tercero?.id || null,
         contraparteNombre: tercero
           ? (tercero.razonSocial || `${tercero.nombre} ${tercero.apellido}`)
           : '—',
         cuentaBancaria: p.cuentaBancaria
           ? {
-              id: p.cuentaBancaria.id,
-              nombre: p.cuentaBancaria.nombre,
-              numeroCuenta: p.cuentaBancaria.numeroCuenta,
-              banco: p.cuentaBancaria.banco
-                ? { id: p.cuentaBancaria.banco.id, nombre: p.cuentaBancaria.banco.nombre }
-                : null,
-            }
+            id: p.cuentaBancaria.id,
+            nombre: p.cuentaBancaria.nombre,
+            numeroCuenta: p.cuentaBancaria.numeroCuenta,
+            banco: p.cuentaBancaria.banco
+              ? { id: p.cuentaBancaria.banco.id, nombre: p.cuentaBancaria.banco.nombre }
+              : null,
+          }
           : null,
         creadoPor: p.creadoPor
           ? `${(p.creadoPor as any).nombre || ''} ${(p.creadoPor as any).apellido || ''}`.trim()
@@ -563,7 +635,14 @@ export class PagosService {
   async obtenerAsientoDePago(pagoId: string) {
     const pago = await this.pagoRepository.findOne({
       where: { id: pagoId },
-      relations: ['facturaVenta', 'facturaCompra', 'cuentaBancaria'],
+      relations: [
+        'facturaVenta',
+        'facturaCompra',
+        'cuentaBancaria',
+        'facturasDetalles',
+        'facturasDetalles.facturaVenta',
+        'facturasDetalles.facturaCompra'
+      ],
     });
 
     if (!pago) {
@@ -579,6 +658,23 @@ export class PagosService {
       relations: ['detalles', 'detalles.cuenta'],
     });
 
+    let numeroFactura = '—';
+    const esIngreso = pago.tipo === TipoPago.COBRO || pago.tipo === TipoPago.OTRO_INGRESO;
+    if (pago.tipo === TipoPago.COBRO || pago.tipo === TipoPago.PAGO) {
+      if (pago.facturasDetalles && pago.facturasDetalles.length > 1) {
+        numeroFactura = 'Múltiples';
+      } else if (pago.facturasDetalles && pago.facturasDetalles.length === 1) {
+        const det = pago.facturasDetalles[0];
+        numeroFactura = esIngreso
+          ? (det.facturaVenta?.comprobante_completo || '—')
+          : (det.facturaCompra?.numero || '—');
+      } else {
+        numeroFactura = pago.facturaVenta
+          ? pago.facturaVenta.comprobante_completo
+          : (pago.facturaCompra?.numero || '—');
+      }
+    }
+
     return {
       pago: {
         id: pago.id,
@@ -588,21 +684,19 @@ export class PagosService {
         monto: pago.monto,
         medioPago: pago.medioPago,
         referencia: pago.referencia,
-        numeroFactura: pago.facturaVenta
-          ? pago.facturaVenta.comprobante_completo
-          : (pago.facturaCompra?.numero || '—'),
+        numeroFactura,
       },
       asiento: asiento
         ? {
-            id: asiento.id,
-            numero: asiento.numero,
-            fecha: asiento.fecha,
-            tipo: asiento.tipo,
-            referencia: asiento.referencia,
-            descripcion: asiento.descripcion,
-            totalDebito: asiento.totalDebito,
-            totalCredito: asiento.totalCredito,
-          }
+          id: asiento.id,
+          numero: asiento.numero,
+          fecha: asiento.fecha,
+          tipo: asiento.tipo,
+          referencia: asiento.referencia,
+          descripcion: asiento.descripcion,
+          totalDebito: asiento.totalDebito,
+          totalCredito: asiento.totalCredito,
+        }
         : null,
       detalles: asiento?.detalles?.map(d => ({
         id: d.id,
@@ -805,6 +899,8 @@ export class PagosService {
     const pagos = await this.pagoRepository
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.facturaCompra', 'fc')
+
+    4
       .leftJoinAndSelect('p.cuentaBancaria', 'cb')
       .leftJoinAndSelect('cb.banco', 'banco')
       .where('fc.proveedorId = :proveedorId', { proveedorId })
@@ -888,18 +984,22 @@ export class PagosService {
 
   /**
    * Genera un número secuencial para el comprobante de pago/cobro.
-   * Formato: COB-0001 / PAG-0001 (secuencia independiente por tipo).
+   * Formato: RC-0001 / CE-0001 (secuencia independiente por tipo).
    */
   private async generarNumeroPago(
     queryRunner: any,
     tipo: TipoPago,
   ): Promise<string> {
-    const prefijo = tipo === TipoPago.COBRO ? 'COB' : 'PAG';
+    const esIngreso = tipo === TipoPago.COBRO || (tipo as any) === 'otro_ingreso';
+    const prefijo = esIngreso ? 'RC' : 'CE';
 
-    const ultimoPago = await queryRunner.manager.findOne(Pago, {
-      where: { tipo },
-      order: { createdAt: 'DESC' },
-    });
+    // Buscar el último pago que empiece con el prefijo correspondiente
+    const ultimoPago = await queryRunner.manager
+      .createQueryBuilder(Pago, 'p')
+      .where('p.numero LIKE :prefix', { prefix: `${prefijo}-%` })
+      .orWhere('p.numero LIKE :legacyPrefix', { legacyPrefix: esIngreso ? 'COB-%' : 'PAG-%' })
+      .orderBy('p.createdAt', 'DESC')
+      .getOne();
 
     let correlativo = 1;
     if (ultimoPago?.numero) {
@@ -920,5 +1020,519 @@ export class PagosService {
       where: { activa: true },
       order: { nombre: 'ASC' },
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NUEVOS FLUJOS FLEXIBLES: COBROS/PAGOS MÚLTIPLES Y OTROS MOVIMIENTOS
+  // ═══════════════════════════════════════════════════════════════
+
+  async obtenerFacturasPendientesCliente(clienteId: string) {
+    return this.facturaVentaRepository
+      .createQueryBuilder('f')
+      .leftJoinAndSelect('f.client', 'client')
+      .where('f.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
+      .andWhere('f.paymentStatus IN (:...estados)', {
+        estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE],
+      })
+      .andWhere('f.saldoPendiente > 0')
+      .andWhere('f.status NOT IN (:...excluidos)', {
+        excluidos: [InvoiceStatus.CANCELLED, InvoiceStatus.DRAFT],
+      })
+      .andWhere('f.clientId = :clienteId', { clienteId })
+      .orderBy('f.fechaVencimiento', 'ASC')
+      .getMany();
+  }
+
+  async obtenerFacturasPendientesProveedor(proveedorId: string) {
+    return this.facturaCompraRepository
+      .createQueryBuilder('fc')
+      .leftJoinAndSelect('fc.proveedor', 'proveedor')
+      .where('fc.proveedorId = :proveedorId', { proveedorId })
+      .andWhere('fc.formaPago = :formaPago', { formaPago: 'CREDITO' })
+      .andWhere('fc.paymentStatus IN (:...estados)', {
+        estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE],
+      })
+      .andWhere('fc.saldoPendiente > 0')
+      .andWhere('fc.estado NOT IN (:...excluidos)', {
+        excluidos: [GastoEstado.ANULADO, GastoEstado.BORRADOR],
+      })
+      .orderBy('fc.fechaVencimiento', 'ASC')
+      .getMany();
+  }
+
+  async registrarCobroMultiple(
+    dto: RegistrarPagoMultipleDto,
+    userId: string,
+  ): Promise<{ pago: Pago; detalles: PagoFacturaDetalle[] }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Validar cliente
+      const cliente = await queryRunner.manager.findOne(Cliente, {
+        where: { id: dto.terceroId },
+      });
+      if (!cliente) {
+        throw new NotFoundException(`Cliente con ID ${dto.terceroId} no encontrado`);
+      }
+
+      // 2. Validar medio de pago y banco
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      } else if (!medioPago) {
+        throw new BadRequestException('Debe especificar metodoPagoId');
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+        throw new BadRequestException('Debe especificar cuentaBancariaId cuando el medio de pago no es caja');
+      }
+
+      let cuentaBancaria: CuentasBancarias | null = null;
+      if (dto.cuentaBancariaId) {
+        cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
+          where: { id: dto.cuentaBancariaId, activa: true },
+        });
+        if (!cuentaBancaria) {
+          throw new NotFoundException(`Cuenta bancaria ${dto.cuentaBancariaId} no encontrada o inactiva`);
+        }
+      }
+
+      let montoTotal = 0;
+      const facturasAbonos: Array<{ facturaVenta: FacturasVenta; monto: number }> = [];
+
+      // 3. Procesar y actualizar cada factura
+      for (const item of dto.detalles) {
+        const factura = await queryRunner.manager.findOne(FacturasVenta, {
+          where: { id: item.facturaId },
+          relations: ['client'],
+        });
+
+        if (!factura) {
+          throw new NotFoundException(`Factura de venta con ID ${item.facturaId} no encontrada`);
+        }
+
+        if (factura.paymentStatus === PaymentStatus.PAID) {
+          throw new BadRequestException(`La factura ${factura.comprobante_completo} ya está pagada`);
+        }
+
+        if (item.monto > factura.saldoPendiente) {
+          throw new BadRequestException(`El monto $${item.monto} supera el saldo pendiente de $${factura.saldoPendiente} para la factura ${factura.comprobante_completo}`);
+        }
+
+        // Actualizar saldos de factura
+        const nuevoTotalPagado = MathUtil.sum(factura.totalPagado, item.monto);
+        const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
+        const nuevoPaymentStatus = nuevoSaldoPendiente === 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+
+        await queryRunner.manager.update(FacturasVenta, { id: factura.id }, {
+          totalPagado: nuevoTotalPagado,
+          saldoPendiente: nuevoSaldoPendiente,
+          paymentStatus: nuevoPaymentStatus,
+        });
+
+        montoTotal = MathUtil.sum(montoTotal, item.monto);
+        facturasAbonos.push({ facturaVenta: factura, monto: item.monto });
+      }
+
+      // 4. Generar asiento contable
+      const cuentaDebitoCode = medioPago === MedioPago.CAJA ? '1105' : '1110';
+      let asientoId: string = '';
+      try {
+        const asiento = await this.asientosContablesService.generarAsientoCobroMultiple(
+          {
+            clienteId: dto.terceroId,
+            facturasAbonos,
+            montoTotal,
+            fecha: new Date(dto.fecha),
+            cuentaDebitoCodigo: cuentaDebitoCode,
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
+            userId,
+          },
+          queryRunner,
+        );
+        asientoId = asiento.id;
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento cobro múltiple: ${asientoError.message}`);
+      }
+
+      // 5. Crear cabecera de Pago
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.COBRO);
+      const pago = queryRunner.manager.create(Pago, {
+        numero: numeroComprobante,
+        tipo: TipoPago.COBRO,
+        clienteId: dto.terceroId,
+        fecha: new Date(dto.fecha),
+        monto: montoTotal,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
+        cuentaBancariaId: dto.cuentaBancariaId || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
+        asientoId,
+        creadoPorId: userId,
+        createdAt: new Date(),
+        // Para compatibilidad legada: guardar el primer id de factura
+        facturaVentaId: dto.detalles[0]?.facturaId || null,
+      });
+
+      const pagoGuardado = await queryRunner.manager.save(Pago, pago);
+
+      // 6. Crear detalles de pago
+      const detallesGuardados: PagoFacturaDetalle[] = [];
+      for (const item of dto.detalles) {
+        const detalle = queryRunner.manager.create(PagoFacturaDetalle, {
+          pagoId: pagoGuardado.id,
+          facturaVentaId: item.facturaId,
+          monto: item.monto,
+        });
+        detallesGuardados.push(await queryRunner.manager.save(PagoFacturaDetalle, detalle));
+      }
+
+      // 7. Actualizar saldo banco/caja
+      if (cuentaBancaria) {
+        const nuevoSaldo = MathUtil.sum(cuentaBancaria.saldoActual, montoTotal);
+        await queryRunner.manager.update(
+          CuentasBancarias,
+          { id: cuentaBancaria.id },
+          { saldoActual: nuevoSaldo },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return { pago: pagoGuardado, detalles: detallesGuardados };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error registrando cobro múltiple: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async registrarPagoMultiple(
+    dto: RegistrarPagoMultipleDto,
+    userId: string,
+  ): Promise<{ pago: Pago; detalles: PagoFacturaDetalle[] }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Validar proveedor
+      const proveedor = await queryRunner.manager.findOne(Proveedor, {
+        where: { id: dto.terceroId },
+      });
+      if (!proveedor) {
+        throw new NotFoundException(`Proveedor con ID ${dto.terceroId} no encontrado`);
+      }
+
+      // 2. Validar medio de pago y banco
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      } else if (!medioPago) {
+        throw new BadRequestException('Debe especificar metodoPagoId');
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+        throw new BadRequestException('Debe especificar cuentaBancariaId cuando el medio de pago no es caja');
+      }
+
+      let cuentaBancaria: CuentasBancarias | null = null;
+      if (dto.cuentaBancariaId) {
+        cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
+          where: { id: dto.cuentaBancariaId, activa: true },
+        });
+        if (!cuentaBancaria) {
+          throw new NotFoundException(`Cuenta bancaria ${dto.cuentaBancariaId} no encontrada o inactiva`);
+        }
+      }
+
+      let montoTotal = 0;
+      const facturasAbonos: Array<{ facturaCompra: FacturaCompra; monto: number }> = [];
+
+      // 3. Procesar y actualizar cada factura compra
+      for (const item of dto.detalles) {
+        const factura = await queryRunner.manager.findOne(FacturaCompra, {
+          where: { id: item.facturaId },
+          relations: ['proveedor'],
+        });
+
+        if (!factura) {
+          throw new NotFoundException(`Factura de compra con ID ${item.facturaId} no encontrada`);
+        }
+
+        if (factura.paymentStatus === PaymentStatus.PAID) {
+          throw new BadRequestException(`La factura ${factura.numero} ya está pagada`);
+        }
+
+        if (item.monto > factura.saldoPendiente) {
+          throw new BadRequestException(`El monto $${item.monto} supera el saldo pendiente de $${factura.saldoPendiente} para la factura ${factura.numero}`);
+        }
+
+        // Actualizar saldos de factura
+        const nuevoTotalPagado = MathUtil.sum(factura.totalPagado, item.monto);
+        const nuevoSaldoPendiente = MathUtil.sub(factura.total, nuevoTotalPagado);
+        const nuevoPaymentStatus = nuevoSaldoPendiente === 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+
+        await queryRunner.manager.update(FacturaCompra, { id: factura.id }, {
+          totalPagado: nuevoTotalPagado,
+          saldoPendiente: nuevoSaldoPendiente,
+          paymentStatus: nuevoPaymentStatus,
+        });
+
+        montoTotal = MathUtil.sum(montoTotal, item.monto);
+        facturasAbonos.push({ facturaCompra: factura, monto: item.monto });
+      }
+
+      // 4. Generar asiento contable
+      const cuentaCreditoCode = medioPago === MedioPago.CAJA ? '1105' : '1110';
+      let asientoId: string = '';
+      try {
+        const asiento = await this.asientosContablesService.generarAsientoPagoCompraMultiple(
+          {
+            proveedorId: dto.terceroId,
+            facturasAbonos,
+            montoTotal,
+            fecha: new Date(dto.fecha),
+            cuentaCreditoCodigo: cuentaCreditoCode,
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
+            userId,
+          },
+          queryRunner,
+        );
+        asientoId = asiento.id;
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento pago múltiple: ${asientoError.message}`);
+      }
+
+      // 5. Crear cabecera de Pago
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.PAGO);
+      const pago = queryRunner.manager.create(Pago, {
+        numero: numeroComprobante,
+        tipo: TipoPago.PAGO,
+        proveedorId: dto.terceroId,
+        fecha: new Date(dto.fecha),
+        monto: montoTotal,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
+        cuentaBancariaId: dto.cuentaBancariaId || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
+        asientoId,
+        creadoPorId: userId,
+        createdAt: new Date(),
+        // Para compatibilidad legada
+        facturaCompraId: dto.detalles[0]?.facturaId || null,
+      });
+
+      const pagoGuardado = await queryRunner.manager.save(Pago, pago);
+
+      // 6. Crear detalles de pago
+      const detallesGuardados: PagoFacturaDetalle[] = [];
+      for (const item of dto.detalles) {
+        const detalle = queryRunner.manager.create(PagoFacturaDetalle, {
+          pagoId: pagoGuardado.id,
+          facturaCompraId: item.facturaId,
+          monto: item.monto,
+        });
+        detallesGuardados.push(await queryRunner.manager.save(PagoFacturaDetalle, detalle));
+      }
+
+      // 7. Actualizar saldo banco/caja
+      if (cuentaBancaria) {
+        const nuevoSaldo = MathUtil.sub(cuentaBancaria.saldoActual, montoTotal);
+        await queryRunner.manager.update(
+          CuentasBancarias,
+          { id: cuentaBancaria.id },
+          { saldoActual: nuevoSaldo },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return { pago: pagoGuardado, detalles: detallesGuardados };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error registrando pago múltiple: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async registrarOtrosMovimientos(
+    dto: RegistrarOtrosConceptosDto,
+    tipoPago: TipoPago,
+    userId: string,
+  ): Promise<{ pago: Pago; detalles: PagoConceptoDetalle[] }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const isIngreso = tipoPago === TipoPago.OTRO_INGRESO;
+
+      // 1. Validar tercero opcional
+      let cliente: Cliente | null = null;
+      let proveedor: Proveedor | null = null;
+
+      if (dto.terceroId) {
+        if (isIngreso) {
+          cliente = await queryRunner.manager.findOne(Cliente, { where: { id: dto.terceroId } });
+        } else {
+          proveedor = await queryRunner.manager.findOne(Proveedor, { where: { id: dto.terceroId } });
+        }
+      }
+
+      // 2. Validar cuenta de banco si aplica
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      } else if (!medioPago) {
+        throw new BadRequestException('Debe especificar metodoPagoId');
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+        throw new BadRequestException('Debe especificar cuentaBancariaId cuando el medio de pago no es caja');
+      }
+
+      let cuentaBancaria: CuentasBancarias | null = null;
+      if (dto.cuentaBancariaId) {
+        cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
+          where: { id: dto.cuentaBancariaId, activa: true },
+        });
+        if (!cuentaBancaria) {
+          throw new NotFoundException(`Cuenta bancaria ${dto.cuentaBancariaId} no encontrada o inactiva`);
+        }
+      }
+
+      // 3. Validar cuentas contables e impuestos, e integrar totalizador
+      let montoTotal = 0;
+      for (const item of dto.conceptos) {
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: item.cuentaContableId },
+        });
+        if (!cuenta) {
+          throw new NotFoundException(`Cuenta contable con ID ${item.cuentaContableId} no encontrada`);
+        }
+
+        const base = item.cantidad * item.valorUnitario;
+        const porc = item.impuestoPorcentaje || 0;
+        const impuestoMonto = base * (porc / 100);
+        const itemTotal = base + impuestoMonto;
+
+        montoTotal = MathUtil.sum(montoTotal, itemTotal);
+      }
+
+      // 4. Generar asiento contable
+      let asientoId: string = '';
+      try {
+        const asiento = await this.asientosContablesService.generarAsientoOtrosMovimientos(
+          {
+            tipoPago,
+            conceptos: dto.conceptos,
+            montoTotal,
+            fecha: new Date(dto.fecha),
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
+            userId,
+          },
+          queryRunner,
+        );
+        asientoId = asiento.id;
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento de otros movimientos: ${asientoError.message}`);
+      }
+
+      // 5. Crear cabecera de Pago
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, tipoPago);
+      const pago = queryRunner.manager.create(Pago, {
+        numero: numeroComprobante,
+        tipo: tipoPago,
+        clienteId: cliente?.id || null,
+        proveedorId: proveedor?.id || null,
+        fecha: new Date(dto.fecha),
+        monto: montoTotal,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
+        cuentaBancariaId: dto.cuentaBancariaId || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
+        asientoId,
+        creadoPorId: userId,
+        createdAt: new Date(),
+      });
+
+      const pagoGuardado = await queryRunner.manager.save(Pago, pago);
+
+      // 6. Crear detalles de conceptos
+      const detallesGuardados: PagoConceptoDetalle[] = [];
+      for (const item of dto.conceptos) {
+        const base = item.cantidad * item.valorUnitario;
+        const porc = item.impuestoPorcentaje || 0;
+        const impuestoMonto = base * (porc / 100);
+        const itemTotal = base + impuestoMonto;
+
+        const detalle = queryRunner.manager.create(PagoConceptoDetalle, {
+          pagoId: pagoGuardado.id,
+          cuentaContableId: item.cuentaContableId,
+          concepto: item.concepto,
+          cantidad: item.cantidad,
+          valorUnitario: item.valorUnitario,
+          impuestoPorcentaje: porc,
+          impuestoId: item.impuestoId || null,
+          total: itemTotal,
+        });
+
+        detallesGuardados.push(await queryRunner.manager.save(PagoConceptoDetalle, detalle));
+      }
+
+      // 7. Actualizar saldo banco/caja
+      if (cuentaBancaria) {
+        const nuevoSaldo = isIngreso
+          ? MathUtil.sum(cuentaBancaria.saldoActual, montoTotal)
+          : MathUtil.sub(cuentaBancaria.saldoActual, montoTotal);
+
+        await queryRunner.manager.update(
+          CuentasBancarias,
+          { id: cuentaBancaria.id },
+          { saldoActual: nuevoSaldo },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return { pago: pagoGuardado, detalles: detallesGuardados };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error registrando otros movimientos: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

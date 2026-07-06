@@ -475,15 +475,9 @@ export class FacturasVentasService {
     const factura = await this.findOne(id);
 
     if (!factura.puedeEmitirse()) {
-      throw new BadRequestException(
-        `No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`,
-      );
+      throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
     }
-
-    this.logger.log(
-      `Emitiendo factura electrónica: ${factura.comprobante_completo}`,
-    );
-
+    this.logger.log(`Emitiendo factura electrónica: ${factura.comprobante_completo}`);
     const numberFactura = await this.generateInvoiceNumber();
 
     try {
@@ -498,14 +492,9 @@ export class FacturasVentasService {
           intentosEnvio: (factura.intentosEnvio ?? 0) + 1,
         },
       );
-
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
-      const respuesta = await this.factusService.crearYValidarFactura(
-        factura,
-        numberFactura,
-      );
-
+      const respuesta = await this.factusService.crearYValidarFactura(factura, numberFactura);
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
         const updateAceptada: Partial<FacturasVenta> = {
@@ -566,7 +555,7 @@ export class FacturasVentasService {
               factura.id,
               {
                 monto: Number(factura.total),
-                fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
+                fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
                 medioPago,
                 cuentaBancariaId: factura.cuentaBancariaId || undefined,
                 referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
@@ -653,9 +642,7 @@ export class FacturasVentasService {
       }
 
       if (factura.status !== InvoiceStatus.DRAFT) {
-        throw new BadRequestException(
-          `No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`,
-        );
+        throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
       }
 
       const numberFactura = await this.generateInvoiceNumber();
@@ -725,7 +712,7 @@ export class FacturasVentasService {
           factura.id,
           {
             monto: Number(factura.total),
-            fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
+            fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
             medioPago,
             cuentaBancariaId: factura.cuentaBancariaId || undefined,
             referencia: `Cobro automático contado - Factura ${updatedInvoice.comprobante_completo}`,
@@ -899,10 +886,7 @@ export class FacturasVentasService {
     };
   }
 
-  private async calcularTotales(
-    queryRunner: any,
-    items: any[],
-  ): Promise<{
+  private async calcularTotales(queryRunner: any, items: any[]): Promise<{
     subtotal: number;
     iva: number;
     descuento: number;

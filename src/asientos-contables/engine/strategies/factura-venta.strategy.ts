@@ -18,7 +18,7 @@ export class FacturaVentaStrategy implements IContabilizacionStrategy {
     private readonly dataSource: DataSource,
     private readonly asientosService: AsientosContablesService,
     private readonly parametrizacionService: ParametrizacionContableService,
-  ) {}
+  ) { }
 
   async generarDefinicion(
     documentoId: string,
@@ -167,7 +167,7 @@ export class FacturaVentaStrategy implements IContabilizacionStrategy {
     // 4. Débito: Descuentos (si aplica)
     const descuento = Number(factura.descuento) || 0;
     if (descuento > 0) {
-      const cuentaDescuento = await this.asientosService.obtenerCuentaPorCodigo('5305');
+      const cuentaDescuento = await this.asientosService.obtenerCuentaPorCodigo('425030');
       detalles.push({
         cuentaId: cuentaDescuento.id,
         cuentaCodigo: cuentaDescuento.codigo,

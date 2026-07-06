@@ -21,6 +21,10 @@ export class RegistrarPagoDto {
   medioPago: MedioPago;
 
   @IsOptional()
+  @IsNumber()
+  metodoPagoId?: number;
+
+  @IsOptional()
   @IsString()
   cuentaBancariaId?: string;
 
@@ -50,6 +54,10 @@ export class RegistrarCobroDto {
     message: 'medioPago debe ser: caja, banco, transferencia o cheque',
   })
   medioPago: MedioPago;
+
+  @IsOptional()
+  @IsNumber()
+  metodoPagoId?: number;
 
   /**
    * Requerido cuando medioPago != 'caja'.
