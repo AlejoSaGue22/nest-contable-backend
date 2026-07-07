@@ -17,7 +17,7 @@ import {
 } from './enums/factura-venta.enum';
 import { DataSource, Not, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
-import { PaymentStatus, MedioPago } from 'src/pagos/enums/pago.enum';
+import { PaymentStatus, MedioPago, AnticipoEstado } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
@@ -28,6 +28,8 @@ import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { PagosService } from 'src/pagos/pagos.service';
+import { Anticipo } from 'src/pagos/entities/anticipo.entity';
+import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -106,11 +108,19 @@ export class FacturasVentasService {
         : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
           ? InvoiceStatus.DRAFT
           : InvoiceStatus.ISSUED;
-      // ⭐ Determinar estado de pago según si es borrador o no
+      // ⭐ Determinar estado de pago según si es borrador o no y considerando anticipos
       let paymentStatus: PaymentStatus;
       let saldoPendiente: number;
       let totalPagado: number;
       let dianStatus: DianStatus;
+
+      let montoAnticiposTotal = 0;
+      if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
+        montoAnticiposTotal = createFacturasVentaDto.anticiposAsociados.reduce(
+          (acc, curr) => MathUtil.sum(acc, curr.montoAplicado),
+          0,
+        );
+      }
 
       if (statusInvoice === InvoiceStatus.DRAFT) {
         // Para BORRADORES: siempre PENDING con saldo = 0
@@ -119,11 +129,12 @@ export class FacturasVentasService {
         totalPagado = 0;
         dianStatus = DianStatus.PENDING;
       } else {
-        // Para NO-BORRADORES: la factura nace con saldoPendiente = total y totalPagado = 0,
-        // incluso si es CONTADO, ya que el cobro automático posterior la liquidará.
-        paymentStatus = PaymentStatus.PENDING;
-        saldoPendiente = total;
-        totalPagado = 0;
+        // Para NO-BORRADORES: restamos el anticipo
+        totalPagado = montoAnticiposTotal;
+        saldoPendiente = MathUtil.sub(total, montoAnticiposTotal);
+        paymentStatus = saldoPendiente === 0
+          ? PaymentStatus.PAID
+          : (totalPagado > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
         dianStatus = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
           ? DianStatus.PENDING
           : DianStatus.ACCEPTED;
@@ -161,6 +172,50 @@ export class FacturasVentasService {
       );
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
 
+      // ⭐ Procesar aplicaciones de anticipos
+      if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
+        for (const assoc of createFacturasVentaDto.anticiposAsociados) {
+          if (statusInvoice === InvoiceStatus.DRAFT) {
+            // Borradores: guardar aplicación sin alterar saldos
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: savedInvoice.id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(createFacturasVentaDto.fecha),
+              estado: AplicacionEstado.BORRADOR,
+              creadoPorId: userId
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          } else {
+            // Emisión directa: validar, descontar saldo y guardar aplicación activa
+            const anticipo = await queryRunner.manager.findOne(Anticipo, {
+              where: { id: assoc.anticipoId },
+              lock: { mode: 'pessimistic_write' }
+            });
+            if (!anticipo) {
+              throw new NotFoundException(`Anticipo con ID ${assoc.anticipoId} no encontrado`);
+            }
+            if (anticipo.saldoDisponible < assoc.montoAplicado) {
+              throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo suficiente disponible. Saldo actual: $${anticipo.saldoDisponible}, requerido: $${assoc.montoAplicado}`);
+            }
+
+            anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, assoc.montoAplicado);
+            anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+            await queryRunner.manager.save(Anticipo, anticipo);
+
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: savedInvoice.id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(createFacturasVentaDto.fecha),
+              estado: AplicacionEstado.ACTIVO,
+              creadoPorId: userId
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          }
+        }
+      }
+
       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
@@ -186,23 +241,26 @@ export class FacturasVentasService {
 
         // Cobro automático si es contado y estándar (dentro de la misma transacción)
         if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
-          const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
-            ? MedioPago.BANCO
-            : MedioPago.CAJA;
+          const cobroMonto = MathUtil.sub(total, montoAnticiposTotal);
+          if (cobroMonto > 0) {
+            const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
+              ? MedioPago.BANCO
+              : MedioPago.CAJA;
 
-          await this.pagosService.registrarCobro(
-            savedInvoice.id,
-            {
-              monto: total,
-              fecha: createFacturasVentaDto.fecha || new Date().toISOString(),
-              medioPago,
-              cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || undefined,
-              referencia: `Cobro automático contado - Factura ${savedInvoice.comprobante_completo}`,
-              notas: 'Cobro generado de forma automática al emitir factura de contado.',
-            },
-            userId,
-            queryRunner,
-          );
+            await this.pagosService.registrarCobro(
+              savedInvoice.id,
+              {
+                monto: cobroMonto,
+                fecha: createFacturasVentaDto.fecha || new Date().toISOString(),
+                medioPago,
+                cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || undefined,
+                referencia: `Cobro automático contado - Factura ${savedInvoice.comprobante_completo}`,
+                notas: 'Cobro generado de forma automática al emitir factura de contado.',
+              },
+              userId,
+              queryRunner,
+            );
+          }
         }
       }
 
@@ -387,6 +445,22 @@ export class FacturasVentasService {
         updatePayload.saldoPendiente = 0;
         updatePayload.totalPagado = 0;
         updatePayload.dianStatus = DianStatus.PENDING;
+
+        // Limpiar y recrear las aplicaciones de anticipo en borrador
+        if (updateDto.anticiposAsociados) {
+          await queryRunner.manager.delete(AnticipoAplicacion, { facturaVentaId: id });
+          for (const assoc of updateDto.anticiposAsociados) {
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(updateDto.fecha || invoice.fecha),
+              estado: AplicacionEstado.BORRADOR,
+              creadoPorId: invoice.createdById
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          }
+        }
       }
 
       this.logger.debug(
@@ -508,9 +582,6 @@ export class FacturasVentasService {
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: 'FE',
           comprobante: numberFactura,
-          paymentStatus: PaymentStatus.PENDING,
-          saldoPendiente: factura.total,
-          totalPagado: 0,
         };
 
         if (respuesta.numeroCompleto) {
@@ -518,8 +589,43 @@ export class FacturasVentasService {
           factura.comprobante_completo = respuesta.numeroCompleto;
         }
 
-        // Primero actualizamos en BD para que la contabilidad y el cobro lean datos correctos
-        await this.facturaVentaRepository.update({ id }, updateAceptada);
+        // Ejecutar en transacción para asegurar la consistencia del cruce de anticipos
+        let montoAnticiposTotal = 0;
+        await this.dataSource.transaction(async (transactionalEntityManager) => {
+          const aplicaciones = await transactionalEntityManager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+          });
+
+          for (const app of aplicaciones) {
+            const anticipo = await transactionalEntityManager.findOne(Anticipo, {
+              where: { id: app.anticipoId },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (!anticipo) {
+              throw new NotFoundException(`Anticipo con ID ${app.anticipoId} no encontrado`);
+            }
+            if (anticipo.saldoDisponible < app.montoAplicado) {
+              throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo disponible suficiente.`);
+            }
+
+            anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, app.montoAplicado);
+            anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+            await transactionalEntityManager.save(Anticipo, anticipo);
+
+            app.estado = AplicacionEstado.ACTIVO;
+            await transactionalEntityManager.save(AnticipoAplicacion, app);
+
+            montoAnticiposTotal = MathUtil.sum(montoAnticiposTotal, app.montoAplicado);
+          }
+
+          updateAceptada.totalPagado = montoAnticiposTotal;
+          updateAceptada.saldoPendiente = MathUtil.sub(factura.total, montoAnticiposTotal);
+          updateAceptada.paymentStatus = updateAceptada.saldoPendiente === 0
+            ? PaymentStatus.PAID
+            : (montoAnticiposTotal > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
+
+          await transactionalEntityManager.update(FacturasVenta, { id }, updateAceptada);
+        });
 
         // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
         const facturaParaAsiento = await this.findOne(id);
@@ -547,23 +653,26 @@ export class FacturasVentasService {
         // Si es de contado, registrar cobro automático (usando transacción independiente para cobros de FE)
         if (factura.formaPago === FormaPago.CONTADO) {
           try {
-            const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
-              ? MedioPago.BANCO
-              : MedioPago.CAJA;
+            const cobroMonto = MathUtil.sub(Number(factura.total), montoAnticiposTotal);
+            if (cobroMonto > 0) {
+              const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+                ? MedioPago.BANCO
+                : MedioPago.CAJA;
 
-            await this.pagosService.registrarCobro(
-              factura.id,
-              {
-                monto: Number(factura.total),
-                fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
-                medioPago,
-                cuentaBancariaId: factura.cuentaBancariaId || undefined,
-                referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
-                notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
-              },
-              userId,
-            );
-            this.logger.log(`Cobro automático registrado para factura electrónica ${factura.comprobante_completo}`);
+              await this.pagosService.registrarCobro(
+                factura.id,
+                {
+                  monto: cobroMonto,
+                  fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+                  medioPago,
+                  cuentaBancariaId: factura.cuentaBancariaId || undefined,
+                  referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
+                  notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
+                },
+                userId,
+              );
+              this.logger.log(`Cobro automático registrado para factura electrónica ${factura.comprobante_completo}`);
+            }
           } catch (cobroError) {
             this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
           }
@@ -648,10 +757,39 @@ export class FacturasVentasService {
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = 'FV';
 
-      // Nace con saldo pendiente para que el cobro posterior lo liquide
-      const paymentStatus = PaymentStatus.PENDING;
-      const saldoPendiente = factura.total;
-      const totalPagado = 0;
+      // 1. Obtener y procesar los anticipos en borrador
+      const aplicacionesBorrador = await queryRunner.manager.find(AnticipoAplicacion, {
+        where: { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+      });
+
+      let montoAnticiposTotal = 0;
+      for (const app of aplicacionesBorrador) {
+        const anticipo = await queryRunner.manager.findOne(Anticipo, {
+          where: { id: app.anticipoId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!anticipo) {
+          throw new NotFoundException(`Anticipo con ID ${app.anticipoId} no encontrado`);
+        }
+        if (anticipo.saldoDisponible < app.montoAplicado) {
+          throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo disponible suficiente.`);
+        }
+
+        anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, app.montoAplicado);
+        anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+        await queryRunner.manager.save(Anticipo, anticipo);
+
+        app.estado = AplicacionEstado.ACTIVO;
+        await queryRunner.manager.save(AnticipoAplicacion, app);
+
+        montoAnticiposTotal = MathUtil.sum(montoAnticiposTotal, app.montoAplicado);
+      }
+
+      const totalPagado = montoAnticiposTotal;
+      const saldoPendiente = MathUtil.sub(factura.total, totalPagado);
+      const paymentStatus = saldoPendiente === 0
+        ? PaymentStatus.PAID
+        : (totalPagado > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
 
       await queryRunner.manager.update(
         FacturasVenta,
@@ -704,23 +842,26 @@ export class FacturasVentasService {
 
       // Cobro automático si es contado (dentro de la misma transacción)
       if (factura.formaPago === FormaPago.CONTADO) {
-        const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
-          ? MedioPago.BANCO
-          : MedioPago.CAJA;
+        const cobroMonto = MathUtil.sub(Number(factura.total), montoAnticiposTotal);
+        if (cobroMonto > 0) {
+          const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+            ? MedioPago.BANCO
+            : MedioPago.CAJA;
 
-        await this.pagosService.registrarCobro(
-          factura.id,
-          {
-            monto: Number(factura.total),
-            fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
-            medioPago,
-            cuentaBancariaId: factura.cuentaBancariaId || undefined,
-            referencia: `Cobro automático contado - Factura ${updatedInvoice.comprobante_completo}`,
-            notas: 'Cobro generado de forma automática al emitir factura de contado.',
-          },
-          userId,
-          queryRunner,
-        );
+          await this.pagosService.registrarCobro(
+            factura.id,
+            {
+              monto: cobroMonto,
+              fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+              medioPago,
+              cuentaBancariaId: factura.cuentaBancariaId || undefined,
+              referencia: `Cobro automático contado - Factura ${updatedInvoice.comprobante_completo}`,
+              notas: 'Cobro generado de forma automática al emitir factura de contado.',
+            },
+            userId,
+            queryRunner,
+          );
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -803,9 +944,45 @@ export class FacturasVentasService {
       }
     }
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      // ✅ FIX: update() selectivo — no toca campos financieros
-      await this.facturaVentaRepository.update(
+      // 1. Revertir aplicaciones de anticipos
+      const aplicaciones = await queryRunner.manager.find(AnticipoAplicacion, {
+        where: { facturaVentaId: id, estado: AplicacionEstado.ACTIVO }
+      });
+
+      for (const app of aplicaciones) {
+        const anticipo = await queryRunner.manager.findOne(Anticipo, {
+          where: { id: app.anticipoId },
+          lock: { mode: 'pessimistic_write' }
+        });
+        if (anticipo) {
+          const nuevoSaldo = MathUtil.sum(anticipo.saldoDisponible, app.montoAplicado);
+          const nuevoEstado = nuevoSaldo === anticipo.montoOriginal ? AnticipoEstado.PENDIENTE : AnticipoEstado.PARCIAL;
+          
+          await queryRunner.manager.update(Anticipo, { id: anticipo.id }, {
+            saldoDisponible: nuevoSaldo,
+            estado: nuevoEstado
+          });
+        }
+        await queryRunner.manager.update(AnticipoAplicacion, { id: app.id }, {
+          estado: AplicacionEstado.REVERTIDO
+        });
+      }
+
+      // Revertir también las de borrador por si acaso
+      await queryRunner.manager.update(
+        AnticipoAplicacion,
+        { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+        { estado: AplicacionEstado.REVERTIDO }
+      );
+
+      // 2. Anular la factura
+      await queryRunner.manager.update(
+        FacturasVenta,
         { id },
         {
           status: InvoiceStatus.CANCELLED,
@@ -815,9 +992,11 @@ export class FacturasVentasService {
         },
       );
 
+      await queryRunner.commitTransaction();
+
       const updatedInvoice = await this.findOne(id);
 
-      // Generar asiento contable de anulación
+      // Generar asiento contable de anulación (fuera de la transacción de actualización)
       try {
         await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(
           updatedInvoice,
@@ -842,8 +1021,11 @@ export class FacturasVentasService {
 
       return await this.findOne(id);
     } catch (error) {
-      this.logger.error(`Error anulando factura: ${error.message}`);
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error anulando factura ${id}: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al anular factura');
+    } finally {
+      await queryRunner.release();
     }
   }
 

@@ -19,3 +19,16 @@ export enum MedioPago {
   TRANSFERENCIA = 'transferencia',
   CHEQUE        = 'cheque',
 }
+
+export enum AnticipoTipo {
+  CLIENTE = 'cliente',
+  PROVEEDOR = 'proveedor',
+}
+
+export enum AnticipoEstado {
+  PENDIENTE = 'pendiente',
+  PARCIAL = 'parcial',
+  APLICADO = 'aplicado',
+  ANULADO = 'anulado',
+}
+

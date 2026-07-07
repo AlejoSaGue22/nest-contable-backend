@@ -2,6 +2,7 @@ import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString,
 import { CreateItemsFacturasVentaDto } from "./create-items-facturas-venta.dto";
 import { Type } from "class-transformer";
 import { FormaPago, TipoFactura } from "../enums/factura-venta.enum";
+import { AplicarAnticipoDto } from "src/pagos/dto/aplicar-anticipo.dto";
 
 export class CreateFacturasVentaDto {
 
@@ -66,6 +67,11 @@ export class CreateFacturasVentaDto {
     @IsOptional()
     saveAsDraft?: boolean;
 
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AplicarAnticipoDto)
+    anticiposAsociados?: AplicarAnticipoDto[];
 }
 
 

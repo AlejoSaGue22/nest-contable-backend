@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { QueryRunner, DataSource } from 'typeorm';
+import { QueryRunner, DataSource, In } from 'typeorm';
 import { IContabilizacionStrategy } from '../contabilizacion-strategy.interface';
 import { DefinicionAsientoDto, DefinicionDetalleAsientoDto } from '../../dto/definicion-asiento.dto';
 import { AsientosContablesService } from '../../asientos-contables.service';
@@ -9,6 +9,8 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class FacturaVentaStrategy implements IContabilizacionStrategy {
@@ -69,16 +71,47 @@ export class FacturaVentaStrategy implements IContabilizacionStrategy {
       }
     }
 
-    detalles.push({
-      cuentaId: cuentaDebito.id,
-      cuentaCodigo: cuentaDebito.codigo,
-      cuentaNombre: cuentaDebito.nombre,
-      debito: Number(factura.total),
-      credito: 0,
-      concepto: `Factura venta ${factura.comprobante_completo || 'Borrador'} - ${factura.metodoPagoRel?.nombre ?? factura.formaPago}`,
-      terceroId: factura.clientId,
-      terceroNombre,
+    // Cruce de anticipos
+    const aplicaciones = await manager.find(AnticipoAplicacion, {
+      where: {
+        facturaVentaId: documentoId,
+        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
+      },
+      relations: ['anticipo', 'anticipo.cuentaContable'],
     });
+
+    const montoAnticipoTotal = aplicaciones.reduce((sum, app) => sum + Number(app.montoAplicado), 0);
+    const totalFacturaNeto = MathUtil.sub(Number(factura.total), montoAnticipoTotal);
+
+    if (totalFacturaNeto > 0) {
+      detalles.push({
+        cuentaId: cuentaDebito.id,
+        cuentaCodigo: cuentaDebito.codigo,
+        cuentaNombre: cuentaDebito.nombre,
+        debito: totalFacturaNeto,
+        credito: 0,
+        concepto: `Factura venta ${factura.comprobante_completo || 'Borrador'} - ${factura.metodoPagoRel?.nombre ?? factura.formaPago}`,
+        terceroId: factura.clientId,
+        terceroNombre,
+      });
+    }
+
+    for (const app of aplicaciones) {
+      let cuentaAnticipo = app.anticipo?.cuentaContable;
+      if (!cuentaAnticipo) {
+        cuentaAnticipo = await this.asientosService.obtenerCuentaPorCodigo('280505');
+      }
+      detalles.push({
+        cuentaId: cuentaAnticipo.id,
+        cuentaCodigo: cuentaAnticipo.codigo,
+        cuentaNombre: cuentaAnticipo.nombre,
+        debito: Number(app.montoAplicado),
+        credito: 0,
+        concepto: `Cruce de anticipo ${app.anticipo?.numero || ''} en factura ${factura.comprobante_completo || 'Borrador'}`,
+        terceroId: factura.clientId,
+        terceroNombre,
+      });
+    }
 
     // 3. Crédito: Ingresos agrupados por cuenta del artículo e IVA
     const ingresosAgrupados = new Map<string, { valor: number; cuenta: CuentaContable }>();

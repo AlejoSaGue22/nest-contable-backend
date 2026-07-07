@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, DataSource, Repository, QueryRunner } from 'typeorm';
+import { Between, DataSource, Repository, QueryRunner, In } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
 import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
@@ -22,6 +22,8 @@ import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { MathUtil } from 'src/common/utils/math.util';
 import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
+import { Anticipo } from './entities/anticipo.entity';
+import { AnticipoAplicacion, AplicacionEstado } from './entities/anticipo-aplicacion.entity';
 
 @Injectable()
 export class PagosService {
@@ -59,6 +61,12 @@ export class PagosService {
 
     @InjectRepository(FacturaCompra)
     private readonly facturaCompraRepository: Repository<FacturaCompra>,
+
+    @InjectRepository(Anticipo)
+    private readonly anticipoRepository: Repository<Anticipo>,
+
+    @InjectRepository(AnticipoAplicacion)
+    private readonly anticipoAplicacionRepository: Repository<AnticipoAplicacion>,
 
     private readonly dataSource: DataSource,
     private readonly asientosContablesService: AsientosContablesService,
@@ -899,8 +907,6 @@ export class PagosService {
     const pagos = await this.pagoRepository
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.facturaCompra', 'fc')
-
-    4
       .leftJoinAndSelect('p.cuentaBancaria', 'cb')
       .leftJoinAndSelect('cb.banco', 'banco')
       .where('fc.proveedorId = :proveedorId', { proveedorId })
@@ -1534,5 +1540,45 @@ export class PagosService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async obtenerAnticiposDisponiblesCliente(clienteId: string): Promise<Anticipo[]> {
+    return this.anticipoRepository.createQueryBuilder('anticipo')
+      .where('anticipo.clienteId = :clienteId', { clienteId })
+      .andWhere('anticipo.tipo = :tipo', { tipo: 'cliente' })
+      .andWhere('anticipo.saldoDisponible > 0')
+      .andWhere('anticipo.estado IN (:...estados)', { estados: ['pendiente', 'parcial'] })
+      .orderBy('anticipo.fecha', 'ASC')
+      .getMany();
+  }
+
+  async obtenerAnticiposDisponiblesProveedor(proveedorId: string): Promise<Anticipo[]> {
+    return this.anticipoRepository.createQueryBuilder('anticipo')
+      .where('anticipo.proveedorId = :proveedorId', { proveedorId })
+      .andWhere('anticipo.tipo = :tipo', { tipo: 'proveedor' })
+      .andWhere('anticipo.saldoDisponible > 0')
+      .andWhere('anticipo.estado IN (:...estados)', { estados: ['pendiente', 'parcial'] })
+      .orderBy('anticipo.fecha', 'ASC')
+      .getMany();
+  }
+
+  async obtenerAplicacionesFacturaVenta(facturaVentaId: string): Promise<AnticipoAplicacion[]> {
+    return this.anticipoAplicacionRepository.find({
+      where: {
+        facturaVentaId,
+        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
+      },
+      relations: ['anticipo'],
+    });
+  }
+
+  async obtenerAplicacionesFacturaCompra(facturaCompraId: string): Promise<AnticipoAplicacion[]> {
+    return this.anticipoAplicacionRepository.find({
+      where: {
+        facturaCompraId,
+        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
+      },
+      relations: ['anticipo'],
+    });
   }
 }

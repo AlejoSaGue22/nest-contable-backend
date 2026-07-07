@@ -12,6 +12,8 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
 import { PagosSchedulerService } from './pagos-scheduler.service';
 import { CxcService } from 'src/common/services/cxc.service';
 import { CxpService } from 'src/common/services/cxp.service';
+import { Anticipo } from './entities/anticipo.entity';
+import { AnticipoAplicacion } from './entities/anticipo-aplicacion.entity';
 
 @Module({
   imports: [
@@ -22,11 +24,13 @@ import { CxpService } from 'src/common/services/cxp.service';
       Pago,
       PagoFacturaDetalle,
       PagoConceptoDetalle,
-      CuentasBancarias
+      CuentasBancarias,
+      Anticipo,
+      AnticipoAplicacion
     ])
   ],
   controllers: [PagosController],
   providers: [PagosService, PagosSchedulerService, CxcService, CxpService],
-  exports: [PagosService],
+  exports: [PagosService, TypeOrmModule],
 })
 export class PagosModule { }

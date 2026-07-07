@@ -434,4 +434,36 @@ export class PagosController {
     const data = await this.pagosService.obtenerFacturasPendientesProveedor(proveedorId);
     return toPagoResponse(data, 'Facturas pendientes del proveedor obtenidas');
   }
+
+  @Get('anticipos-disponibles/cliente/:clienteId')
+  async anticiposDisponiblesCliente(
+    @Param('clienteId', ParseUUIDPipe) clienteId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAnticiposDisponiblesCliente(clienteId);
+    return toPagoResponse(data, 'Anticipos disponibles del cliente obtenidos');
+  }
+
+  @Get('anticipos-disponibles/proveedor/:proveedorId')
+  async anticiposDisponiblesProveedor(
+    @Param('proveedorId', ParseUUIDPipe) proveedorId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAnticiposDisponiblesProveedor(proveedorId);
+    return toPagoResponse(data, 'Anticipos disponibles del proveedor obtenidos');
+  }
+
+  @Get('aplicaciones/factura-venta/:facturaId')
+  async aplicacionesFacturaVenta(
+    @Param('facturaId', ParseUUIDPipe) facturaId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAplicacionesFacturaVenta(facturaId);
+    return toPagoResponse(data, 'Aplicaciones de anticipo de la factura de venta obtenidas');
+  }
+
+  @Get('aplicaciones/factura-compra/:facturaId')
+  async aplicacionesFacturaCompra(
+    @Param('facturaId', ParseUUIDPipe) facturaId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAplicacionesFacturaCompra(facturaId);
+    return toPagoResponse(data, 'Aplicaciones de anticipo de la factura de compra obtenidas');
+  }
 }

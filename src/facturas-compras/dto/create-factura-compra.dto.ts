@@ -1,6 +1,8 @@
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { CreateFacturaCompraItemDto } from "./create-items-factura-compra.dto";
 import { FormaPago } from "src/facturas-ventas/enums/factura-venta.enum";
+import { Type } from "class-transformer";
+import { AplicarAnticipoDto } from "src/pagos/dto/aplicar-anticipo.dto";
 
 export class CreateFacturaCompraDto {
 
@@ -59,4 +61,10 @@ export class CreateFacturaCompraDto {
     @IsBoolean()
     @IsOptional()
     isDraft?: boolean;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AplicarAnticipoDto)
+    anticiposAsociados?: AplicarAnticipoDto[];
 }

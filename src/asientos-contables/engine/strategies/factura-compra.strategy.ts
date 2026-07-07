@@ -9,6 +9,8 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
+import { MathUtil } from 'src/common/utils/math.util';
 
 @Injectable()
 export class FacturaCompraStrategy implements IContabilizacionStrategy {
@@ -165,16 +167,47 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       }
     }
 
-    detalles.push({
-      cuentaId: cuentaCredito.id,
-      cuentaCodigo: cuentaCredito.codigo,
-      cuentaNombre: cuentaCredito.nombre,
-      debito: 0,
-      credito: Number(gasto.total),
-      concepto: descCredito,
-      terceroId: gasto.proveedorId,
-      terceroNombre,
+    // Cruce de anticipos para compras
+    const aplicaciones = await manager.find(AnticipoAplicacion, {
+      where: {
+        facturaCompraId: documentoId,
+        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
+      },
+      relations: ['anticipo', 'anticipo.cuentaContable'],
     });
+
+    const montoAnticipoTotal = aplicaciones.reduce((sum, app) => sum + Number(app.montoAplicado), 0);
+    const totalGastoNeto = MathUtil.sub(Number(gasto.total), montoAnticipoTotal);
+
+    if (totalGastoNeto > 0) {
+      detalles.push({
+        cuentaId: cuentaCredito.id,
+        cuentaCodigo: cuentaCredito.codigo,
+        cuentaNombre: cuentaCredito.nombre,
+        debito: 0,
+        credito: totalGastoNeto,
+        concepto: descCredito,
+        terceroId: gasto.proveedorId,
+        terceroNombre,
+      });
+    }
+
+    for (const app of aplicaciones) {
+      let cuentaAnticipo = app.anticipo?.cuentaContable;
+      if (!cuentaAnticipo) {
+        cuentaAnticipo = await this.asientosService.obtenerCuentaPorCodigo('133005');
+      }
+      detalles.push({
+        cuentaId: cuentaAnticipo.id,
+        cuentaCodigo: cuentaAnticipo.codigo,
+        cuentaNombre: cuentaAnticipo.nombre,
+        debito: 0,
+        credito: Number(app.montoAplicado),
+        concepto: `Cruce de anticipo ${app.anticipo?.numero || ''} en compra ${gasto.numero || 'Borrador'}`,
+        terceroId: gasto.proveedorId,
+        terceroNombre,
+      });
+    }
 
     // 3.5. Crédito: Descuentos en compras (si aplica)
     const descuento = Number(gasto.descuento) || 0;
