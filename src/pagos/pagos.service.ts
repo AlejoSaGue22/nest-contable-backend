@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, Repository, QueryRunner, In } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
-import { TipoPago, MedioPago, PaymentStatus } from './enums/pago.enum';
+import { TipoPago, MedioPago, PaymentStatus, AnticipoTipo, AnticipoEstado } from './enums/pago.enum';
 import { PagoFacturaDetalle } from './entities/pago-factura-detalle.entity';
 import { PagoConceptoDetalle } from './entities/pago-concepto-detalle.entity';
 import { RegistrarPagoMultipleDto, RegistrarOtrosConceptosDto } from './dto/registrar-pago-multiple.dto';
@@ -523,6 +523,7 @@ export class PagosService {
       .leftJoinAndSelect('p.creadoPor', 'user')
       .leftJoinAndSelect('p.cliente', 'p_cliente')
       .leftJoinAndSelect('p.proveedor', 'p_proveedor')
+      .leftJoinAndSelect('p.conceptosDetalles', 'pcd')
       .leftJoin('p.facturaVenta', 'fv')
       .leftJoin('fv.client', 'client')
       .leftJoin('p.facturaCompra', 'fc')
@@ -591,6 +592,10 @@ export class PagosService {
           const fc = factura as FacturaCompra;
           numeroFactura = fc?.numero || 'Múltiples';
         }
+      } else if (p.tipo === TipoPago.OTRO_INGRESO || p.tipo === TipoPago.OTRO_EGRESO) {
+        if (p.conceptosDetalles && p.conceptosDetalles.length > 0) {
+          numeroFactura = p.conceptosDetalles.map(c => c.concepto).join(', ');
+        }
       }
 
       return {
@@ -626,8 +631,8 @@ export class PagosService {
       };
     });
 
-    const totalCobros = items.filter(i => i.tipo === TipoPago.COBRO).reduce((s, i) => s + Number(i.monto), 0);
-    const totalPagos = items.filter(i => i.tipo === TipoPago.PAGO).reduce((s, i) => s + Number(i.monto), 0);
+    const totalCobros = items.filter(i => i.tipo === TipoPago.COBRO || i.tipo === TipoPago.OTRO_INGRESO).reduce((s, i) => s + Number(i.monto), 0);
+    const totalPagos = items.filter(i => i.tipo === TipoPago.PAGO || i.tipo === TipoPago.OTRO_EGRESO).reduce((s, i) => s + Number(i.monto), 0);
 
     return {
       items,
@@ -1496,7 +1501,7 @@ export class PagosService {
 
       const pagoGuardado = await queryRunner.manager.save(Pago, pago);
 
-      // 6. Crear detalles de conceptos
+      // 6. Crear detalles de conceptos e identificar anticipos
       const detallesGuardados: PagoConceptoDetalle[] = [];
       for (const item of dto.conceptos) {
         const base = item.cantidad * item.valorUnitario;
@@ -1515,7 +1520,35 @@ export class PagosService {
           total: itemTotal,
         });
 
-        detallesGuardados.push(await queryRunner.manager.save(PagoConceptoDetalle, detalle));
+        const savedDetalle = await queryRunner.manager.save(PagoConceptoDetalle, detalle);
+        detallesGuardados.push(savedDetalle);
+
+        // Verificar si la cuenta corresponde a un anticipo
+        const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+          where: { id: item.cuentaContableId },
+        });
+        if (cuenta) {
+          const esAnticipoCliente = (cuenta.codigo.startsWith('2805') || cuenta.codigo.startsWith('2815')) && isIngreso && dto.terceroId;
+          const esAnticipoProveedor = cuenta.codigo.startsWith('1330') && !isIngreso && dto.terceroId;
+
+          if (esAnticipoCliente || esAnticipoProveedor) {
+            const anticipo = queryRunner.manager.create(Anticipo, {
+              numero: pagoGuardado.numero,
+              tipo: esAnticipoCliente ? AnticipoTipo.CLIENTE : AnticipoTipo.PROVEEDOR,
+              clienteId: esAnticipoCliente ? dto.terceroId : null,
+              proveedorId: esAnticipoProveedor ? dto.terceroId : null,
+              fecha: new Date(dto.fecha),
+              montoOriginal: itemTotal,
+              saldoDisponible: itemTotal,
+              cuentaContableId: item.cuentaContableId,
+              pagoId: pagoGuardado.id,
+              estado: AnticipoEstado.PENDIENTE,
+              createdAt: new Date(),
+            });
+            await queryRunner.manager.save(Anticipo, anticipo);
+            this.logger.log(`Anticipo de ${esAnticipoCliente ? 'cliente' : 'proveedor'} creado de forma automática: ${pagoGuardado.numero} por $${itemTotal}`);
+          }
+        }
       }
 
       // 7. Actualizar saldo banco/caja

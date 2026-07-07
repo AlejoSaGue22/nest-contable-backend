@@ -55,7 +55,7 @@ export class PagosController {
     private readonly pagosService: PagosService,
     private readonly cxcService: CxcService,
     private readonly cxpService: CxpService,
-  ) {}
+  ) { }
 
   // ════════════════════════════════════════════════════════════
   // CxC — CUENTAS POR COBRAR

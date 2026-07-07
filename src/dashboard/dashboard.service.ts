@@ -7,6 +7,7 @@ import { ReportesService } from 'src/reportes/reportes-general/reportes.service'
 import { InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { AsientoDetalle } from 'src/asientos-contables/entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 
 // export interface DashboardSummary {
 //     estadoResultados: any;
@@ -134,14 +135,22 @@ export class DashboardService {
 
             // 5. Caja/Bancos (Al final del periodo seleccionado para reflejar estado histórico si aplica)
             const referenceDate = (period === 'current_month' || period === 'last_3_months' || period === 'current_year') ? now : endDate;
-            const accounts = await this.cuentaRepository.find({
-                where: { codigo: Like('11%'), isActive: true }
+            const bankAccounts = await this.cuentaRepository.manager.find(CuentasBancarias, {
+                where: { activa: true }
             });
 
-            const cuentasCajaBancos = await Promise.all(accounts.map(async (acc) => {
-                const saldo = await this.reportesService.calcularSaldoCuenta(acc.id, new Date('2000-01-01'), referenceDate);
+            const cuentasCajaBancos = await Promise.all(bankAccounts.map(async (bankAcc) => {
+                const acc = await this.cuentaRepository.findOne({
+                    where: { codigo: bankAcc.codigoCuentaContable, isActive: true }
+                });
+                
+                let saldo = Number(bankAcc.saldoActual);
+                if (acc) {
+                    saldo = await this.reportesService.calcularSaldoCuenta(acc.id, new Date('2000-01-01'), referenceDate);
+                }
+                
                 return {
-                    name: acc.nombre,
+                    name: bankAcc.nombre,
                     balance: saldo
                 };
             }));
@@ -149,8 +158,7 @@ export class DashboardService {
             // Ordenar: primero los que tienen saldo, luego por nombre
             cuentasCajaBancos.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
 
-            const balanceGeneral = await this.reportesService.generarBalanceGeneral(referenceDate);
-            const totalDisponible = balanceGeneral.activos.corrientes;
+            const totalDisponible = cuentasCajaBancos.reduce((sum, acc) => sum + acc.balance, 0);
 
             // 6. Recent Transactions
             const recentSales = await this.facturaVentaRepository.find({
