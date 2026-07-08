@@ -502,7 +502,7 @@ export class PagosService {
   // ═══════════════════════════════════════════════════════════════
 
   async listarMovimientos(filtros: {
-    tipo?: TipoPago;
+    tipo?: string | string[];
     fechaInicio?: string;
     fechaFin?: string;
     medioPago?: MedioPago;
@@ -534,7 +534,16 @@ export class PagosService {
       .addSelect(['proveedor.id', 'proveedor.razonSocial', 'proveedor.nombre', 'proveedor.apellido']);
 
     if (filtros.tipo) {
-      qb.andWhere('p.tipo = :tipo', { tipo: filtros.tipo });
+      let tipos: string[] = [];
+      if (Array.isArray(filtros.tipo)) {
+        tipos = filtros.tipo;
+      } else if (typeof filtros.tipo === 'string') {
+        tipos = filtros.tipo.split(',').map(t => t.trim());
+      }
+
+      if (tipos.length > 0) {
+        qb.andWhere('p.tipo IN (:...tipos)', { tipos });
+      }
     }
 
     if (filtros.fechaInicio) {

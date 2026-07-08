@@ -199,7 +199,7 @@ export const DEFAULT_MENU_ITEMS = [
         metadata: { badge: null },
       },
       {
-        title: 'Antigüedad Cartera',
+        title: 'Vencimientos Cartera',
         icon: 'bar_chart',
         route: '/panel/pagos/aging',
         requiredPermission: Permission.PAGO_READ,

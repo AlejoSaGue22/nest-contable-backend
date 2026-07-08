@@ -313,7 +313,7 @@ export class PagosController {
 
   @Get('movimientos')
   async listarMovimientos(
-    @Query('tipo') tipo?: TipoPago,
+    @Query('tipo') tipo?: string,
     @Query('fechaInicio') fechaInicio?: string,
     @Query('fechaFin') fechaFin?: string,
     @Query('medioPago') medioPago?: MedioPago,
