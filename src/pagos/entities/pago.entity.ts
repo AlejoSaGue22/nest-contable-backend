@@ -19,7 +19,7 @@ import { PagoConceptoDetalle } from './pago-concepto-detalle.entity';
 
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
-import { PaymentStatus, TipoPago, MedioPago } from '../enums/pago.enum';
+import { PaymentStatus, TipoPago, MedioPago, EstadoPago } from '../enums/pago.enum';
 
 /**
  * Tabla central de pagos/cobros.
@@ -116,8 +116,14 @@ export class Pago {
    * ID del asiento contable generado automáticamente por este pago.
    * Guardamos el ID (string) del asiento para trazabilidad.
    */
-  @Column({  nullable: true })
+  @Column({ nullable: true })
   asientoId: string;
+
+  @Column({ type: 'enum', enum: EstadoPago, default: EstadoPago.ACTIVO })
+  estado: EstadoPago;
+
+  @Column({ type: 'text', nullable: true })
+  motivoAnulacion: string | null;
 
   // ── Auditoría ────────────────────────────────────────────────────────────
   @ManyToOne(() => User)

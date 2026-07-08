@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -465,5 +466,20 @@ export class PagosController {
   ): Promise<PagoResponseDto<any>> {
     const data = await this.pagosService.obtenerAplicacionesFacturaCompra(facturaId);
     return toPagoResponse(data, 'Aplicaciones de anticipo de la factura de compra obtenidas');
+  }
+
+  @Patch(':id/anular')
+  @Permissions(Permission.PAGO_UPDATE)
+  async anularPago(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('motivo') motivo: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user.sub;
+    if (!motivo || motivo.trim() === '') {
+      throw new BadRequestException('Debe proporcionar un motivo de anulación');
+    }
+    const data = await this.pagosService.anularPago(id, motivo, userId);
+    return toPagoResponse(data, 'Pago anulado exitosamente');
   }
 }

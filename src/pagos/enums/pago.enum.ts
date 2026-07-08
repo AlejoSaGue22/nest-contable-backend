@@ -32,3 +32,9 @@ export enum AnticipoEstado {
   ANULADO = 'anulado',
 }
 
+export enum EstadoPago {
+  ACTIVO = 'activo',
+  ANULADO = 'anulado',
+}
+
+

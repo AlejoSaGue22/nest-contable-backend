@@ -2,6 +2,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -1007,6 +1008,67 @@ export class AsientosContablesService {
       throw new InternalServerErrorException(
         `Error al generar asiento de cobro: ${error.message}`,
       );
+    } finally {
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  async generarAsientoReverso(
+    asientoId: string,
+    tipoReverso: TipoAsiento,
+    userId: string,
+    qr?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const asientoOriginal = await queryRunner.manager.findOne(AsientoContable, {
+        where: { id: asientoId },
+        relations: ['detalles'],
+      });
+
+      if (!asientoOriginal) {
+        throw new NotFoundException(`Asiento original con ID ${asientoId} no encontrado`);
+      }
+
+      // Intercambiar débitos y créditos
+      const detallesReverso: DetalleAsiento[] = asientoOriginal.detalles.map(d => ({
+        cuentaId: d.cuentaId,
+        debito: Number(d.credito),
+        credito: Number(d.debito),
+        descripcion: `Reverso - ${d.descripcion || ''}`.substring(0, 255),
+      }));
+
+      const asientoReverso = await this.crearAsiento(
+        {
+          tipo: tipoReverso,
+          fecha: new Date(),
+          referencia: `REV-${asientoOriginal.numero}`,
+          descripcion: `Reverso del asiento ${asientoOriginal.numero} - Motivo: Anulación de pago`,
+          detalles: detallesReverso,
+          userId,
+        },
+        queryRunner,
+      );
+
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
+
+      return asientoReverso;
+    } catch (error) {
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Error generando asiento de reverso: ${error.message}`, error.stack);
+      throw error;
     } finally {
       if (!isCustomRunner) {
         await queryRunner.release();

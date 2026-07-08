@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, Repository, QueryRunner, In } from 'typeorm';
 
 import { Pago } from './entities/pago.entity';
-import { TipoPago, MedioPago, PaymentStatus, AnticipoTipo, AnticipoEstado } from './enums/pago.enum';
+import { TipoPago, MedioPago, PaymentStatus, AnticipoTipo, AnticipoEstado, EstadoPago } from './enums/pago.enum';
 import { PagoFacturaDetalle } from './entities/pago-factura-detalle.entity';
 import { PagoConceptoDetalle } from './entities/pago-concepto-detalle.entity';
 import { RegistrarPagoMultipleDto, RegistrarOtrosConceptosDto } from './dto/registrar-pago-multiple.dto';
@@ -21,7 +21,7 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
 import { RegistrarCobroDto, RegistrarPagoDto } from './dto/create-pago.dto';
 import { FormaPago, InvoiceStatus } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { MathUtil } from 'src/common/utils/math.util';
-import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
+import { AsientoContable, TipoAsiento } from 'src/asientos-contables/entities/asientos-contable.entity';
 import { Anticipo } from './entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from './entities/anticipo-aplicacion.entity';
 
@@ -618,6 +618,8 @@ export class PagosService {
         notas: p.notas,
         asientoId: p.asientoId,
         numeroFactura,
+        estado: p.estado,
+        motivoAnulacion: p.motivoAnulacion,
         facturaId: esIngreso ? p.facturaVentaId : p.facturaCompraId,
         contraparteId: tercero?.id || null,
         contraparteNombre: tercero
@@ -1622,5 +1624,178 @@ export class PagosService {
       },
       relations: ['anticipo'],
     });
+  }
+
+  async anularPago(pagoId: string, motivo: string, userId: string): Promise<Pago> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Buscar el pago con todas sus relaciones necesarias
+      const pago = await queryRunner.manager.findOne(Pago, {
+        where: { id: pagoId },
+        relations: [
+          'cuentaBancaria',
+          'facturasDetalles',
+          'facturasDetalles.facturaVenta',
+          'facturasDetalles.facturaCompra',
+          'facturaVenta',
+          'facturaCompra',
+        ],
+      });
+
+      if (!pago) {
+        throw new NotFoundException(`Pago con ID ${pagoId} no encontrado`);
+      }
+
+      // 2. Validar que no esté ya anulado
+      if (pago.estado === EstadoPago.ANULADO) {
+        throw new BadRequestException('El pago ya se encuentra anulado');
+      }
+
+      // 3. Validar si tiene un anticipo generado y si ese anticipo ya se aplicó
+      const anticipo = await queryRunner.manager.findOne(Anticipo, {
+        where: { pagoId: pago.id },
+      });
+
+      if (anticipo) {
+        // Verificar si el anticipo tiene aplicaciones activas
+        const aplicaciones = await queryRunner.manager.count(AnticipoAplicacion, {
+          where: {
+            anticipoId: anticipo.id,
+            estado: AplicacionEstado.ACTIVO,
+          },
+        });
+
+        if (aplicaciones > 0) {
+          throw new BadRequestException(
+            `El anticipo generado por este pago ya ha sido cruzado en facturas. Debe anular primero las aplicaciones de anticipo correspondientes.`,
+          );
+        }
+      }
+
+      // 4. Cambiar el estado del pago a ANULADO
+      pago.estado = EstadoPago.ANULADO;
+      pago.motivoAnulacion = motivo;
+      await queryRunner.manager.save(Pago, pago);
+
+      // 5. Reversar el saldo de la caja o banco si aplica
+      if (pago.cuentaBancariaId) {
+        const cta = await queryRunner.manager.findOne(CuentasBancarias, {
+          where: { id: pago.cuentaBancariaId },
+        });
+
+        if (cta) {
+          const montoNum = Number(pago.monto);
+          if (pago.tipo === TipoPago.COBRO || pago.tipo === TipoPago.OTRO_INGRESO) {
+            // Ingreso: restamos el dinero recibido
+            cta.saldoActual = MathUtil.sub(cta.saldoActual, montoNum);
+          } else if (pago.tipo === TipoPago.PAGO || pago.tipo === TipoPago.OTRO_EGRESO) {
+            // Egreso: sumamos el dinero devuelto
+            cta.saldoActual = MathUtil.sum(cta.saldoActual, montoNum);
+          }
+          await queryRunner.manager.save(CuentasBancarias, cta);
+        }
+      }
+
+      // 6. Liberar facturas asociadas y reversar sus saldos
+      if (pago.tipo === TipoPago.COBRO) {
+        // Cobros (Facturas de venta)
+        if (pago.facturasDetalles && pago.facturasDetalles.length > 0) {
+          for (const det of pago.facturasDetalles) {
+            if (det.facturaVentaId) {
+              const fv = await queryRunner.manager.findOne(FacturasVenta, {
+                where: { id: det.facturaVentaId },
+              });
+              if (fv) {
+                const montoAbono = Number(det.monto);
+                fv.totalPagado = MathUtil.sub(fv.totalPagado, montoAbono);
+                fv.saldoPendiente = MathUtil.sum(fv.saldoPendiente, montoAbono);
+                fv.paymentStatus = fv.totalPagado === 0 ? PaymentStatus.PENDING : PaymentStatus.PARTIAL;
+                await queryRunner.manager.save(FacturasVenta, fv);
+              }
+            }
+          }
+        } else if (pago.facturaVentaId) {
+          const fv = await queryRunner.manager.findOne(FacturasVenta, {
+            where: { id: pago.facturaVentaId },
+          });
+          if (fv) {
+            const montoAbono = Number(pago.monto);
+            fv.totalPagado = MathUtil.sub(fv.totalPagado, montoAbono);
+            fv.saldoPendiente = MathUtil.sum(fv.saldoPendiente, montoAbono);
+            fv.paymentStatus = fv.totalPagado === 0 ? PaymentStatus.PENDING : PaymentStatus.PARTIAL;
+            await queryRunner.manager.save(FacturasVenta, fv);
+          }
+        }
+      } else if (pago.tipo === TipoPago.PAGO) {
+        // Pagos (Facturas de compra)
+        if (pago.facturasDetalles && pago.facturasDetalles.length > 0) {
+          for (const det of pago.facturasDetalles) {
+            if (det.facturaCompraId) {
+              const fc = await queryRunner.manager.findOne(FacturaCompra, {
+                where: { id: det.facturaCompraId },
+              });
+              if (fc) {
+                const montoAbono = Number(det.monto);
+                fc.totalPagado = MathUtil.sub(fc.totalPagado, montoAbono);
+                fc.saldoPendiente = MathUtil.sum(fc.saldoPendiente, montoAbono);
+                fc.paymentStatus = fc.totalPagado === 0 ? PaymentStatus.PENDING : PaymentStatus.PARTIAL;
+                await queryRunner.manager.save(FacturaCompra, fc);
+              }
+            }
+          }
+        } else if (pago.facturaCompraId) {
+          const fc = await queryRunner.manager.findOne(FacturaCompra, {
+            where: { id: pago.facturaCompraId },
+          });
+          if (fc) {
+            const montoAbono = Number(pago.monto);
+            fc.totalPagado = MathUtil.sub(fc.totalPagado, montoAbono);
+            fc.saldoPendiente = MathUtil.sum(fc.saldoPendiente, montoAbono);
+            fc.paymentStatus = fc.totalPagado === 0 ? PaymentStatus.PENDING : PaymentStatus.PARTIAL;
+            await queryRunner.manager.save(FacturaCompra, fc);
+          }
+        }
+      }
+
+      // 7. Si existía un anticipo, anularlo
+      if (anticipo) {
+        anticipo.estado = AnticipoEstado.ANULADO;
+        anticipo.saldoDisponible = 0;
+        await queryRunner.manager.save(Anticipo, anticipo);
+      }
+
+      // 8. Generar asiento contable de reverso (si el pago original tenía asiento contable)
+      if (pago.asientoId) {
+        let tipoReverso = TipoAsiento.ANULACION_COBRO;
+        if (pago.tipo === TipoPago.PAGO) {
+          tipoReverso = TipoAsiento.ANULACION_PAGO_PROVEEDOR;
+        } else if (pago.tipo === TipoPago.OTRO_INGRESO) {
+          tipoReverso = TipoAsiento.ANULACION_OTROS_INGRESOS;
+        } else if (pago.tipo === TipoPago.OTRO_EGRESO) {
+          tipoReverso = TipoAsiento.ANULACION_OTROS_EGRESOS;
+        }
+
+        const asientoReverso = await this.asientosContablesService.generarAsientoReverso(
+          pago.asientoId,
+          tipoReverso,
+          userId,
+          queryRunner,
+        );
+
+        this.logger.log(`Asiento contable de reverso generado exitosamente: ${asientoReverso.numero}`);
+      }
+
+      await queryRunner.commitTransaction();
+      return pago;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error al anular el pago: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
