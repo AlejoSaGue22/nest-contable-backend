@@ -7,6 +7,7 @@ import { AsientoContable } from '../entities/asientos-contable.entity';
 import { NotaAjusteStrategy } from './strategies/nota-ajuste.strategy';
 import { FacturaVentaStrategy } from './strategies/factura-venta.strategy';
 import { FacturaCompraStrategy } from './strategies/factura-compra.strategy';
+import { ComprobanteContableStrategy } from './strategies/comprobante-contable.strategy';
 
 
 @Injectable()
@@ -20,12 +21,14 @@ export class ContabilizacionEngine implements OnModuleInit {
     private readonly notaAjusteStrategy: NotaAjusteStrategy,
     private readonly facturaVentaStrategy: FacturaVentaStrategy,
     private readonly facturaCompraStrategy: FacturaCompraStrategy,
+    private readonly comprobanteContableStrategy: ComprobanteContableStrategy,
   ) { }
 
   onModuleInit() {
     this.strategiesMap.set(this.notaAjusteStrategy.tipoDocumento, this.notaAjusteStrategy);
     this.strategiesMap.set(this.facturaVentaStrategy.tipoDocumento, this.facturaVentaStrategy);
     this.strategiesMap.set(this.facturaCompraStrategy.tipoDocumento, this.facturaCompraStrategy);
+    this.strategiesMap.set(this.comprobanteContableStrategy.tipoDocumento, this.comprobanteContableStrategy);
     this.logger.log('Motor de Contabilización inicializado con estrategias registradas.');
   }
 

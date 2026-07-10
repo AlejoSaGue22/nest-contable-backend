@@ -38,6 +38,7 @@ import { NominaModule } from './nomina/nomina.module';
 import { ParametrizacionContableModule } from './settings/parametrizacion-contable/parametrizacion-contable.module';
 import { CargosModule } from './settings/cargos/cargos.module';
 import { CentrosCostosModule } from './settings/centros-costos/centros-costos.module';
+import { ComprobantesModule } from './comprobantes/comprobantes.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { CentrosCostosModule } from './settings/centros-costos/centros-costos.mo
     ParametrizacionContableModule,
     CargosModule,
     CentrosCostosModule,
+    ComprobantesModule,
   ],
   controllers: [],
 })

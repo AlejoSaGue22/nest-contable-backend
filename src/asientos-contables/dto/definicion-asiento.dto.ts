@@ -7,6 +7,8 @@ export interface DefinicionDetalleAsientoDto {
   concepto: string;
   
   // Información analítica para el libro auxiliar/mayor
+  clienteId?: string;
+  proveedorId?: string;
   terceroId?: string;
   terceroNombre?: string;
   centroCostoId?: string;
@@ -14,8 +16,10 @@ export interface DefinicionDetalleAsientoDto {
   
   // Desglose fiscal
   baseGravable?: number;
+  impuestoId?: string;
   porcentajeImpuesto?: number;
   tipoImpuesto?: 'IVA' | 'RETENCION' | 'ICA' | 'OTRO';
+  documentoReferencia?: string;
 }
 
 export interface DefinicionAsientoDto {

@@ -53,6 +53,12 @@ export class CuentaContable {
     @Column({ default: false })
     isSystemAccount: boolean;
 
+    @Column({ default: false })
+    requiereTercero: boolean;
+
+    @Column({ default: false })
+    requiereCentroCostos: boolean;
+
     @CreateDateColumn()
     createdAt: Date;
 

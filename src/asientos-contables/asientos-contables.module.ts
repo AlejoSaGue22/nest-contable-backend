@@ -11,6 +11,7 @@ import { ContabilizacionEngine } from './engine/contabilizacion.engine';
 import { NotaAjusteStrategy } from './engine/strategies/nota-ajuste.strategy';
 import { FacturaVentaStrategy } from './engine/strategies/factura-venta.strategy';
 import { FacturaCompraStrategy } from './engine/strategies/factura-compra.strategy';
+import { ComprobanteContableStrategy } from './engine/strategies/comprobante-contable.strategy';
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { FacturaCompraStrategy } from './engine/strategies/factura-compra.strate
     NotaAjusteStrategy,
     FacturaVentaStrategy,
     FacturaCompraStrategy,
+    ComprobanteContableStrategy,
   ],
-  exports: [AsientosContablesService, ContabilizacionEngine],
+  exports: [AsientosContablesService, ContabilizacionEngine, ComprobanteContableStrategy],
 })
 export class AsientosContablesModule { }

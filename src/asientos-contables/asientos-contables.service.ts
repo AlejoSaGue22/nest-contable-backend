@@ -33,6 +33,14 @@ interface DetalleAsiento {
   debito: number;
   credito: number;
   descripcion: string;
+  clienteId?: string;
+  proveedorId?: string;
+  centroCostoId?: string;
+  baseGravable?: number;
+  impuestoId?: string;
+  porcentajeImpuesto?: number;
+  tipoImpuesto?: string;
+  documentoReferencia?: string;
 }
 
 @Injectable()
@@ -1597,7 +1605,6 @@ export class AsientosContablesService {
     // 3. Fallback final al código por defecto ('1105' o '1110')
     return this.obtenerCuentaPorCodigo(fallbackCodigo);
   }
-
   async crearAsientoDesdeDefinicion(definicion: DefinicionAsientoDto, userId: string, queryRunner: QueryRunner): Promise<AsientoContable> {
     const totalDebito = definicion.detalles.reduce((s, d) => s + d.debito, 0);
     const totalCredito = definicion.detalles.reduce((s, d) => s + d.credito, 0);
@@ -1622,12 +1629,50 @@ export class AsientosContablesService {
     const asientoGuardado = await queryRunner.manager.save(AsientoContable, asiento);
 
     for (const detalle of definicion.detalles) {
+      let clienteId = detalle.clienteId;
+      let proveedorId = detalle.proveedorId;
+
+      if (!clienteId && !proveedorId && detalle.terceroId) {
+        const esVenta = [
+          TipoAsiento.FACTURA_VENTA,
+          TipoAsiento.ANULACION_FACTURA_VENTA,
+          TipoAsiento.COBRO,
+          TipoAsiento.ANULACION_COBRO,
+          TipoAsiento.NOTA_CREDITO_VENTA,
+          TipoAsiento.NOTA_DEBITO_VENTA,
+        ].includes(definicion.tipo as TipoAsiento);
+
+        const esCompra = [
+          TipoAsiento.GASTO,
+          TipoAsiento.ANULACION_FACTURA_COMPRA,
+          TipoAsiento.PAGO_PROVEEDOR,
+          TipoAsiento.ANULACION_PAGO_PROVEEDOR,
+          TipoAsiento.NOTA_CREDITO_COMPRA,
+          TipoAsiento.NOTA_DEBITO_COMPRA,
+          TipoAsiento.ANULACION_NOTA_COMPRA,
+        ].includes(definicion.tipo as TipoAsiento);
+
+        if (esVenta) {
+          clienteId = detalle.terceroId;
+        } else if (esCompra) {
+          proveedorId = detalle.terceroId;
+        }
+      }
+
       const detalleAsiento = queryRunner.manager.create(AsientoDetalle, {
         asientoId: asientoGuardado.id,
         cuentaId: detalle.cuentaId,
         debito: detalle.debito,
         credito: detalle.credito,
         descripcion: detalle.concepto,
+        clienteId,
+        proveedorId,
+        centroCostoId: detalle.centroCostoId,
+        baseGravable: detalle.baseGravable,
+        impuestoId: detalle.impuestoId,
+        porcentajeImpuesto: detalle.porcentajeImpuesto,
+        tipoImpuesto: detalle.tipoImpuesto,
+        documentoReferencia: detalle.documentoReferencia,
       });
       await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
     }
@@ -1680,6 +1725,14 @@ export class AsientosContablesService {
         debito: detalle.debito,
         credito: detalle.credito,
         descripcion: detalle.descripcion,
+        clienteId: detalle.clienteId,
+        proveedorId: detalle.proveedorId,
+        centroCostoId: detalle.centroCostoId,
+        baseGravable: detalle.baseGravable,
+        impuestoId: detalle.impuestoId,
+        porcentajeImpuesto: detalle.porcentajeImpuesto,
+        tipoImpuesto: detalle.tipoImpuesto,
+        documentoReferencia: detalle.documentoReferencia,
       });
       await queryRunner.manager.save(AsientoDetalle, detalleAsiento);
     }

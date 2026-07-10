@@ -294,6 +294,16 @@ export const DEFAULT_MENU_ITEMS = [
         isVisible: true,
         metadata: { badge: null },
       },
+      {
+        title: 'Comprobantes Contables',
+        icon: '<i class="fa-solid fa-file-invoice-dollar"></i>',
+        route: '/panel/contabilidad/comprobantes',
+        requiredPermission: Permission.ACCOUNTING_VIEW,
+        order: 2,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
     ],
   },
   {
