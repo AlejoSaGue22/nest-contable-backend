@@ -34,13 +34,13 @@ export class CatalogsService {
         private categoriasArticulosRepo: Repository<CategoriaArticulo>,
         @InjectRepository(CuentaContable)
         private cuentaContableRepo: Repository<CuentaContable>,
-    @InjectRepository(ConceptoCorreccion)
-    private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
-    @InjectRepository(EntidadSeguridadSocial)
-    private entidadSSRepo: Repository<EntidadSeguridadSocial>,
-    @InjectRepository(TipoContratoEntity)
-    private tipoContratoRepo: Repository<TipoContratoEntity>,
-) { }
+        @InjectRepository(ConceptoCorreccion)
+        private conceptoCorreccionRepo: Repository<ConceptoCorreccion>,
+        @InjectRepository(EntidadSeguridadSocial)
+        private entidadSSRepo: Repository<EntidadSeguridadSocial>,
+        @InjectRepository(TipoContratoEntity)
+        private tipoContratoRepo: Repository<TipoContratoEntity>,
+    ) { }
 
     async findAllDocumentTypes() {
         return this.tipoDocumentoRepo.find({ where: { state: true } });
@@ -101,10 +101,10 @@ export class CatalogsService {
         // Verificar duplicado solo entre categorías activas
         const existing = await this.categoriasArticulosRepo.findOne({ where: { nombre, state: true } });
         if (existing) throw new BadRequestException(`Categoría ${nombre} ya existe`);
- 
+
         const cPrincipal = await this.cuentaContableRepo.findOne({ where: { id: cuentaPrincipalId } });
         if (!cPrincipal) throw new BadRequestException(`Cuenta principal ${cuentaPrincipalId} no encontrada`);
-        
+
         // (opcional)
         let cCosto: CuentaContable | null = null;
         if (cuentaCostoId) {
@@ -118,6 +118,8 @@ export class CatalogsService {
             cInventario = await this.cuentaContableRepo.findOne({ where: { id: cuentaInventarioId } });
             if (!cInventario) throw new BadRequestException(`Cuenta de inventario ${cuentaInventarioId} no encontrada`);
         }
+
+
 
         const codigo = this.generarCodigo(nombre);
 
@@ -169,7 +171,7 @@ export class CatalogsService {
                 const cInventario = await this.cuentaContableRepo.findOne({ where: { id: cuentaInventarioId } });
                 if (!cInventario) throw new BadRequestException(`Cuenta de inventario ${cuentaInventarioId} no encontrada`);
                 category.cuentaInventario = cInventario;
-            } 
+            }
         }
 
         // Asignar el resto de campos opcionales (tipo, manejaInventario, descripcion)
@@ -225,7 +227,7 @@ export class CatalogsService {
         const data = [
             { codigo: '10', nombre: 'Efectivo', state: true },
             { codigo: '42', nombre: 'Consignación', state: true },
-            { codigo: '20', nombre: 'Cheque', state: true }, 
+            { codigo: '20', nombre: 'Cheque', state: true },
             { codigo: '47', nombre: 'Transferencia', state: true },
             { codigo: '71', nombre: 'Bonos', state: true },
             { codigo: '72', nombre: 'Vales', state: true },
@@ -238,7 +240,7 @@ export class CatalogsService {
         for (const item of data) {
             const exists = await this.metodoPagoRepo.findOne({ where: { codigo: item.codigo } });
             if (!exists) {
-                await this.metodoPagoRepo.save(item); 
+                await this.metodoPagoRepo.save(item);
             }
         }
         this.logger.log('✔ Métodos de pago sincronizados');

@@ -1708,6 +1708,7 @@ export class AsientosContablesService {
         descripcion: detalle.concepto,
         clienteId,
         proveedorId,
+        entidadSSId: detalle.entidadSSId,
         centroCostoId: detalle.centroCostoId,
         baseGravable: detalle.baseGravable,
         impuestoId: detalle.impuestoId,

@@ -5,13 +5,13 @@ import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export enum ArticuloTipo {
-    VENTA = 'venta',
-    GASTO = 'gasto',
-    COSTO = 'costo',
-    SERVICIO = 'servicio'
+    VENTA = 'VENTA',
+    GASTO = 'GASTO',
+    COSTO = 'COSTO',
+    SERVICIO = 'SERVICIO'
 }
 
-@Entity({ name: 'articulos' })  
+@Entity({ name: 'articulos' })
 export class Articulo {
 
     @PrimaryGeneratedColumn('uuid')
@@ -37,7 +37,7 @@ export class Articulo {
     categoriaArticulo: CategoriaArticulo;
 
     @Column()
-    categoriaArticuloId: string;          
+    categoriaArticuloId: string;
 
     @ManyToOne(() => UnidadMedida)
     @JoinColumn({ name: 'unidadmedida', referencedColumnName: 'id' })
@@ -47,9 +47,9 @@ export class Articulo {
     unidadmedida: string;
 
     @ManyToOne(() => Impuesto, { eager: true })
-    @JoinColumn({ name: 'impuestoId'})
+    @JoinColumn({ name: 'impuestoId' })
     impuestoRel: Impuesto;
-    
+
     @Column()
     impuestoId: string;
 

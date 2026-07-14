@@ -4,6 +4,7 @@ import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 import { Cliente } from "src/clientes/entities/cliente.entity";
 import { Proveedor } from "src/proveedores/entities/proveedor.entity";
 import { CentroCosto } from "src/nomina/entities/centro-costo.entity";
+import { EntidadSeguridadSocial } from "src/nomina/entities/entidad-seguridad-social.entity";
 import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
@@ -47,6 +48,13 @@ export class AsientoDetalle {
 
     @Column({ nullable: true })
     proveedorId: string;
+
+    @ManyToOne(() => EntidadSeguridadSocial, { nullable: true })
+    @JoinColumn({ name: 'entidadSSId' })
+    entidadSS: EntidadSeguridadSocial;
+
+    @Column({ nullable: true })
+    entidadSSId: string;
 
     @ManyToOne(() => CentroCosto, { nullable: true })
     @JoinColumn({ name: 'centroCostoId' })

@@ -38,6 +38,10 @@ export class CreateComprobanteDetalleDto {
 
   @IsUUID()
   @IsOptional()
+  entidadSSId?: string;
+
+  @IsUUID()
+  @IsOptional()
   centroCostoId?: string;
 
   @IsString()

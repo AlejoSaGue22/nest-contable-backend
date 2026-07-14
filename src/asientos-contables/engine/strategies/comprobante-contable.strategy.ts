@@ -25,6 +25,7 @@ export class ComprobanteContableStrategy implements IContabilizacionStrategy {
         'detalles.cuentaContable',
         'detalles.cliente',
         'detalles.proveedor',
+        'detalles.entidadSS',
         'detalles.centroCosto',
       ],
     });
@@ -41,6 +42,8 @@ export class ComprobanteContableStrategy implements IContabilizacionStrategy {
         terceroNombre = d.cliente.razonSocial || `${d.cliente.nombre || ''} ${d.cliente.apellido || ''}`.trim();
       } else if (d.proveedor) {
         terceroNombre = d.proveedor.razonSocial || `${d.proveedor.nombre || ''} ${d.proveedor.apellido || ''}`.trim();
+      } else if (d.entidadSS) {
+        terceroNombre = d.entidadSS.nombre;
       }
 
       detalles.push({
@@ -53,7 +56,8 @@ export class ComprobanteContableStrategy implements IContabilizacionStrategy {
         
         clienteId: d.clienteId || undefined,
         proveedorId: d.proveedorId || undefined,
-        terceroId: d.clienteId || d.proveedorId || undefined,
+        entidadSSId: d.entidadSSId || undefined,
+        terceroId: d.clienteId || d.proveedorId || d.entidadSSId || undefined,
         terceroNombre: terceroNombre || undefined,
         
         centroCostoId: d.centroCostoId || undefined,

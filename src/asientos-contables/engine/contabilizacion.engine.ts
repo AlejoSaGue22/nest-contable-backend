@@ -67,6 +67,7 @@ export class ContabilizacionEngine implements OnModuleInit {
           .leftJoinAndSelect('detalle.cuenta', 'cuenta')
           .leftJoinAndSelect('detalle.cliente', 'cliente')
           .leftJoinAndSelect('detalle.proveedor', 'proveedor')
+          .leftJoinAndSelect('detalle.entidadSS', 'entidadSS')
           .leftJoinAndSelect('detalle.centroCosto', 'centroCosto');
 
         const originalAsiento = await this.dataSource.manager.findOne(AsientoContable, {
@@ -95,6 +96,8 @@ export class ContabilizacionEngine implements OnModuleInit {
               terceroNombre = d.cliente.razonSocial || `${d.cliente.nombre || ''} ${d.cliente.apellido || ''}`.trim();
             } else if (d.proveedor) {
               terceroNombre = d.proveedor.razonSocial || `${d.proveedor.nombre || ''} ${d.proveedor.apellido || ''}`.trim();
+            } else if (d.entidadSS) {
+              terceroNombre = d.entidadSS.nombre;
             }
             return {
               cuentaId: d.cuentaId,
@@ -105,7 +108,8 @@ export class ContabilizacionEngine implements OnModuleInit {
               concepto: d.descripcion,
               clienteId: d.clienteId || undefined,
               proveedorId: d.proveedorId || undefined,
-              terceroId: d.clienteId || d.proveedorId || undefined,
+              entidadSSId: d.entidadSSId || undefined,
+              terceroId: d.clienteId || d.proveedorId || d.entidadSSId || undefined,
               terceroNombre: terceroNombre || undefined,
               centroCostoId: d.centroCostoId || undefined,
               centroCostoNombre: d.centroCosto?.nombre || undefined,

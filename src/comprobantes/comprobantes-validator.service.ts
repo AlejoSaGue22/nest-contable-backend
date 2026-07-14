@@ -67,9 +67,9 @@ export class ComprobantesValidatorService {
       }
 
       // c. Validación de Tercero Obligatorio
-      if (cuenta.requiereTercero && !d.clienteId && !d.proveedorId) {
+      if (cuenta.requiereTercero && !d.clienteId && !d.proveedorId && !d.entidadSSId) {
         throw new BadRequestException(
-          `Línea ${linea}: La cuenta ${cuenta.codigo} exige registrar un tercero (Cliente o Proveedor).`,
+          `Línea ${linea}: La cuenta ${cuenta.codigo} exige registrar un tercero (Cliente, Proveedor o Entidad de Seguridad Social).`,
         );
       }
 

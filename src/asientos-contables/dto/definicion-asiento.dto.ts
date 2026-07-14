@@ -9,6 +9,7 @@ export interface DefinicionDetalleAsientoDto {
   // Información analítica para el libro auxiliar/mayor
   clienteId?: string;
   proveedorId?: string;
+  entidadSSId?: string;
   terceroId?: string;
   terceroNombre?: string;
   centroCostoId?: string;

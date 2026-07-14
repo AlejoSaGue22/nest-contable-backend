@@ -13,7 +13,7 @@ export class ImpuestosService {
   constructor(
     @InjectRepository(Impuesto)
     private readonly impuestoRepository: Repository<Impuesto>,
-  ) {}
+  ) { }
 
   async create(createImpuestoDto: CreateImpuestoDto) {
     try {
@@ -68,10 +68,11 @@ export class ImpuestosService {
 
   async update(id: string, updateImpuestoDto: UpdateImpuestoDto) {
     try {
-      const impuesto = await this.findOne(id);
-      this.impuestoRepository.merge(impuesto, updateImpuestoDto);
-      const saved = await this.impuestoRepository.save(impuesto);
-      return { success: true, data: saved, message: 'Impuesto actualizado correctamente' };
+      await this.findOne(id); // Check existence
+      await this.impuestoRepository.update(id, updateImpuestoDto);
+      const updated = await this.findOne(id);
+
+      return { success: true, data: updated, message: 'Impuesto actualizado correctamente' };
     } catch (error) {
       this.logger.error(`Error actualizando impuesto: ${error.message}`, error.stack);
       throw error;
@@ -97,10 +98,10 @@ export class ImpuestosService {
     }
 
     console.log('📊 Creando impuestos predeterminados...');
-    
+
     // Obtener las cuentas contables necesarias para el mapeo
     const entityManager = this.impuestoRepository.manager;
-    
+
     // Buscamos las cuentas por su código
     const cuentaIva = await entityManager.findOne(CuentaContable, { where: { codigo: '2408' } });
     const cuentaAnticipo = await entityManager.findOne(CuentaContable, { where: { codigo: '1355' } });

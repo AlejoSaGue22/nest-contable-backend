@@ -143,6 +143,7 @@ export class ComprobantesService {
           credito: det.credito,
           clienteId: det.clienteId || undefined,
           proveedorId: det.proveedorId || undefined,
+          entidadSSId: det.entidadSSId || undefined,
           centroCostoId: det.centroCostoId || undefined,
           documentoReferencia: det.documentoReferencia || undefined,
         });
@@ -210,6 +211,7 @@ export class ComprobantesService {
             credito: det.credito,
             clienteId: det.clienteId || undefined,
             proveedorId: det.proveedorId || undefined,
+            entidadSSId: det.entidadSSId || undefined,
             centroCostoId: det.centroCostoId || undefined,
             documentoReferencia: det.documentoReferencia || undefined,
           });
@@ -244,6 +246,7 @@ export class ComprobantesService {
         'detalles.cuentaContable',
         'detalles.cliente',
         'detalles.proveedor',
+        'detalles.entidadSS',
         'detalles.centroCosto',
         'creadoPor',
         'modificadoPor',
