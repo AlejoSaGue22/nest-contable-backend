@@ -71,43 +71,16 @@ export class FacturaVentaStrategy implements IContabilizacionStrategy {
       }
     }
 
-    // Cruce de anticipos
-    const aplicaciones = await manager.find(AnticipoAplicacion, {
-      where: {
-        facturaVentaId: documentoId,
-        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
-      },
-      relations: ['anticipo', 'anticipo.cuentaContable'],
-    });
-
-    const montoAnticipoTotal = aplicaciones.reduce((sum, app) => sum + Number(app.montoAplicado), 0);
-    const totalFacturaNeto = MathUtil.sub(Number(factura.total), montoAnticipoTotal);
-
-    if (totalFacturaNeto > 0) {
+    // Débito a Clientes por el 100% del total de la factura
+    const totalFactura = Number(factura.total);
+    if (totalFactura > 0) {
       detalles.push({
         cuentaId: cuentaDebito.id,
         cuentaCodigo: cuentaDebito.codigo,
         cuentaNombre: cuentaDebito.nombre,
-        debito: totalFacturaNeto,
+        debito: totalFactura,
         credito: 0,
         concepto: `Factura venta ${factura.comprobante_completo || 'Borrador'} - ${factura.metodoPagoRel?.nombre ?? factura.formaPago}`,
-        terceroId: factura.clientId,
-        terceroNombre,
-      });
-    }
-
-    for (const app of aplicaciones) {
-      let cuentaAnticipo = app.anticipo?.cuentaContable;
-      if (!cuentaAnticipo) {
-        cuentaAnticipo = await this.asientosService.obtenerCuentaPorCodigo('280505');
-      }
-      detalles.push({
-        cuentaId: cuentaAnticipo.id,
-        cuentaCodigo: cuentaAnticipo.codigo,
-        cuentaNombre: cuentaAnticipo.nombre,
-        debito: Number(app.montoAplicado),
-        credito: 0,
-        concepto: `Cruce de anticipo ${app.anticipo?.numero || ''} en factura ${factura.comprobante_completo || 'Borrador'}`,
         terceroId: factura.clientId,
         terceroNombre,
       });

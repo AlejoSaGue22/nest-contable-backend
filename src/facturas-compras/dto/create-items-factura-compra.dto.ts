@@ -7,8 +7,12 @@ export class CreateFacturaCompraItemDto {
     descripcion?: string;
 
     @IsUUID()
-    @IsNotEmpty()
-    articuloId: string;
+    @IsOptional()
+    articuloId?: string;
+
+    @IsUUID()
+    @IsOptional()
+    cuentaContableId?: string;
 
     @IsNumber()
     @IsNotEmpty()

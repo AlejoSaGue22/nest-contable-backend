@@ -5,12 +5,12 @@ import { Repository } from 'typeorm';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { CreateArticuloDto } from './dto/create-articulos.dto';
 import { UpdateArticuloDto } from './dto/update-articulos.dto';
-import { CATEGORIAS_ARTICULOS } from 'src/common/constants/categorias-articulos.config';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { UnidadMedida } from 'src/core/catalogs/entities/unidad-medida.entity';
 import { CategoriaArticulo } from 'src/core/catalogs/entities/categorias-articulos-entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
+import { tipoCategoria } from 'src/common/constants/categorias-articulos.config';
 
 @Injectable()
 export class ArticulosService {
@@ -174,7 +174,7 @@ export class ArticulosService {
   async update(id: string, updateArticuloDto: UpdateArticuloDto) {
     const articulo = await this.findOne(id);
 
-    if (updateArticuloDto.categoria && updateArticuloDto.categoria !== articulo.categoriaArticuloId) {
+    if (updateArticuloDto.categoria && String(updateArticuloDto.categoria) !== String(articulo.categoriaArticuloId)) {
       const categoria = await this.categoriasRepository.findOne({
         where: { id: updateArticuloDto.categoria }
       });
@@ -185,6 +185,30 @@ export class ArticulosService {
 
       articulo.tipo = categoria.tipo;
       articulo.fullNameCategoria = categoria.nombre;
+      articulo.categoriaArticuloId = String(categoria.id);
+      articulo.categoriaArticulo = categoria;
+    }
+
+    if (updateArticuloDto.impuesto) {
+      const impuesto = await this.impuestosRepository.findOne({
+        where: { id: updateArticuloDto.impuesto }
+      });
+      if (!impuesto) {
+        throw new BadRequestException('Impuesto inválido');
+      }
+      articulo.impuestoId = updateArticuloDto.impuesto;
+      articulo.impuestoRel = impuesto;
+    }
+
+    if (updateArticuloDto.unidadmedida) {
+      const unidad = await this.unidadesRepository.findOne({
+        where: { id: updateArticuloDto.unidadmedida }
+      });
+      if (!unidad) {
+        throw new BadRequestException('Unidad de medida inválida');
+      }
+      articulo.unidadmedida = updateArticuloDto.unidadmedida;
+      articulo.unidadmedidaRel = unidad;
     }
 
     if (updateArticuloDto.isInventariable !== undefined) {
@@ -201,17 +225,15 @@ export class ArticulosService {
     return await this.articulosRepository.softDelete({ id });
   }
 
-  async generateCodigo(tipo: 'venta' | 'costo' | 'gasto' | 'servicio'): Promise<string> {
+  async generateCodigo(tipo: tipoCategoria): Promise<string> {
     const lastArticulo = await this.articulosRepository.find({
       order: { createdAt: 'DESC' },
       take: 1,
     });
 
-    console.log(lastArticulo);
-
     const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
     const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
-    const tipoArticulo = tipo === 'venta' ? 'V' : tipo === 'costo' ? 'C' : tipo === 'gasto' ? 'G' : 'S';
+    const tipoArticulo = tipo === 'VENTA' ? 'V' : tipo === 'COSTO' ? 'C' : tipo === 'GASTO' ? 'G' : 'S';
 
     return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
   }

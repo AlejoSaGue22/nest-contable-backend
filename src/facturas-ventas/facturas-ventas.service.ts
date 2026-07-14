@@ -22,6 +22,7 @@ import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { TipoAsiento } from 'src/asientos-contables/entities/asientos-contable.entity';
 import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { MathUtil } from 'src/common/utils/math.util';
@@ -30,6 +31,7 @@ import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { PagosService } from 'src/pagos/pagos.service';
 import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
+import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
 @Injectable()
 export class FacturasVentasService {
@@ -58,6 +60,7 @@ export class FacturasVentasService {
 
     private factusService: FactusService,
     private pagosService: PagosService,
+    private readonly parametrizacionService: ParametrizacionContableService,
   ) { }
 
   async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
@@ -214,9 +217,7 @@ export class FacturasVentasService {
             await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
           }
         }
-      }
-
-      // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD
+       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD (Factura + Cruces de Anticipo)
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
           savedInvoice.items = itemsToSave;
@@ -231,6 +232,48 @@ export class FacturasVentasService {
           }
           await this.contabilizacionEngine.contabilizarDocumento('FACTURA_VENTA', savedInvoice.id, userId, queryRunner);
           this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
+
+          // Generar asientos de cruce para cada anticipo asociado (estándar al crear directamente)
+          const aplicacionesActivas = await queryRunner.manager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: savedInvoice.id, estado: AplicacionEstado.ACTIVO },
+            relations: ['anticipo'],
+          });
+
+          const clientConCuenta = await queryRunner.manager.findOne(Cliente, {
+            where: { id: savedInvoice.clientId },
+            relations: ['cuentaContable'],
+          });
+
+          const config = await this.parametrizacionService.getConfiguracion();
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
+            (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+          for (const app of aplicacionesActivas) {
+            const anticipo = app.anticipo;
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || 
+              clientConCuenta?.cuentaContableId || 
+              cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId || 
+              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: savedInvoice.fecha || new Date(),
+                referencia: savedInvoice.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${savedInvoice.comprobante_completo}`,
+                terceroId: savedInvoice.clientId,
+                userId,
+              },
+              queryRunner,
+            );
+            app.asientoId = asientoCruce.id;
+            await queryRunner.manager.save(AnticipoAplicacion, app);
+            this.logger.log(`Asiento de cruce de anticipo (${anticipo.numero}) generado para factura estándar ${savedInvoice.comprobante_completo}`);
+          }
         } catch (asientoError) {
           await queryRunner.manager.update(FacturasVenta, { id: savedInvoice.id }, {
             status: InvoiceStatus.ERROR_ASIENTO,
@@ -238,6 +281,7 @@ export class FacturasVentasService {
             fechaAsientoError: new Date(),
           });
         }
+      }
 
         // Cobro automático si es contado y estándar (dentro de la misma transacción)
         if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
@@ -627,27 +671,80 @@ export class FacturasVentasService {
           await transactionalEntityManager.update(FacturasVenta, { id }, updateAceptada);
         });
 
-        // ✅ GENERAR ASIENTO CONTABLE TRAS ACEPTACIÓN
+        // ✅ GENERAR ASIENTOS CONTABLES TRAS ACEPTACIÓN (Factura + Cruces de Anticipo)
         const facturaParaAsiento = await this.findOne(id);
+        const queryRunnerAsiento = this.dataSource.createQueryRunner();
+        await queryRunnerAsiento.connect();
+        await queryRunnerAsiento.startTransaction();
 
         try {
+          // 1. Contabilizar factura al 100%
           await this.contabilizacionEngine.contabilizarDocumento(
             'FACTURA_VENTA',
             facturaParaAsiento.id,
             userId,
+            queryRunnerAsiento,
           );
+
+          // 2. Generar asientos de cruce para cada aplicación activa de anticipo
+          const aplicacionesActivas = await queryRunnerAsiento.manager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: id, estado: AplicacionEstado.ACTIVO },
+            relations: ['anticipo'],
+          });
+
+          // Cargar cuenta contable del cliente si existe
+          const clientConCuenta = await queryRunnerAsiento.manager.findOne(Cliente, {
+            where: { id: facturaParaAsiento.clientId },
+            relations: ['cuentaContable'],
+          });
+
+          const config = await this.parametrizacionService.getConfiguracion();
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
+            (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+          for (const app of aplicacionesActivas) {
+            const anticipo = app.anticipo;
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || 
+              clientConCuenta?.cuentaContableId || 
+              cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId || 
+              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: facturaParaAsiento.fecha || new Date(),
+                referencia: facturaParaAsiento.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${facturaParaAsiento.comprobante_completo}`,
+                terceroId: facturaParaAsiento.clientId,
+                userId,
+              },
+              queryRunnerAsiento,
+            );
+
+            app.asientoId = asientoCruce.id;
+            await queryRunnerAsiento.manager.save(AnticipoAplicacion, app);
+          }
+
+          await queryRunnerAsiento.commitTransaction();
           this.logger.log(
-            `Asiento contable generado para factura electrónica ${facturaParaAsiento.comprobante_completo}`,
+            `Asiento contable de factura y comprobante(s) de cruce generados para FE ${facturaParaAsiento.comprobante_completo}`,
           );
         } catch (asientoError) {
+          await queryRunnerAsiento.rollbackTransaction();
           await this.facturaVentaRepository.update({ id }, {
             status: InvoiceStatus.ERROR_ASIENTO,
             asientoError: asientoError.message,
             fechaAsientoError: new Date(),
           });
           this.logger.error(
-            `Error generando asiento contable para FE: ${asientoError.message}`,
+            `Error generando asientos contables para FE: ${asientoError.message}`,
           );
+        } finally {
+          await queryRunnerAsiento.release();
         }
 
         // Si es de contado, registrar cobro automático (usando transacción independiente para cobros de FE)
@@ -808,7 +905,7 @@ export class FacturasVentasService {
 
       const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id },
-        relations: ['items', 'client', 'cuentaBancaria'],
+        relations: ['items', 'client', 'client.cuentaContable', 'cuentaBancaria'],
       });
 
       if (!updatedInvoice) {
@@ -825,6 +922,41 @@ export class FacturasVentasService {
         this.logger.log(
           `Asiento contable generado para factura estándar ${updatedInvoice.comprobante_completo}`,
         );
+
+        const config = await this.parametrizacionService.getConfiguracion();
+        const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
+          (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+        for (const app of aplicacionesBorrador) {
+          const anticipo = await queryRunner.manager.findOne(Anticipo, {
+            where: { id: app.anticipoId },
+          });
+          if (anticipo) {
+            const cuentaTerceroId = updatedInvoice.client?.cuentaContable?.id || 
+              updatedInvoice.client?.cuentaContableId || 
+              cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId || 
+              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: updatedInvoice.fecha || new Date(),
+                referencia: updatedInvoice.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${updatedInvoice.comprobante_completo}`,
+                terceroId: updatedInvoice.clientId,
+                userId,
+              },
+              queryRunner,
+            );
+            app.asientoId = asientoCruce.id;
+            await queryRunner.manager.save(AnticipoAplicacion, app);
+            this.logger.log(`Asiento de cruce de anticipo (${anticipo.numero}) generado para factura estándar ${updatedInvoice.comprobante_completo}`);
+          }
+        }
       } catch (asientoError) {
         await queryRunner.manager.update(
           FacturasVenta,
@@ -996,7 +1128,7 @@ export class FacturasVentasService {
 
       const updatedInvoice = await this.findOne(id);
 
-      // Generar asiento contable de anulación (fuera de la transacción de actualización)
+      // Generar asiento contable de anulación y de reversión de cruces de anticipo
       try {
         await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(
           updatedInvoice,
@@ -1005,6 +1137,33 @@ export class FacturasVentasService {
         this.logger.log(
           `Asiento de anulación generado para factura ${updatedInvoice.comprobante_completo}`,
         );
+
+        // Anular los asientos contables de cruce asociados
+        if (aplicaciones.length > 0) {
+          const qrAnulacionCruce = this.dataSource.createQueryRunner();
+          await qrAnulacionCruce.connect();
+          await qrAnulacionCruce.startTransaction();
+          try {
+            for (const app of aplicaciones) {
+              if (app.asientoId) {
+                await this.asientosContablesService.anularAsiento(
+                  app.asientoId,
+                  TipoAsiento.ANULACION_COMPROBANTE,
+                  userId,
+                  qrAnulacionCruce,
+                );
+                this.logger.log(`Asiento de cruce de anticipo (${app.asientoId}) anulado para factura ${updatedInvoice.comprobante_completo}`);
+              }
+            }
+            await qrAnulacionCruce.commitTransaction();
+          } catch (cruceAnulacionError) {
+            await qrAnulacionCruce.rollbackTransaction();
+            this.logger.error(`Error anulando asientos de cruce: ${cruceAnulacionError.message}`);
+            throw cruceAnulacionError;
+          } finally {
+            await qrAnulacionCruce.release();
+          }
+        }
       } catch (asientoError) {
         await this.facturaVentaRepository.update(
           { id },
@@ -1015,7 +1174,7 @@ export class FacturasVentasService {
           },
         );
         this.logger.error(
-          `Error generando asiento de anulación: ${asientoError.message}`,
+          `Error generando asientos de anulación: ${asientoError.message}`,
         );
       }
 

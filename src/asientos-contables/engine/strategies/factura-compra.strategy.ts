@@ -52,24 +52,42 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
     const ivaAgrupados = new Map<string, { valor: number; cuenta: CuentaContable }>();
 
     for (const item of gasto.items) {
-      const articulo = await manager.findOne(Articulo, {
-        where: { id: item.articuloId },
-        relations: [
-          'categoriaArticulo',
-          'categoriaArticulo.cuentaPrincipal',
-          'impuestoRel',
-          'impuestoRel.cuentaCompras',
-        ],
-      });
+      let cuentaGasto: CuentaContable | null = null;
+      let impuestoId = item.impuestoId;
+      let impuestoRel = item.impuestoRel;
 
-      if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+      if (item.articuloId) {
+        const articulo = await manager.findOne(Articulo, {
+          where: { id: item.articuloId },
+          relations: [
+            'categoriaArticulo',
+            'categoriaArticulo.cuentaPrincipal',
+            'impuestoRel',
+            'impuestoRel.cuentaCompras',
+          ],
+        });
+
+        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+          throw new Error(
+            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`
+          );
+        }
+        cuentaGasto = articulo.categoriaArticulo.cuentaPrincipal;
+        if (!impuestoId) impuestoId = articulo.impuestoId;
+        if (!impuestoRel) impuestoRel = articulo.impuestoRel;
+      } else if (item.cuentaContableId) {
+        cuentaGasto = item.cuentaContable || await manager.findOne(CuentaContable, {
+          where: { id: item.cuentaContableId }
+        });
+      }
+
+      if (!cuentaGasto) {
         throw new Error(
-          `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`
+          `No se pudo determinar la cuenta contable para el ítem con ID ${item.id}`
         );
       }
 
       // Gastos
-      const cuentaGasto = articulo.categoriaArticulo.cuentaPrincipal;
       const acumGasto = gastosAgrupados.get(cuentaGasto.id)?.valor ?? 0;
       gastosAgrupados.set(cuentaGasto.id, {
         valor: acumGasto + Number(item.valorSubtotal),
@@ -81,7 +99,7 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       if (valorIva > 0) {
         let cuentaIva: CuentaContable;
         const cuentaIvaPorcentaje = await this.asientosService.obtenerCuentaImpuesto({
-          impuestoId: item.impuestoId,
+          impuestoId: impuestoId,
           tarifa: item.porcentajeIva || 0,
           tipo: 'IVA',
           operacion: 'compras',
@@ -89,8 +107,8 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
 
         if (cuentaIvaPorcentaje) {
           cuentaIva = cuentaIvaPorcentaje;
-        } else if (articulo.impuestoRel?.cuentaCompras) {
-          cuentaIva = articulo.impuestoRel.cuentaCompras;
+        } else if (impuestoRel?.cuentaCompras) {
+          cuentaIva = impuestoRel.cuentaCompras;
         } else {
           cuentaIva = await this.asientosService.obtenerCuentaPorCodigo('1355');
         }
@@ -167,43 +185,16 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       }
     }
 
-    // Cruce de anticipos para compras
-    const aplicaciones = await manager.find(AnticipoAplicacion, {
-      where: {
-        facturaCompraId: documentoId,
-        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
-      },
-      relations: ['anticipo', 'anticipo.cuentaContable'],
-    });
-
-    const montoAnticipoTotal = aplicaciones.reduce((sum, app) => sum + Number(app.montoAplicado), 0);
-    const totalGastoNeto = MathUtil.sub(Number(gasto.total), montoAnticipoTotal);
-
-    if (totalGastoNeto > 0) {
+    // Crédito a Proveedores/Gastos por pagar por el 100% del total de la factura
+    const totalGasto = Number(gasto.total);
+    if (totalGasto > 0) {
       detalles.push({
         cuentaId: cuentaCredito.id,
         cuentaCodigo: cuentaCredito.codigo,
         cuentaNombre: cuentaCredito.nombre,
         debito: 0,
-        credito: totalGastoNeto,
+        credito: totalGasto,
         concepto: descCredito,
-        terceroId: gasto.proveedorId,
-        terceroNombre,
-      });
-    }
-
-    for (const app of aplicaciones) {
-      let cuentaAnticipo = app.anticipo?.cuentaContable;
-      if (!cuentaAnticipo) {
-        cuentaAnticipo = await this.asientosService.obtenerCuentaPorCodigo('133005');
-      }
-      detalles.push({
-        cuentaId: cuentaAnticipo.id,
-        cuentaCodigo: cuentaAnticipo.codigo,
-        cuentaNombre: cuentaAnticipo.nombre,
-        debito: 0,
-        credito: Number(app.montoAplicado),
-        concepto: `Cruce de anticipo ${app.anticipo?.numero || ''} en compra ${gasto.numero || 'Borrador'}`,
         terceroId: gasto.proveedorId,
         terceroNombre,
       });

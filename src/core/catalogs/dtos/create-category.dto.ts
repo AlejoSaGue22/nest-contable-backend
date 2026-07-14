@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
-import { tipoCategoria } from "src/common/constants/categorias-articulos.config";
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsEnum } from "class-validator";
+import { TipoCategoria } from "src/common/constants/categorias-articulos.config";
 
 export class CreateCategoryArticleDto {
 
@@ -7,9 +7,9 @@ export class CreateCategoryArticleDto {
     @IsNotEmpty()
     nombre: string;
 
-    @IsString()
+    @IsEnum(TipoCategoria, { message: 'El tipo de categoría debe ser VENTA, COSTO, GASTO o SERVICIO' })
     @IsNotEmpty()
-    tipo: tipoCategoria;
+    tipo: TipoCategoria;
 
     @IsString()
     @IsNotEmpty()

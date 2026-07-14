@@ -12,12 +12,15 @@ import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { PagosModule } from 'src/pagos/pagos.module';
 
+import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo, Impuesto, CuentasBancarias]),
     AsientosContablesModule,
     ApiDianModule,
-    PagosModule
+    PagosModule,
+    ParametrizacionContableModule
   ],
   controllers: [FacturasVentasController],
   providers: [FacturasVentasService],

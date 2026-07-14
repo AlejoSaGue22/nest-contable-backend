@@ -37,9 +37,9 @@ export class ComprobantesService {
     private readonly contabilizacionEngine: ContabilizacionEngine,
     private readonly asientosService: AsientosContablesService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════ 
   // A. ADMINISTRACIÓN DE TIPOS DE COMPROBANTES (CONFIGURACIÓN)
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -107,7 +107,7 @@ export class ComprobantesService {
       if (tipo.numeracionAutomatica) {
         const consecutivoStr = String(tipo.consecutivoActual).padStart(4, '0');
         numero = tipo.prefijo ? `${tipo.prefijo}-${consecutivoStr}` : consecutivoStr;
-        
+
         // Incrementar el consecutivo
         tipo.consecutivoActual += 1;
         await queryRunner.manager.save(TipoComprobante, tipo);
@@ -245,7 +245,6 @@ export class ComprobantesService {
         'detalles.cliente',
         'detalles.proveedor',
         'detalles.centroCosto',
-        'detalles.impuesto',
         'creadoPor',
         'modificadoPor',
         'contabilizadoPor',

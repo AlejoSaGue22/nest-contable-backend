@@ -18,6 +18,7 @@ async function bootstrap() {
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
     'http://192.168.1.77:4200',
     'http://localhost:4200',
+    'http://192.168.1.15:4200'
   ];
   // const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
   //   'http://localhost:4200',

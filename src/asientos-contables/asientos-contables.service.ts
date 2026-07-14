@@ -5,10 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  AsientoContable,
-  TipoAsiento,
-} from './entities/asientos-contable.entity';
+import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entity';
 import { DataSource, In, Repository, QueryRunner } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
@@ -28,6 +25,10 @@ import { ParametrizacionContableService } from 'src/settings/parametrizacion-con
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { TipoPago } from 'src/pagos/enums/pago.enum';
 
+import { ComprobanteContable, EstadoComprobante } from 'src/comprobantes/entities/comprobante-contable.entity';
+import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
+import { ComprobanteDetalle } from 'src/comprobantes/entities/comprobante-detalle.entity';
+
 interface DetalleAsiento {
   cuentaId: string;
   debito: number;
@@ -42,6 +43,9 @@ interface DetalleAsiento {
   tipoImpuesto?: string;
   documentoReferencia?: string;
 }
+
+
+
 
 @Injectable()
 export class AsientosContablesService {
@@ -65,11 +69,28 @@ export class AsientosContablesService {
   ) { }
 
   async findByReferencia(referencia: string) {
-    return this.asientoRepository.find({
+    const asientos = await this.asientoRepository.find({
       where: { referencia },
       relations: ['detalles', 'detalles.cuenta'],
       order: { createdAt: 'ASC' },
     });
+
+    if (asientos.length > 0) {
+      const ids = asientos.map((a) => a.id);
+      const comprobantes = await this.dataSource.manager.find(ComprobanteContable, {
+        where: { asientoId: In(ids) },
+        select: ['id', 'asientoId'],
+      });
+
+      const compMap = new Map(comprobantes.map(c => [c.asientoId, c.id]));
+      for (const a of asientos) {
+        if (compMap.has(a.id)) {
+          (a as any).comprobanteId = compMap.get(a.id);
+        }
+      }
+    }
+
+    return asientos;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -253,22 +274,32 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of gasto.items) {
-        const articulo = await queryRunner.manager.findOne(Articulo, {
-          where: { id: item.articuloId },
-          relations: [
-            'categoriaArticulo',
-            'categoriaArticulo.cuentaPrincipal',
-            'impuestoRel',
-            'impuestoRel.cuentaCompras',
-          ],
-        });
+        let cuentaId = '';
+        let articulo: Articulo | null = null;
 
-        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
+        if (item.articuloId) {
+          articulo = await queryRunner.manager.findOne(Articulo, {
+            where: { id: item.articuloId },
+            relations: [
+              'categoriaArticulo',
+              'categoriaArticulo.cuentaPrincipal',
+              'impuestoRel',
+              'impuestoRel.cuentaCompras',
+            ],
+          });
+
+          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+            throw new Error(`Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`);
+          }
+
+          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        } else if (item.cuentaContableId) {
+          cuentaId = item.cuentaContableId;
         }
 
-        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
-        gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal);
+        if (cuentaId) {
+          gastosAgrupados.set(cuentaId, (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal);
+        }
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
@@ -280,7 +311,7 @@ export class AsientosContablesService {
           });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
-          } else if (articulo.impuestoRel?.cuentaComprasId) {
+          } else if (articulo?.impuestoRel?.cuentaComprasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
           } else {
             cuentaIvaId = '1355';
@@ -593,27 +624,37 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of gasto.items) {
-        const articulo = await queryRunner.manager.findOne(Articulo, {
-          where: { id: item.articuloId },
-          relations: [
-            'categoriaArticulo',
-            'categoriaArticulo.cuentaPrincipal',
-            'impuestoRel',
-            'impuestoRel.cuentaCompras',
-          ],
-        });
+        let cuentaId = '';
+        let articulo: Articulo | null = null;
 
-        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
-          );
+        if (item.articuloId) {
+          articulo = await queryRunner.manager.findOne(Articulo, {
+            where: { id: item.articuloId },
+            relations: [
+              'categoriaArticulo',
+              'categoriaArticulo.cuentaPrincipal',
+              'impuestoRel',
+              'impuestoRel.cuentaCompras',
+            ],
+          });
+
+          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+            throw new Error(
+              `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
+            );
+          }
+
+          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        } else if (item.cuentaContableId) {
+          cuentaId = item.cuentaContableId;
         }
 
-        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
-        gastosAgrupados.set(
-          cuentaId,
-          (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
-        );
+        if (cuentaId) {
+          gastosAgrupados.set(
+            cuentaId,
+            (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
+          );
+        }
 
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
@@ -625,7 +666,7 @@ export class AsientosContablesService {
           });
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
-          } else if (articulo.impuestoRel?.cuentaComprasId) {
+          } else if (articulo?.impuestoRel?.cuentaComprasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
           } else {
             cuentaIvaId = '1355';
@@ -2449,6 +2490,207 @@ export class AsientosContablesService {
       throw new Error(`Asiento contable '${id}' no encontrado`);
     }
     return asiento;
+  }
+
+  async generarAsientoCruceAnticipo(
+    data: {
+      tipo: 'venta' | 'compra';
+      cuentaTerceroId: string;
+      cuentaAnticipoId: string;
+      monto: number;
+      fecha: Date;
+      referencia: string;
+      descripcion: string;
+      terceroId: string;
+      userId: string;
+    },
+    queryRunner: QueryRunner,
+  ): Promise<AsientoContable> {
+    const cuentaTercero = await queryRunner.manager.findOne(CuentaContable, { where: { id: data.cuentaTerceroId } });
+    const cuentaAnticipo = await queryRunner.manager.findOne(CuentaContable, { where: { id: data.cuentaAnticipoId } });
+
+    if (!cuentaTercero) {
+      throw new NotFoundException(`Cuenta de control de tercero no encontrada`);
+    }
+    if (!cuentaAnticipo) {
+      throw new NotFoundException(`Cuenta de anticipo no encontrada`);
+    }
+
+    const detalles: any[] = [];
+    const debitoMonto = Number(data.monto);
+    const creditoMonto = Number(data.monto);
+
+    if (data.tipo === 'venta') {
+      // VENTA:
+      // Débito: Anticipo Clientes (Pasivo)
+      // Crédito: Clientes Nacionales (Activo)
+      detalles.push({
+        cuentaId: cuentaAnticipo.id,
+        cuentaCodigo: cuentaAnticipo.codigo,
+        cuentaNombre: cuentaAnticipo.nombre,
+        debito: debitoMonto,
+        credito: 0,
+        concepto: data.descripcion,
+        terceroId: data.terceroId,
+      });
+      detalles.push({
+        cuentaId: cuentaTercero.id,
+        cuentaCodigo: cuentaTercero.codigo,
+        cuentaNombre: cuentaTercero.nombre,
+        debito: 0,
+        credito: creditoMonto,
+        concepto: data.descripcion,
+        terceroId: data.terceroId,
+      });
+    } else {
+      // COMPRA:
+      // Débito: Proveedores (Pasivo)
+      // Crédito: Anticipo Proveedores (Activo)
+      detalles.push({
+        cuentaId: cuentaTercero.id,
+        cuentaCodigo: cuentaTercero.codigo,
+        cuentaNombre: cuentaTercero.nombre,
+        debito: debitoMonto,
+        credito: 0,
+        concepto: data.descripcion,
+        terceroId: data.terceroId,
+      });
+      detalles.push({
+        cuentaId: cuentaAnticipo.id,
+        cuentaCodigo: cuentaAnticipo.codigo,
+        cuentaNombre: cuentaAnticipo.nombre,
+        debito: 0,
+        credito: creditoMonto,
+        concepto: data.descripcion,
+        terceroId: data.terceroId,
+      });
+    }
+
+    const definicion: DefinicionAsientoDto = {
+      tipo: TipoAsiento.CRUCE_ANTICIPO,
+      fecha: data.fecha,
+      referencia: data.referencia,
+      descripcion: data.descripcion,
+      detalles,
+      totalDebito: debitoMonto,
+      totalCredito: creditoMonto,
+      estaBalanceado: true,
+      diferencia: 0,
+    };
+
+    const asientoCruce = await this.crearAsientoDesdeDefinicion(definicion, data.userId, queryRunner);
+
+    // Generar el ComprobanteContable asociado
+    const tipoCruce = await this.obtenerTipoComprobanteCruce(queryRunner.manager);
+    const consecutivoStr = String(tipoCruce.consecutivoActual).padStart(4, '0');
+    const numeroComp = tipoCruce.prefijo ? `${tipoCruce.prefijo}-${consecutivoStr}` : consecutivoStr;
+
+    tipoCruce.consecutivoActual += 1;
+    await queryRunner.manager.save(TipoComprobante, tipoCruce);
+
+    const comprobante = queryRunner.manager.create(ComprobanteContable, {
+      tipoComprobanteId: tipoCruce.id,
+      numero: numeroComp,
+      fechaDocumento: data.fecha,
+      fechaContabilizacion: new Date(),
+      estado: EstadoComprobante.CONTABILIZADO,
+      totalDebito: debitoMonto,
+      totalCredito: creditoMonto,
+      asientoId: asientoCruce.id,
+      observaciones: data.descripcion,
+      creadoPorId: data.userId,
+    });
+
+    const guardado = await queryRunner.manager.save(ComprobanteContable, comprobante);
+
+    // Crear los ComprobanteDetalle correspondientes
+    for (const d of detalles) {
+      const detail = queryRunner.manager.create(ComprobanteDetalle, {
+        comprobanteId: guardado.id,
+        cuentaContableId: d.cuentaId,
+        descripcion: d.concepto,
+        debito: d.debito,
+        credito: d.credito,
+        clienteId: data.tipo === 'venta' ? data.terceroId : undefined,
+        proveedorId: data.tipo === 'compra' ? data.terceroId : undefined,
+      });
+      await queryRunner.manager.save(ComprobanteDetalle, detail);
+    }
+
+    return asientoCruce;
+  }
+
+  private async obtenerTipoComprobanteCruce(manager: any): Promise<TipoComprobante> {
+    let tipo = await manager.findOne(TipoComprobante, { where: { codigo: 'CC' } });
+    if (!tipo) {
+      tipo = await manager.findOne(TipoComprobante, { where: { codigo: 'DIARIO' } });
+    }
+    if (!tipo) {
+      tipo = manager.create(TipoComprobante, {
+        codigo: 'CC',
+        nombre: 'Cruce de Anticipos',
+        prefijo: 'CC',
+        consecutivoActual: 1,
+        numeracionAutomatica: true,
+        activo: true,
+      });
+      tipo = await manager.save(TipoComprobante, tipo);
+    }
+    return tipo;
+  }
+
+  async anularAsiento(
+    asientoId: string,
+    tipoAnulacion: TipoAsiento,
+    userId: string,
+    queryRunner: QueryRunner,
+  ): Promise<AsientoContable> {
+    const asientoOriginal = await queryRunner.manager.findOne(AsientoContable, {
+      where: { id: asientoId },
+      relations: ['detalles', 'detalles.cuenta'],
+    });
+
+    if (!asientoOriginal) {
+      throw new NotFoundException(`Asiento original con ID ${asientoId} no encontrado`);
+    }
+
+    const detalles = asientoOriginal.detalles.map((d) => ({
+      cuentaId: d.cuentaId,
+      cuentaCodigo: d.cuenta?.codigo,
+      cuentaNombre: d.cuenta?.nombre,
+      debito: Number(d.credito),
+      credito: Number(d.debito),
+      concepto: `ANULACIÓN: ${d.descripcion}`,
+      terceroId: d.clienteId || d.proveedorId || undefined,
+    }));
+
+    const definicion: DefinicionAsientoDto = {
+      tipo: tipoAnulacion,
+      fecha: new Date(),
+      referencia: asientoOriginal.referencia,
+      descripcion: `Anulación del asiento #${asientoOriginal.numero}`,
+      detalles,
+      totalDebito: asientoOriginal.totalCredito,
+      totalCredito: asientoOriginal.totalDebito,
+      estaBalanceado: true,
+      diferencia: 0,
+    };
+
+    const asientoReverso = await this.crearAsientoDesdeDefinicion(definicion, userId, queryRunner);
+
+    // Si hay un comprobante contable asociado, anularlo también
+    const comprobante = await queryRunner.manager.findOne(ComprobanteContable, {
+      where: { asientoId: asientoOriginal.id },
+    });
+    if (comprobante) {
+      comprobante.estado = EstadoComprobante.ANULADO;
+      comprobante.fechaAnulacion = new Date();
+      comprobante.anuladoPorId = userId;
+      comprobante.motivoAnulacion = `Anulado automáticamente por anulación de factura/compra`;
+      await queryRunner.manager.save(ComprobanteContable, comprobante);
+    }
+
+    return asientoReverso;
   }
 
   private async generarNumeroAsiento(queryRunner: any): Promise<string> {

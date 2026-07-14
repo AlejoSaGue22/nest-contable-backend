@@ -3,6 +3,7 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToO
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { FacturaCompra } from "./factura-compra.entity";
 import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 
 @Entity('facturas_compras_detalles')
 export class FacturaCompraDetalle {
@@ -15,12 +16,19 @@ export class FacturaCompraDetalle {
     @Column()
     facturaCompraId: string;
 
-    @ManyToOne(() => Articulo, { eager: true })
+    @ManyToOne(() => Articulo, { eager: true, nullable: true })
     @JoinColumn({ name: 'articuloId' })
-    articulo: Articulo;
+    articulo?: Articulo | null;
 
-    @Column()
-    articuloId: string;
+    @Column({ nullable: true })
+    articuloId?: string | null;
+
+    @ManyToOne(() => CuentaContable, { eager: true, nullable: true })
+    @JoinColumn({ name: 'cuentaContableId' })
+    cuentaContable?: CuentaContable | null;
+
+    @Column({ nullable: true })
+    cuentaContableId?: string | null;
 
     @Column({ type: 'text', nullable: true })
     descripcion: string;

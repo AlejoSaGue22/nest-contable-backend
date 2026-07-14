@@ -1,74 +1,51 @@
 
+export enum TipoCategoria {
+    VENTA = 'VENTA',
+    COSTO = 'COSTO',
+    GASTO = 'GASTO',
+    SERVICIO = 'SERVICIO',
+}
+
+export type tipoCategoria = TipoCategoria;
+
 export interface CategoriaConfig {
     codigo: string;
     nombre: string;
-    tipo: tipoCategoria;
+    tipo: TipoCategoria;
     cuentaPrincipalId: string;
     cuentaInventarioId: string;
     cuentaCostoId: string;
     descripcion: string;
 }
 
-export type tipoCategoria = 'venta' | 'costo' | 'gasto' | 'servicio';
-
 export const CATEGORIAS_ARTICULOS: Record<string, CategoriaConfig> = {
     // VENTAS
-    'venta-productos': {
-        codigo: 'venta-productos',
-        nombre: 'Venta de Productos',
-        tipo: 'venta',
+    'productos': {
+        codigo: 'productos',
+        nombre: 'Productos',
+        tipo: TipoCategoria.VENTA,
         cuentaPrincipalId: '4135', // Comercio al por mayor
         cuentaInventarioId: '1435',
         cuentaCostoId: '6205',
-        descripcion: 'Para artículos que se venden'
+        descripcion: 'Para artículos que se venden y se compran'
     },
-    'venta-servicios': {
-        codigo: 'venta-servicios',
-        nombre: 'Venta de Servicios',
-        tipo: 'servicio',
+    'servicios': {
+        codigo: 'servicios',
+        nombre: 'Servicios',
+        tipo: TipoCategoria.SERVICIO,
         cuentaPrincipalId: '4155', // Servicios
         cuentaInventarioId: 'N/A',
         cuentaCostoId: 'N/A',
         descripcion: 'Para servicios que se prestan'
     },
 
-    // COMPRAS
-    'compra-mercancia': {
-        codigo: 'compra-mercancia',
-        nombre: 'Compra de Mercancía',
-        tipo: 'costo',
-        cuentaPrincipalId: '6205', // Costo de mercancía vendida
-        cuentaInventarioId: '1435',
-        cuentaCostoId: '6205',
-        descripcion: 'Para mercancía que se compra para revender'
-    },
-    'compra-activos': {
-        codigo: 'compra-activos',
-        nombre: 'Compra de Activos Fijos',
-        tipo: 'costo',
-        cuentaPrincipalId: '1524', // Equipo de oficina
+    'activos-fijos': {
+        codigo: 'activos-fijos',
+        nombre: 'Activos Fijos',
+        tipo: TipoCategoria.COSTO,
+        cuentaPrincipalId: '1524',
         cuentaInventarioId: 'N/A',
         cuentaCostoId: 'N/A',
         descripcion: 'Para compra de equipos, muebles, etc.'
     },
-
-    // GASTOS
-    'gastos-operacionales': {
-        codigo: 'gastos-operacionales',
-        nombre: 'Gastos Operacionales',
-        tipo: 'gasto',
-        cuentaPrincipalId: '5195', // Gastos diversos
-        cuentaInventarioId: 'N/A',
-        cuentaCostoId: 'N/A',
-        descripcion: 'Gastos del día a día del negocio'
-    },
-    'gastos-personal': {
-        codigo: 'gastos-personal',
-        nombre: 'Gastos de Personal',
-        tipo: 'gasto',
-        cuentaPrincipalId: '5105', // Gastos de personal
-        cuentaInventarioId: 'N/A',
-        cuentaCostoId: 'N/A',
-        descripcion: 'Sueldos, bonos, capacitaciones'
-    }
 };
