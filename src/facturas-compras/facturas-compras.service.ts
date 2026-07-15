@@ -869,13 +869,13 @@ export class FacturasComprasService {
                 total = MathUtil.sum(MathUtil.sub(subtotal, descuento), totalIva);
 
                 // eliminar items actuales
-                await queryRunner.manager.delete(FacturaCompraDetalle, { facturaId: id });
+                await queryRunner.manager.delete(FacturaCompraDetalle, { facturaCompraId: id });
 
                 // guardar items
                 const itemsToSave = calc.detalles.map(item =>
                     queryRunner.manager.create(FacturaCompraDetalle, {
                         ...item,
-                        facturaId: factura.id
+                        facturaCompraId: factura.id
                     })
                 );
 
