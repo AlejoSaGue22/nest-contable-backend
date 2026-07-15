@@ -11,6 +11,7 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
 import { EntidadSeguridadSocial } from 'src/nomina/entities/entidad-seguridad-social.entity';
 import { TipoContratoEntity } from 'src/nomina/entities/tipo-contrato.entity';
+import { TipoActivo } from './entities/tipo-activo.entity';
 
 @Module({
     imports: [
@@ -24,6 +25,7 @@ import { TipoContratoEntity } from 'src/nomina/entities/tipo-contrato.entity';
             ConceptoCorreccion,
             EntidadSeguridadSocial,
             TipoContratoEntity,
+            TipoActivo,
         ]),
     ],
     providers: [CatalogsService],

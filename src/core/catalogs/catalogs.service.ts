@@ -16,6 +16,7 @@ import { ConceptoCorreccion } from './entities/concepto-correcion.entity';
 import { EntidadSeguridadSocial } from 'src/nomina/entities/entidad-seguridad-social.entity';
 import { TipoContratoEntity } from 'src/nomina/entities/tipo-contrato.entity';
 import { ENTIDADES_SEGURO_SOCIAL } from 'src/common/constants/entidades-ss.config';
+import { TipoActivo } from './entities/tipo-activo.entity';
 
 @Injectable()
 export class CatalogsService {
@@ -40,10 +41,16 @@ export class CatalogsService {
         private entidadSSRepo: Repository<EntidadSeguridadSocial>,
         @InjectRepository(TipoContratoEntity)
         private tipoContratoRepo: Repository<TipoContratoEntity>,
+        @InjectRepository(TipoActivo)
+        private tipoActivoRepo: Repository<TipoActivo>,
     ) { }
 
     async findAllDocumentTypes() {
         return this.tipoDocumentoRepo.find({ where: { state: true } });
+    }
+
+    async findAllTiposActivo() {
+        return this.tipoActivoRepo.find({ where: { state: true } });
     }
 
     async findAllPaymentMethods() {
@@ -196,6 +203,7 @@ export class CatalogsService {
         await this.seedConceptsCorrections();
         await this.seedEntidadesSeguridadSocial();
         await this.seedTiposContrato();
+        await this.seedTiposActivo();
         this.logger.log('✅ Todos los catálogos han sido sincronizados');
     }
 
@@ -382,6 +390,30 @@ export class CatalogsService {
             }
         }
         this.logger.log('✔ Tipos de contrato sincronizados');
+    }
+
+    private async seedTiposActivo() {
+        const data = [
+            { nombre: 'Terrenos' },
+            { nombre: 'Edificios o construcciones' },
+            { nombre: 'Maquinarias' },
+            { nombre: 'Equipos de computación' },
+            { nombre: 'Equipos de oficina' },
+            { nombre: 'Muebles y enseres' },
+            { nombre: 'Equipos de transporte' },
+            { nombre: 'Otros tangibles' },
+        ];
+
+        for (const item of data) {
+            const exists = await this.tipoActivoRepo.findOne({ where: { nombre: item.nombre } });
+            if (!exists) {
+                await this.tipoActivoRepo.save({
+                    nombre: item.nombre,
+                    state: true
+                });
+            }
+        }
+        this.logger.log('✔ Tipos de activo sincronizados');
     }
 
     private generarCodigo(nombre: string): string {

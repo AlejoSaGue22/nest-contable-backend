@@ -13,6 +13,11 @@ export class CatalogsController {
         return this.catalogsService.findAllDocumentTypes();
     }
 
+    @Get('tipos-activo')
+    findAllTiposActivo() {
+        return this.catalogsService.findAllTiposActivo();
+    }
+
     @Get('payment-methods')
     findAllPaymentMethods() {
         return this.catalogsService.findAllPaymentMethods();

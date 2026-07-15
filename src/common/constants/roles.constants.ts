@@ -116,6 +116,13 @@ export enum Permission {
   NOMINA_PERIOD_ANUL = 'nomina:period_anul',
   NOMINA_DIAN_SEND = 'nomina:dian_send',
   NOMINA_REPORT_READ = 'nomina:report_read',
+
+  // Activos Fijos
+  FIXED_ASSETS_CREATE = 'fixed_assets:create',
+  FIXED_ASSETS_READ = 'fixed_assets:read',
+  FIXED_ASSETS_UPDATE = 'fixed_assets:update',
+  FIXED_ASSETS_DELETE = 'fixed_assets:delete',
+  FIXED_ASSETS_DEPRECIATE = 'fixed_assets:depreciate',
 }
 
 export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
@@ -139,6 +146,11 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.NOMINA_PERIOD_PAY, Permission.NOMINA_PERIOD_ANUL,
     Permission.NOMINA_DIAN_SEND,
     Permission.NOMINA_REPORT_READ,
+    Permission.FIXED_ASSETS_CREATE,
+    Permission.FIXED_ASSETS_READ,
+    Permission.FIXED_ASSETS_UPDATE,
+    Permission.FIXED_ASSETS_DELETE,
+    Permission.FIXED_ASSETS_DEPRECIATE,
   ],
   [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
@@ -164,6 +176,8 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.PAGO_DELETE, Permission.PAGO_EXPORT,
     Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_MANAGE,
     Permission.CLIENT_READ,
+    Permission.FIXED_ASSETS_READ,
+    Permission.FIXED_ASSETS_DEPRECIATE,
   ],
   [SystemRole.SALES]: [
     Permission.DASHBOARD_VIEW,
