@@ -61,18 +61,16 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
           where: { id: item.articuloId },
           relations: [
             'categoriaArticulo',
-            'categoriaArticulo.cuentaPrincipal',
+            'categoriaArticulo.cuentaInventario',
             'impuestoRel',
             'impuestoRel.cuentaCompras',
           ],
         });
 
-        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`
-          );
+        if (!articulo?.categoriaArticulo?.cuentaInventario) {
+          throw new Error(`No se pudo determinar la cuenta contable para el ítem con ID ${item.id}`);
         }
-        cuentaGasto = articulo.categoriaArticulo.cuentaPrincipal;
+        cuentaGasto = articulo.categoriaArticulo.cuentaInventario;
         if (!impuestoId) impuestoId = articulo.impuestoId;
         if (!impuestoRel) impuestoRel = articulo.impuestoRel;
       } else if (item.cuentaContableId) {
@@ -82,9 +80,7 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       }
 
       if (!cuentaGasto) {
-        throw new Error(
-          `No se pudo determinar la cuenta contable para el ítem con ID ${item.id}`
-        );
+        throw new Error(`No se pudo determinar la cuenta contable para el ítem con ID ${item.id}`);
       }
 
       // Gastos
@@ -175,7 +171,7 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
       cuentaCredito = proveedor.cuentaContable;
     } else {
       const config = await this.parametrizacionService.getConfiguracion();
-      if (config?.cuentaPagarProveedoresId) {
+      if (config.cuentaPagarProveedoresId) {
         const temp = await manager.findOne(CuentaContable, {
           where: { id: config.cuentaPagarProveedoresId },
         });

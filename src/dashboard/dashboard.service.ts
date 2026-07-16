@@ -87,12 +87,20 @@ export class DashboardService {
                     prevEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
             }
 
-            // 1. Ventas del Mes (o periodo)
-            const salesCurrent = await this.reportesService.generarEstadoResultados(startDate, endDate);
-            const salesPrev = await this.reportesService.generarEstadoResultados(prevStartDate, prevEndDate);
+            // 1. Ventas del Mes (o periodo) con impuestos incluidos
+            const salesCurrentQuery = await this.facturaVentaRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
+                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+                .getRawOne();
+            const totalVentasPeriodo = parseFloat(salesCurrentQuery?.total || '0');
 
-            const totalVentasPeriodo = salesCurrent.ingresos.total;
-            const totalVentasAnt = salesPrev.ingresos.total;
+            const salesPrevQuery = await this.facturaVentaRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
+                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+                .getRawOne();
+            const totalVentasAnt = parseFloat(salesPrevQuery?.total || '0');
             const crecimientoVentas = totalVentasAnt > 0 ? ((totalVentasPeriodo - totalVentasAnt) / totalVentasAnt) * 100 : 0;
 
             // 2. Cuentas por Cobrar (CxC) - Filtrar por facturas hasta el fin del periodo
@@ -128,9 +136,20 @@ export class DashboardService {
             const proximosCxP = cxp.filter(f => f.fechaVencimiento && new Date(f.fechaVencimiento) >= endDate && new Date(f.fechaVencimiento) <= proximaReferencia)
                 .reduce((sum, f) => sum + f.saldoPendiente, 0);
 
-            // 4. Gastos del Mes (o periodo)
-            const totalGastosPeriodo = salesCurrent.gastos.total + salesCurrent.costos.total;
-            const totalGastosAnt = salesPrev.gastos.total + salesPrev.costos.total;
+            // 4. Gastos del Mes (o periodo) basados en facturas de compra registradas con impuestos
+            const comprasCurrentQuery = await this.facturaCompraRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
+                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+                .getRawOne();
+            const totalGastosPeriodo = parseFloat(comprasCurrentQuery?.total || '0');
+
+            const comprasPrevQuery = await this.facturaCompraRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
+                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+                .getRawOne();
+            const totalGastosAnt = parseFloat(comprasPrevQuery?.total || '0');
             const crecimientoGastos = totalGastosAnt > 0 ? ((totalGastosPeriodo - totalGastosAnt) / totalGastosAnt) * 100 : 0;
 
             // 5. Caja/Bancos (Al final del periodo seleccionado para reflejar estado histórico si aplica)
@@ -143,12 +162,12 @@ export class DashboardService {
                 const acc = await this.cuentaRepository.findOne({
                     where: { codigo: bankAcc.codigoCuentaContable, isActive: true }
                 });
-                
+
                 let saldo = Number(bankAcc.saldoActual);
                 if (acc) {
                     saldo = await this.reportesService.calcularSaldoCuenta(acc.id, new Date('2000-01-01'), referenceDate);
                 }
-                
+
                 return {
                     name: bankAcc.nombre,
                     balance: saldo
@@ -264,11 +283,23 @@ export class DashboardService {
         const series = await Promise.all(months.map(async (m) => {
             // No exceder la fecha fin real si es el mes actual
             const effectiveEnd = m.end > endDate ? endDate : m.end;
-            const er = await this.reportesService.generarEstadoResultados(m.start, effectiveEnd);
+            
+            const salesQuery = await this.facturaVentaRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
+                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+                .getRawOne();
+            
+            const purchasesQuery = await this.facturaCompraRepository.createQueryBuilder('f')
+                .select('SUM(f.total)', 'total')
+                .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
+                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+                .getRawOne();
+
             return {
                 month: m.name.charAt(0).toUpperCase() + m.name.slice(1),
-                ingresos: er.ingresos.total,
-                egresos: er.gastos.total + er.costos.total,
+                ingresos: parseFloat(salesQuery?.total || '0'),
+                egresos: parseFloat(purchasesQuery?.total || '0'),
             };
         }));
 

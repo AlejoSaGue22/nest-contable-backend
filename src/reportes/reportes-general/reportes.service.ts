@@ -51,11 +51,8 @@ export class ReportesService {
 
       const ingresosDetalle = await Promise.all(
         cuentasIngresos.map(async (cuenta) => {
-          const saldo = await this.calcularSaldoCuenta(
-            cuenta.id,
-            fechaInicio,
-            fechaFin
-          );
+          const saldo = await this.calcularSaldoCuenta(cuenta.id, fechaInicio, fechaFin);
+
           return {
             cuenta: `${cuenta.codigo} - ${cuenta.nombre}`,
             valor: saldo
@@ -617,7 +614,7 @@ export class ReportesService {
       base: d.base,
       iva: d.iva,
       cantidadItems: d.cant
-    })).sort((a,b) => a.tarifa - b.tarifa);
+    })).sort((a, b) => a.tarifa - b.tarifa);
 
     return {
       periodo: { fechaInicio, fechaFin },
@@ -642,18 +639,18 @@ export class ReportesService {
     const facturasHoy = await this.facturaRepository.find({
       where: { createdAt: Between(hoyInicio, ahora) }
     });
-    const montoHoy = facturasHoy.reduce((s,f) => s + Number(f.total), 0);
+    const montoHoy = facturasHoy.reduce((s, f) => s + Number(f.total), 0);
     const rechazoHoy = facturasHoy.filter(f => f.dianStatus === DianStatus.REJECTED).length;
 
     // Datos Semana (últimos 7 días)
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
     const hace14Dias = new Date(ahora.getTime() - 14 * 24 * 60 * 60 * 1000);
-    
+
     const facturasSemana = await this.facturaRepository.find({ where: { createdAt: Between(hace7Dias, ahora) } });
     const facturasSemanaAnt = await this.facturaRepository.find({ where: { createdAt: Between(hace14Dias, hace7Dias) } });
-    
-    const montoSemana = facturasSemana.reduce((s,f) => s + Number(f.total), 0);
-    const montoSemanaAnt = facturasSemanaAnt.reduce((s,f) => s + Number(f.total), 0);
+
+    const montoSemana = facturasSemana.reduce((s, f) => s + Number(f.total), 0);
+    const montoSemanaAnt = facturasSemanaAnt.reduce((s, f) => s + Number(f.total), 0);
     const crecimientoSem = montoSemanaAnt > 0 ? ((montoSemana - montoSemanaAnt) / montoSemanaAnt) * 100 : 0;
 
     // Datos Mes
@@ -664,8 +661,8 @@ export class ReportesService {
     const facturasMes = await this.facturaRepository.find({ where: { createdAt: Between(iniMes, ahora) } });
     const facturasMesAnt = await this.facturaRepository.find({ where: { createdAt: Between(iniMesAnt, finMesAnt) } });
 
-    const montoMes = facturasMes.reduce((s,f) => s + Number(f.total), 0);
-    const montoMesAnt = facturasMesAnt.reduce((s,f) => s + Number(f.total), 0);
+    const montoMes = facturasMes.reduce((s, f) => s + Number(f.total), 0);
+    const montoMesAnt = facturasMesAnt.reduce((s, f) => s + Number(f.total), 0);
     const crecimientoMes = montoMesAnt > 0 ? ((montoMes - montoMesAnt) / montoMesAnt) * 100 : 0;
 
     // Proyeccion
