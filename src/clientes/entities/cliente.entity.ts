@@ -53,8 +53,8 @@ export class Cliente {
     @Column()
     observacion: string;
 
-    @Column({ comment: 'Indica si el cliente es responsable de IVA S=Si, N=No' })
-    tributo: string;
+    @Column({ comment: 'Indica si el cliente es responsable de IVA S=18, N=21' })
+    tributo: number;
 
     @ManyToOne(() => CuentaContable, { nullable: true })
     @JoinColumn({ name: 'cuentaContableId' })

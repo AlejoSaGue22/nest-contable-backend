@@ -72,6 +72,27 @@ export class ActivosFijosService {
     if (activo.estado !== EstadoActivo.ACTIVO) {
       throw new BadRequestException('Solo se pueden modificar activos fijos en estado ACTIVO');
     }
+
+    if (updateDto.cuentaActivoId) {
+      await this.validarCuenta(updateDto.cuentaActivoId, 'ACTIVO');
+      activo.cuentaActivo = { id: updateDto.cuentaActivoId } as any;
+    }
+    if (updateDto.cuentaDepreciacionAcumuladaId) {
+      await this.validarCuenta(updateDto.cuentaDepreciacionAcumuladaId, 'ACTIVO');
+      activo.cuentaDepreciacionAcumulada = { id: updateDto.cuentaDepreciacionAcumuladaId } as any;
+    }
+    if (updateDto.cuentaGastoDepreciacionId) {
+      await this.validarCuenta(updateDto.cuentaGastoDepreciacionId, 'GASTO');
+      activo.cuentaGastoDepreciacion = { id: updateDto.cuentaGastoDepreciacionId } as any;
+    }
+
+    if (updateDto.proveedorId !== undefined) {
+      activo.proveedor = updateDto.proveedorId ? ({ id: updateDto.proveedorId } as any) : null;
+    }
+    if (updateDto.centroCostoId !== undefined) {
+      activo.centroCosto = updateDto.centroCostoId ? ({ id: updateDto.centroCostoId } as any) : null;
+    }
+
     Object.assign(activo, updateDto);
     return this.activoRepository.save(activo);
   }

@@ -27,6 +27,7 @@ export class ClientesService {
     }
     const cliente = this.clientesRepository.create({
       ...rest,
+      tributo: createClienteDto.tributo == 'S' ? 18 : 21,
       cuentaContableId,
     });
     const saved = await this.clientesRepository.save(cliente);
@@ -60,13 +61,14 @@ export class ClientesService {
 
     const clientesMap = clientes.map((cli, indx) => {
       return {
-          ...cli,
-          fullName: cli.razonSocial ? cli.razonSocial : `${cli.nombre} ${cli.apellido}`,
-          tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
-          estado: cli.isActive == true ? 'Activo' : 'Inactivo',
-          ind: (indx + 1).toString()
+        ...cli,
+        tributo: cli.tributo === 18 ? 'S' : 'N',
+        fullName: cli.razonSocial ? cli.razonSocial : `${cli.nombre} ${cli.apellido}`,
+        tipoPersona_nom: cli.tipoPersona == 'PN' ? 'Persona Natural' : 'Persona Juridica',
+        estado: cli.isActive == true ? 'Activo' : 'Inactivo',
+        ind: (indx + 1).toString()
       }
-    })  
+    })
 
     return {
       count: totalClients,
@@ -92,12 +94,21 @@ export class ClientesService {
     if (!cliente) {
       throw new BadRequestException('Cliente no encontrado');
     }
-    return cliente;
+    return {
+      ...cliente,
+      tributo: cliente.tributo === 18 ? 'S' : 'N',
+    } as any;
   }
 
   async update(id: string, updateClienteDto: UpdateClienteDto) {
     await this.findOne(id);
-    const update = await this.clientesRepository.update(id, updateClienteDto);
+
+    const { tributo, ...rest } = updateClienteDto;
+
+    const update = await this.clientesRepository.update(id, {
+      ...rest,
+      tributo: tributo == 'S' ? 18 : 21,
+    });
 
     return update;
   }

@@ -24,6 +24,7 @@ import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
 import { LiquidarNominaDto } from './dto/liquidar-nomina.dto';
 import { PagarNominaDto } from './dto/pagar-nomina.dto';
+import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -108,26 +109,45 @@ export class NominaService {
     }
   }
 
-  async findAllEmpleados(paginationDto: PaginatioDto) {
+  async findAllEmpleados(paginationDto: GetEmpleadosFilterDto) {
     const page = paginationDto.offset || 1;
     const limit = paginationDto.limit || 10;
     const skip = (page - 1) * limit;
 
-    const [empleados, total] = await this.empleadoRepo.findAndCount({
-      where: { activo: true },
-      relations: [
-        'eps',
-        'afp',
-        'ccf',
-        'cargo',
-        'centroCosto',
-        'banco',
-        'tipoContratoRel',
-      ],
-      order: { primerApellido: 'ASC' },
-      take: limit,
-      skip,
-    });
+    const queryBuilder = this.empleadoRepo.createQueryBuilder('empleado');
+
+    queryBuilder
+      .leftJoinAndSelect('empleado.eps', 'eps')
+      .leftJoinAndSelect('empleado.afp', 'afp')
+      .leftJoinAndSelect('empleado.ccf', 'ccf')
+      .leftJoinAndSelect('empleado.cargo', 'cargo')
+      .leftJoinAndSelect('empleado.centroCosto', 'centroCosto')
+      .leftJoinAndSelect('empleado.banco', 'banco')
+      .leftJoinAndSelect('empleado.tipoContratoRel', 'tipoContratoRel');
+
+    if (paginationDto.activo !== undefined && paginationDto.activo !== '') {
+      const isActivo = paginationDto.activo === 'true' || (paginationDto.activo as any) === true;
+      queryBuilder.andWhere('empleado.activo = :activo', { activo: isActivo });
+    }
+
+    if (paginationDto.cargoId) {
+      queryBuilder.andWhere('empleado.cargoId = :cargoId', { cargoId: paginationDto.cargoId });
+    }
+
+    if (paginationDto.search) {
+      const searchPattern = `%${paginationDto.search.toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(empleado.primerNombre) LIKE :search OR LOWER(empleado.primerApellido) LIKE :search OR LOWER(empleado.numeroDocumento) LIKE :search OR LOWER(empleado.segundoNombre) LIKE :search OR LOWER(empleado.segundoApellido) LIKE :search)',
+        { search: searchPattern }
+      );
+    }
+
+    queryBuilder
+      .orderBy('empleado.primerApellido', 'ASC')
+      .take(limit)
+      .skip(skip);
+
+    const [empleados, total] = await queryBuilder.getManyAndCount();
 
     return {
       count: total,

@@ -19,6 +19,7 @@ import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
 import { LiquidarNominaDto } from './dto/liquidar-nomina.dto';
 import { PagarNominaDto } from './dto/pagar-nomina.dto';
+import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
@@ -43,7 +44,7 @@ export class NominaController {
 
   @Get('empleados')
   // @Permissions(Permission.NOMINA_EMPLOYEE_READ)
-  findAllEmpleados(@Query() pagination: PaginatioDto) {
+  findAllEmpleados(@Query() pagination: GetEmpleadosFilterDto) {
     return this.nominaService.findAllEmpleados(pagination);
   }
 
