@@ -1,0 +1,27 @@
+import { IsString, IsOptional, IsEmail, IsNotEmpty, IsObject } from 'class-validator';
+
+export class CreateEmpresaDto {
+  @IsString()
+  @IsNotEmpty()
+  nit: string;
+
+  @IsString()
+  @IsNotEmpty()
+  razonSocial: string;
+
+  @IsOptional()
+  @IsString()
+  direccion?: string;
+
+  @IsOptional()
+  @IsString()
+  telefono?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsObject()
+  configuracionDian?: any;
+}

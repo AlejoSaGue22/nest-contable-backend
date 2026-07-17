@@ -282,11 +282,8 @@ export class ReportesService {
 
       const patrimonioDetalle = await Promise.all(
         cuentasPatrimonio.map(async (cuenta) => {
-          const saldo = await this.calcularSaldoCuenta(
-            cuenta.id,
-            new Date('2000-01-01'),
-            fecha
-          );
+          const saldo = await this.calcularSaldoCuenta(cuenta.id, new Date('2000-01-01'), fecha);
+
           return {
             cuenta: cuenta.nombre,
             codigo: cuenta.codigo,

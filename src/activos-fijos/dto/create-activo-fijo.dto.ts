@@ -2,8 +2,8 @@ import { IsString, IsNotEmpty, IsOptional, IsDateString, IsNumber, Min } from 'c
 
 export class CreateActivoFijoDto {
   @IsString()
-  @IsNotEmpty()
-  codigo: string;
+  @IsOptional()
+  codigo?: string;
 
   @IsString()
   @IsNotEmpty()

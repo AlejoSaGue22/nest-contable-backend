@@ -40,6 +40,7 @@ import { CargosModule } from './settings/cargos/cargos.module';
 import { CentrosCostosModule } from './settings/centros-costos/centros-costos.module';
 import { ComprobantesModule } from './comprobantes/comprobantes.module';
 import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
+import { EmpresaModule } from './settings/empresa/empresa.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
     CentrosCostosModule,
     ComprobantesModule,
     ActivosFijosModule,
+    EmpresaModule,
   ],
   controllers: [],
 })

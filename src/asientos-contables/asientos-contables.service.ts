@@ -44,9 +44,6 @@ interface DetalleAsiento {
   documentoReferencia?: string;
 }
 
-
-
-
 @Injectable()
 export class AsientosContablesService {
   private readonly logger = new Logger(AsientosContablesService.name);
@@ -448,34 +445,26 @@ export class AsientosContablesService {
     try {
       const detalles: DetalleAsiento[] = [];
 
-      // ── Crédito: reversa de Caja/Bancos / Clientes ──────────────────
-      const isContado = factura.formaPago === FormaPago.CONTADO;
+      // ── Crédito: reversa de Clientes ──────────────────
       let cuentaDebito: CuentaContable;
-      if (isContado) {
-        const codigoDebito = factura.cuentaBancaria?.codigoCuentaContable
-          ? factura.cuentaBancaria.codigoCuentaContable
-          : await this.resolverCuentaContado(factura.metodoPago!);
-        cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebito);
+      let client: Cliente | null = factura.client;
+      if (!client || !client.cuentaContableId) {
+        client = await queryRunner.manager.findOne(Cliente, {
+          where: { id: factura.clientId },
+          relations: ['cuentaContable'],
+        });
+      }
+      if (client?.cuentaContable) {
+        cuentaDebito = client.cuentaContable;
       } else {
-        let client: Cliente | null = factura.client;
-        if (!client || !client.cuentaContableId) {
-          client = await queryRunner.manager.findOne(Cliente, {
-            where: { id: factura.clientId },
-            relations: ['cuentaContable'],
+        const config = await this.parametrizacionService.getConfiguracion();
+        if (config?.cuentaCobrarClientesId) {
+          const temp = await queryRunner.manager.findOne(CuentaContable, {
+            where: { id: config.cuentaCobrarClientesId },
           });
-        }
-        if (client?.cuentaContable) {
-          cuentaDebito = client.cuentaContable;
+          cuentaDebito = temp || (await this.obtenerCuentaPorCodigo('1305'));
         } else {
-          const config = await this.parametrizacionService.getConfiguracion();
-          if (config?.cuentaCobrarClientesId) {
-            const temp = await queryRunner.manager.findOne(CuentaContable, {
-              where: { id: config.cuentaCobrarClientesId },
-            });
-            cuentaDebito = temp || (await this.obtenerCuentaPorCodigo('1305'));
-          } else {
-            cuentaDebito = await this.obtenerCuentaPorCodigo('1305');
-          }
+          cuentaDebito = await this.obtenerCuentaPorCodigo('1305');
         }
       }
 
@@ -678,9 +667,7 @@ export class AsientosContablesService {
         }
       }
 
-      // ── Débito: reversa de Caja o Bancos (contado) / Proveedores (crédito) ────────────────────────
-      const isContado = gasto.formaPago === FormaPago.CONTADO;
-
+      // ── Débito: reversa de Proveedores / Cuentas por Pagar ────────────────────────
       // Lógica de Diferenciación CxP:
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
@@ -695,39 +682,27 @@ export class AsientosContablesService {
         }
       }
 
-      const codigoDebitoPlaceholder = isContado
-        ? gasto.cuentaBancaria?.codigoCuentaContable
-          ? gasto.cuentaBancaria.codigoCuentaContable
-          : await this.resolverCuentaContado(gasto.metodoPago!)
-        : codigoCxP;
-
-      const descDebito = isContado
-        ? `ANULACIÓN contado - Proveedor: ${gasto.proveedor?.identificacion ?? ''}`
-        : `ANULACIÓN ${codigoCxP === '2335' ? 'gasto por pagar' : 'deuda con proveedor'} - Compra: ${gasto.numero}`;
+      const descDebito = `ANULACIÓN ${codigoCxP === '2335' ? 'gasto por pagar' : 'deuda con proveedor'} - Compra: ${gasto.numero}`;
 
       let cuentaDebito: CuentaContable;
-      if (isContado) {
-        cuentaDebito = await this.obtenerCuentaPorCodigo(codigoDebitoPlaceholder);
+      let proveedor: Proveedor | null = gasto.proveedor;
+      if (!proveedor || !proveedor.cuentaContableId) {
+        proveedor = await queryRunner.manager.findOne(Proveedor, {
+          where: { id: gasto.proveedorId },
+          relations: ['cuentaContable'],
+        });
+      }
+      if (proveedor?.cuentaContable) {
+        cuentaDebito = proveedor.cuentaContable;
       } else {
-        let proveedor: Proveedor | null = gasto.proveedor;
-        if (!proveedor || !proveedor.cuentaContableId) {
-          proveedor = await queryRunner.manager.findOne(Proveedor, {
-            where: { id: gasto.proveedorId },
-            relations: ['cuentaContable'],
+        const config = await this.parametrizacionService.getConfiguracion();
+        if (config?.cuentaPagarProveedoresId) {
+          const temp = await queryRunner.manager.findOne(CuentaContable, {
+            where: { id: config.cuentaPagarProveedoresId },
           });
-        }
-        if (proveedor?.cuentaContable) {
-          cuentaDebito = proveedor.cuentaContable;
+          cuentaDebito = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
         } else {
-          const config = await this.parametrizacionService.getConfiguracion();
-          if (config?.cuentaPagarProveedoresId) {
-            const temp = await queryRunner.manager.findOne(CuentaContable, {
-              where: { id: config.cuentaPagarProveedoresId },
-            });
-            cuentaDebito = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
-          } else {
-            cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCxP);
-          }
+          cuentaDebito = await this.obtenerCuentaPorCodigo(codigoCxP);
         }
       }
 

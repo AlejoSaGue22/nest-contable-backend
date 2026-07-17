@@ -23,7 +23,29 @@ export class ActivosFijosService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private async generateNextCode(): Promise<string> {
+    const lastActivo = await this.activoRepository.findOne({
+      where: {},
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!lastActivo) {
+      return 'AF-000001';
+    }
+
+    const match = lastActivo.codigo.match(/AF-(\d+)/);
+    if (match) {
+      const nextNum = parseInt(match[1], 10) + 1;
+      return `AF-${nextNum.toString().padStart(6, '0')}`;
+    }
+
+    const count = await this.activoRepository.count();
+    return `AF-${(count + 1).toString().padStart(6, '0')}`;
+  }
+
   async create(createDto: CreateActivoFijoDto): Promise<ActivoFijo> {
+    createDto.codigo = await this.generateNextCode();
+
     const existing = await this.activoRepository.findOne({ where: { codigo: createDto.codigo } });
     if (existing) {
       throw new BadRequestException(`El activo con código ${createDto.codigo} ya está registrado`);
