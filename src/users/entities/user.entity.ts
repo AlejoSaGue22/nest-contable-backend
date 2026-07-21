@@ -1,5 +1,6 @@
 import { SystemRole } from "src/common/constants/roles.constants";
 import { Role } from "src/core/roles/entities/role.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity({ name: 'users' })
@@ -29,6 +30,13 @@ export class User {
 
     @Column({ name: 'role_id' })
     roleId: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @Column({ nullable: true, name: 'last_login' })
     lastLogin?: Date; // Ultimo Inicio de Sesion.

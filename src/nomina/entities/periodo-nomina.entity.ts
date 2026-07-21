@@ -3,11 +3,19 @@ import { TipoPeriodoNomina } from '../enums/tipo-periodo.enum';
 import { EstadoPeriodoNomina } from '../enums/estado-periodo.enum';
 import { EstadoDianNomina } from '../enums/estado-dian-nomina.enum';
 import { User } from 'src/users/entities/user.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 @Entity('periodos_nomina')
 export class PeriodoNomina {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @Column()
     nombre: string;

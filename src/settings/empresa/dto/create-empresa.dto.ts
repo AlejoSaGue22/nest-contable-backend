@@ -22,6 +22,10 @@ export class CreateEmpresaDto {
   email?: string;
 
   @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
+  @IsOptional()
   @IsObject()
   configuracionDian?: any;
 }

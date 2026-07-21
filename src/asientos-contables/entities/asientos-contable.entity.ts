@@ -1,5 +1,6 @@
-import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn } from "typeorm";
 import { User } from "src/users/entities/user.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { AsientoDetalle } from "./asientos-detalles.entity";
 
 export enum TipoAsiento {
@@ -33,6 +34,13 @@ export enum TipoAsiento {
 export class AsientoContable {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column()
   numero: string;

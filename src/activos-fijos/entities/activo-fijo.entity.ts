@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDa
 import { CuentaContable } from '../../cuentas/entities/cuenta.entity';
 import { Proveedor } from '../../proveedores/entities/proveedor.entity';
 import { CentroCosto } from '../../nomina/entities/centro-costo.entity';
+import { Empresa } from '../../settings/empresa/entities/empresa.entity';
 import { ColumnNumericTransformer } from '../../common/transformers/column-numeric.transformer';
 
 export enum EstadoActivo {
@@ -15,6 +16,13 @@ export enum EstadoActivo {
 export class ActivoFijo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ unique: true })
   codigo: string;

@@ -11,6 +11,7 @@ import {
 import { TipoComprobante } from './tipo-comprobante.entity';
 import { ComprobanteDetalle } from './comprobante-detalle.entity';
 import { User } from 'src/users/entities/user.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
 export enum EstadoComprobante {
@@ -23,6 +24,13 @@ export enum EstadoComprobante {
 export class ComprobanteContable {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @ManyToOne(() => TipoComprobante, { eager: true })
   @JoinColumn({ name: 'tipoComprobanteId' })

@@ -16,11 +16,19 @@ import { ItemNotaAjusteCompra } from "./items-notas-ajuste-compra.entity";
 import { FacturaCompra } from "src/facturas-compras/entities/factura-compra.entity";
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 
 @Entity('notas_ajuste_compras')
 export class NotaAjusteCompra {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ 
     type: 'enum', 

@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
+import { join } from 'path';
 import * as helmet from 'helmet';
 
 async function bootstrap() {
@@ -8,6 +10,8 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
+  // Serve static uploads
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.setGlobalPrefix('api/v1');
 

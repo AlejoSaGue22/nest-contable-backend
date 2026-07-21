@@ -20,6 +20,9 @@ export class Empresa {
   @Column({ nullable: true })
   email: string;
 
+  @Column({ nullable: true })
+  logoUrl: string;
+
   @Column('json', { nullable: true })
   configuracionDian: any;
 

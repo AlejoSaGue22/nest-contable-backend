@@ -14,11 +14,19 @@ import { EntidadSeguridadSocial } from './entidad-seguridad-social.entity';
 import { Cargo } from './cargo.entity';
 import { CentroCosto } from './centro-costo.entity';
 import { Banco } from 'src/bancos/entities/banco.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 @Entity('empleados')
 export class Empleado {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ type: 'enum', enum: TipoDocumentoIdentidad })
   tipoDocumento: TipoDocumentoIdentidad;

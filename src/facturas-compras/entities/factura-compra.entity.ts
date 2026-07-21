@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToO
 import { Proveedor } from "../../proveedores/entities/proveedor.entity";
 import { FacturaCompraDetalle } from "./factura-compra-detalle.entity";
 import { User } from "src/users/entities/user.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { Pago } from "src/pagos/entities/pago.entity";
 import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { FormaPago } from "../../facturas-ventas/enums/factura-venta.enum";
@@ -21,6 +22,13 @@ export enum GastoEstado {
 export class FacturaCompra {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @Column({ type: 'varchar', length: 255, nullable: true })
     numero: string | null;

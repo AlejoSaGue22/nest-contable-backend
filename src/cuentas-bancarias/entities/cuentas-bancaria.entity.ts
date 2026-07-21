@@ -1,6 +1,7 @@
 import {
   Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
 import { Banco } from '../../bancos/entities/banco.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
 export enum TipoCuentaBancaria {
@@ -12,6 +13,13 @@ export enum TipoCuentaBancaria {
 export class CuentasBancarias {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ length: 120 })
   nombre: string;

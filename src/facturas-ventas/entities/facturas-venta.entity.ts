@@ -1,5 +1,6 @@
 import { Cliente } from "src/clientes/entities/cliente.entity";
 import { User } from "src/users/entities/user.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { ItemsFacturaVenta } from "./items-facturas-venta.entity";
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
@@ -14,6 +15,13 @@ import { CuentasBancarias } from "src/cuentas-bancarias/entities/cuentas-bancari
 export class FacturasVenta {
   @PrimaryGeneratedColumn("uuid")
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({
     type: 'enum',

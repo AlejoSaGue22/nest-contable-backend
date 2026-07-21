@@ -2,6 +2,7 @@ import { CategoriaArticulo } from "src/core/catalogs/entities/categorias-articul
 import { UnidadMedida } from "src/core/catalogs/entities/unidad-medida.entity";
 import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export enum ArticuloTipo {
@@ -16,6 +17,13 @@ export class Articulo {
 
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @Column({ unique: true })
     codigo: string;

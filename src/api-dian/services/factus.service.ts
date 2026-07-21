@@ -221,7 +221,7 @@ export class FactusService {
         try {
             const token = await this.obtenerToken();
             const endpoint = tipo === 'credito' ? 'credit-notes' : 'debit-notes';
-            
+
             const response = await firstValueFrom(
                 this.httpService.get(
                     `${this.apiUrl}/v1/${endpoint}/${numeroCompleto}`,
@@ -249,7 +249,7 @@ export class FactusService {
      */
     async crearYValidarFactura(factura: FacturasVenta, numero: string): Promise<FacturaDianResponse> {
         try {
-            const token = await this.obtenerToken(); 
+            const token = await this.obtenerToken();
             this.validarDatosFactura(factura);
 
             const payload = this.construirPayloadFactus(factura, numero);
@@ -320,7 +320,7 @@ export class FactusService {
             // Método de pago: "10" = Efectivo
             payment_method_code: factura.metodoPago || '10',
 
-          // Datos del establecimiento/sucursal
+            // Datos del establecimiento/sucursal
             establishment: {
                 name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
                 address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
@@ -348,24 +348,24 @@ export class FactusService {
             // Items de la factura
             items: factura.items.map(
                 item => ({
-                code_reference: item.articulo.codigo,
-                name: item.articulo.nombre,
-                quantity: item.quantity,
-                discount_rate: item.discount || 0,
-                price: item.unitPrice,
-                tax_rate: item.iva.toString(),
-                unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
-                standard_code_id: 1, // 1 = Estándar del contribuyente (999)
-                is_excluded: item.iva === 0 ? 1 : 0, // 0 = No excluido de IVA
-                tribute_id: 1, // 1 = IVA (código 01)
-                withholding_taxes: [] // Retenciones (opcional)
-            })),
+                    code_reference: item.articulo.codigo,
+                    name: item.articulo.nombre,
+                    quantity: item.quantity,
+                    discount_rate: item.discount || 0,
+                    price: item.unitPrice,
+                    tax_rate: item.iva.toString(),
+                    unit_measure_id: item.articulo.unidadmedida, // 70 = "unidad" (código 94)
+                    standard_code_id: 1, // 1 = Estándar del contribuyente (999)
+                    is_excluded: item.iva === 0 ? 1 : 0, // 0 = No excluido de IVA
+                    tribute_id: 1, // 1 = IVA (código 01)
+                    withholding_taxes: [] // Retenciones (opcional)
+                })),
 
             // Cargos adicionales (descuentos globales, recargos)
             ...(this.construirCargosAdicionales(factura).length > 0 ? { allowance_charges: this.construirCargosAdicionales(factura) } : ''),
         };
         console.log('Payload construido para Factus:', payload);
-      return payload;
+        return payload;
     }
 
     /**
@@ -433,7 +433,7 @@ export class FactusService {
     async crearNotaCredito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
-            
+
             const payload = this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
@@ -527,24 +527,24 @@ export class FactusService {
         const referenceCodeNew = `NC-${referenceCode}_${factura.comprobante_completo}`; // Código de referencia único para la nota de ajuste   
 
         const isNC = tipo === 'credito';
-        
+
         // Obtener el ID de la factura en el sistema de Factus si existe
         const billId = factura.proveedorResponse.data.bill.id || factura.proveedorResponse.data.id;
 
         const payload: any = {
             // ID del rango de numeración para NC o ND
             numbering_range_id: this.configService.get<number>(isNC ? 'FACTUS_NC_NUMBERING_RANGE_ID' : 'FACTUS_ND_NUMBERING_RANGE_ID')!,
-            
+
             // Concepto de corrección (según DIAN/Factus)
             correction_concept_code: parseInt(concepto),
-            
+
             // 20 = Nota Crédito que referencia una factura electrónica.
             // 30 = Nota Débito que referencia una factura electrónica.
-            customization_id: isNC ? 20 : 30,   
-            
+            customization_id: isNC ? 20 : 30,
+
             // ID de la factura en Factus
             bill_id: billId,
-            
+
             reference_code: referenceCodeNew, // Código de referencia único para la nota de ajuste
 
             // Metadatos de la factura original para facilitar procesamiento
@@ -662,7 +662,7 @@ export class FactusService {
         }
     }
 
-    
+
     // ========== ENDPOINTS DE REFERENCIA ==========
 
     /**

@@ -22,25 +22,16 @@ export class FacturaCompraStrategy implements IContabilizacionStrategy {
     private readonly parametrizacionService: ParametrizacionContableService,
   ) { }
 
-  async generarDefinicion(
-    documentoId: string,
-    queryRunner?: QueryRunner
-  ): Promise<DefinicionAsientoDto> {
+  async generarDefinicion(documentoId: string, queryRunner?: QueryRunner): Promise<DefinicionAsientoDto> {
     const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
 
     // 1. Obtener la factura de compra con sus relaciones
     const gasto = await manager.findOne(FacturaCompra, {
       where: { id: documentoId },
-      relations: [
-        'proveedor',
-        'items',
-        'cuentaBancaria',
-      ],
+      relations: ['proveedor', 'items', 'cuentaBancaria'],
     });
 
-    if (!gasto) {
-      throw new NotFoundException(`Factura de compra con ID ${documentoId} no encontrada`);
-    }
+    if (!gasto) throw new NotFoundException(`Factura de compra con ID ${documentoId} no encontrada`);
 
     const detalles: DefinicionDetalleAsientoDto[] = [];
     const terceroNombre = gasto.proveedor

@@ -1,11 +1,19 @@
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { tipoCategoria } from 'src/common/constants/categorias-articulos.config';
 
 @Entity('categorias_articulos')
 export class CategoriaArticulo {
     @PrimaryGeneratedColumn()
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @Column()
     codigo: string;

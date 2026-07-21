@@ -17,12 +17,20 @@ import { FacturasVenta } from "src/facturas-ventas/entities/facturas-venta.entit
 import { MetodoPago } from "src/core/catalogs/entities/metodo-pago.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { ConceptoCorreccion } from "src/core/catalogs/entities/concepto-correcion.entity";
+import { Empresa } from "src/settings/empresa/entities/empresa.entity";
 import { Delete } from "@nestjs/common";
 
 @Entity('notas_ajuste')
 export class NotaAjuste {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ 
     type: 'enum', 

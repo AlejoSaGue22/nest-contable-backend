@@ -14,6 +14,7 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { PagoFacturaDetalle } from './pago-factura-detalle.entity';
 import { PagoConceptoDetalle } from './pago-concepto-detalle.entity';
 
@@ -31,6 +32,13 @@ import { PaymentStatus, TipoPago, MedioPago, EstadoPago } from '../enums/pago.en
 export class Pago {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ type: 'varchar', length: 20, default: '0000' })
   numero: string;

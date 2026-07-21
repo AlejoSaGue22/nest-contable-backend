@@ -14,7 +14,10 @@ export class EmpresaService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.ensureDefaultCompany();
+    const defaultEmpresa = await this.ensureDefaultCompany();
+    if (defaultEmpresa) {
+      await this.backfillOrphanedRecords(defaultEmpresa.id);
+    }
   }
 
   private async ensureDefaultCompany(): Promise<Empresa> {
@@ -37,6 +40,41 @@ export class EmpresaService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error inicializando empresa por defecto: ${error.message}`, error.stack);
       throw error;
+    }
+  }
+
+  private async backfillOrphanedRecords(empresaId: string): Promise<void> {
+    const tables = [
+      'users',
+      'asientos_contables',
+      'facturas_venta',
+      'facturas_compras',
+      'cuentas_contables',
+      'cuentas_bancarias',
+      'clientes',
+      'proveedores',
+      'articulos',
+      'pagos',
+      'empleados',
+      'activos_fijos',
+      'impuestos',
+      'categorias_articulos',
+      'comprobantes_contables',
+      'periodos_nomina',
+      'notas_ajuste',
+      'notas_ajuste_compras',
+    ];
+
+    for (const table of tables) {
+      try {
+        await this.empresaRepository.query(
+          `UPDATE "${table}" SET "empresaId" = $1 WHERE "empresaId" IS NULL`,
+          [empresaId],
+        );
+      } catch (err) {
+        // Table or column might not exist yet if TypeORM hasn't synced it, ignore safely
+        this.logger.warn(`Backfill para la tabla ${table} finalizó con aviso: ${err.message}`);
+      }
     }
   }
 
