@@ -8,6 +8,8 @@ import * as path from 'path';
 import { AllowanceChargesFactus, FacturaDianResponse, FactusPayload, FactusTokenResponse, filtroMunicipios } from '../interfaces/api-dian-interface';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { ItemNotaAjuste } from 'src/notas-ajuste/entities/items-notas-ajuste.entity';
+import { EmpresaService } from 'src/settings/empresa/empresa.service';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 /**
  * Servicio de integración con Factus
@@ -28,6 +30,7 @@ export class FactusService {
     constructor(
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
+        private readonly empresaService: EmpresaService,
     ) {
         // Ambiente: sandbox para pruebas, producción para real
         const environment = this.configService.get<string>('FACTUS_ENVIRONMENT', 'sandbox');
@@ -252,7 +255,7 @@ export class FactusService {
             const token = await this.obtenerToken();
             this.validarDatosFactura(factura);
 
-            const payload = this.construirPayloadFactus(factura, numero);
+            const payload = await this.construirPayloadFactus(factura, numero);
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
@@ -295,11 +298,35 @@ export class FactusService {
     }
 
     /**
+     * Resolver datos del establecimiento a partir de la configuración de la empresa
+     */
+    private obtenerDatosEstablecimiento(empresa: Empresa) {
+        const configDian = empresa.configuracionDian || {};
+        const rawMunicipalityId = configDian.municipality_id || 
+                                  configDian.municipalityId || 
+                                  configDian.establishment_municipality_id || 
+                                  this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID');
+        const municipalityId = rawMunicipalityId ? Number(rawMunicipalityId) : undefined;
+
+        return {
+            name: empresa.razonSocial || configDian.establishmentName || configDian.establishment_name || this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
+            address: empresa.direccion || configDian.address || configDian.establishment_address || this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
+            phone_number: empresa.telefono || configDian.phone_number || configDian.phoneNumber || configDian.establishment_phone || this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE')!,
+            email: empresa.email || configDian.email || configDian.establishment_email || this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL')!,
+            municipality_id: municipalityId!
+        };
+    }
+
+    /**
      * Construir payload para Factus según su estructura exacta
      */
-    private construirPayloadFactus(factura: FacturasVenta, numero: string) {
+    private async construirPayloadFactus(factura: FacturasVenta, numero: string) {
         const referenceCode = `${factura.comprobante}_${Date.now()}`;
         const nombreCliente = factura.client.razonSocial || `${factura.client.nombre} ${factura.client.apellido}`;
+        
+        const empresa = await this.empresaService.getEmpresaEntity();
+        const establishmentData = this.obtenerDatosEstablecimiento(empresa);
+
         const payload = {
             // Código de documento: "01" = Factura de Venta
             document: "01",
@@ -321,13 +348,7 @@ export class FactusService {
             payment_method_code: factura.metodoPago || '10',
 
             // Datos del establecimiento/sucursal
-            establishment: {
-                name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
-                address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
-                phone_number: this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE')!,
-                email: this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL')!,
-                municipality_id: this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID')!
-            },
+            establishment: establishmentData,
 
             // Datos del cliente
             customer: {
@@ -434,7 +455,7 @@ export class FactusService {
         try {
             const token = await this.obtenerToken();
 
-            const payload = this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -480,7 +501,7 @@ export class FactusService {
         try {
             const token = await this.obtenerToken();
 
-            const payload = this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
 
             this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -523,13 +544,16 @@ export class FactusService {
     /**
      * Construir payload Nota Ajuste para Factus (NC o ND)
      */
-    private construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
+    private async construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito') {
         const referenceCodeNew = `NC-${referenceCode}_${factura.comprobante_completo}`; // Código de referencia único para la nota de ajuste   
 
         const isNC = tipo === 'credito';
 
         // Obtener el ID de la factura en el sistema de Factus si existe
         const billId = factura.proveedorResponse.data.bill.id || factura.proveedorResponse.data.id;
+
+        const empresa = await this.empresaService.getEmpresaEntity();
+        const establishmentData = this.obtenerDatosEstablecimiento(empresa);
 
         const payload: any = {
             // ID del rango de numeración para NC o ND
@@ -553,13 +577,7 @@ export class FactusService {
             observation: motivo || '',
 
             // Datos del establecimiento/sucursal
-            establishment: {
-                name: this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
-                address: this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS')!,
-                phone_number: this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE')!,
-                email: this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL')!,
-                municipality_id: this.configService.get<number>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID')!
-            },
+            establishment: establishmentData,
 
             // Datos del cliente
 

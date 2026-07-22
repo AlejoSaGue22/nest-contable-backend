@@ -91,6 +91,14 @@ export class EmpresaService implements OnModuleInit {
     }
   }
 
+  async getEmpresaEntity(): Promise<Empresa> {
+    const empresa = await this.empresaRepository.findOne({ where: {} });
+    if (!empresa) {
+      return this.ensureDefaultCompany();
+    }
+    return empresa;
+  }
+
   async update(updateEmpresaDto: UpdateEmpresaDto) {
     try {
       let empresa = await this.empresaRepository.findOne({ where: {} });
