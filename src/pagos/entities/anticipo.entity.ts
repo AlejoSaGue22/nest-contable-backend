@@ -10,6 +10,7 @@ import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { Pago } from './pago.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { AnticipoEstado, AnticipoTipo } from '../enums/pago.enum';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
@@ -17,6 +18,13 @@ import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric
 export class Anticipo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column({ type: 'varchar', length: 30 })
   numero: string;

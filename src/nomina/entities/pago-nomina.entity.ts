@@ -2,11 +2,19 @@ import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, Up
 import { PeriodoNomina } from './periodo-nomina.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Banco } from 'src/bancos/entities/banco.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 @Entity('pagos_nomina')
 export class PagoNomina {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @ManyToOne(() => PeriodoNomina)
     @JoinColumn({ name: 'periodoId' })

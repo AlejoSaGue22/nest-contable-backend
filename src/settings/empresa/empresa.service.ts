@@ -63,6 +63,14 @@ export class EmpresaService implements OnModuleInit {
       'periodos_nomina',
       'notas_ajuste',
       'notas_ajuste_compras',
+      'vendedores',
+      'parametrizacion_contable',
+      'pagos_nomina',
+      'liquidaciones_nomina',
+      'cargos',
+      'centros_costo',
+      'depreciaciones_activos_fijos',
+      'anticipos',
     ];
 
     for (const table of tables) {

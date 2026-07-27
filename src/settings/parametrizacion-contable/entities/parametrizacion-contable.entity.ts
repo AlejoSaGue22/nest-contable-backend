@@ -1,10 +1,18 @@
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('parametrizacion_contable')
 export class ParametrizacionContable {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   // Cuenta por cobrar clientes
   @ManyToOne(() => CuentaContable, { nullable: true })

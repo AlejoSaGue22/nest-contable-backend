@@ -1,11 +1,19 @@
 import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { PeriodoNomina } from './periodo-nomina.entity';
 import { Empleado } from './empleado.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 @Entity('liquidaciones_nomina')
 export class Liquidacion {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @ManyToOne(() => Empresa, { nullable: true })
+    @JoinColumn({ name: 'empresaId' })
+    empresa: Empresa;
+
+    @Column({ nullable: true })
+    empresaId: string;
 
     @ManyToOne(() => PeriodoNomina)
     @JoinColumn({ name: 'periodoId' })

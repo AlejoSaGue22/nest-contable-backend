@@ -1,9 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 
 @Entity('vendedores')
 export class Vendedor {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
 
   @Column()
   nombre: string;
