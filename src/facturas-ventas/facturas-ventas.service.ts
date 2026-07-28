@@ -217,7 +217,9 @@ export class FacturasVentasService {
             await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
           }
         }
-       // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD (Factura + Cruces de Anticipo)
+      }
+
+      // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD (Factura + Cruces de Anticipo)
       if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
         try {
           savedInvoice.items = itemsToSave;
@@ -281,7 +283,6 @@ export class FacturasVentasService {
             fechaAsientoError: new Date(),
           });
         }
-      }
 
         // Cobro automático si es contado y estándar (dentro de la misma transacción)
         if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
@@ -1269,10 +1270,10 @@ export class FacturasVentasService {
       const discountRate = Number(itemDto.discount) || 0;
       const itemDiscount = MathUtil.percentage(totalSinDescuento, discountRate);
 
-      const itemSubtotal = MathUtil.sub(totalSinDescuento, itemDiscount);
+      const itemImporte = MathUtil.sub(totalSinDescuento, itemDiscount);
 
       const taxRate = Number(itemDto.iva) || 0;
-      const itemIva = MathUtil.percentage(itemSubtotal, taxRate);
+      const itemIva = MathUtil.percentage(itemImporte, taxRate);
 
       let impuestoIdSeleccionado: string | undefined;
       if (itemDto.impuestoId) {
@@ -1288,7 +1289,7 @@ export class FacturasVentasService {
         impuestoIdSeleccionado = product.impuestoId || undefined;
       }
 
-      const itemTotal = MathUtil.sum(itemSubtotal, itemIva);
+      const itemTotal = MathUtil.sum(itemImporte, itemIva);
 
       itemsCalculados.push({
         articuloId: product.id,
@@ -1297,15 +1298,15 @@ export class FacturasVentasService {
         iva: taxRate,
         impuestoId: impuestoIdSeleccionado,
         quantity,
-        subtotal: itemSubtotal,
+        subtotal: totalSinDescuento,
         valor_iva: itemIva,
-        importe: MathUtil.sub(itemSubtotal, itemDiscount),
+        importe: itemImporte,
         discount: discountRate,
         valor_discount: itemDiscount,
         total: itemTotal,
       });
 
-      subtotal = MathUtil.sum(subtotal, itemSubtotal);
+      subtotal = MathUtil.sum(subtotal, totalSinDescuento);
       iva = MathUtil.sum(iva, itemIva);
       descuento = MathUtil.sum(descuento, itemDiscount);
     }

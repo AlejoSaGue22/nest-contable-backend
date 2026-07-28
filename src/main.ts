@@ -20,8 +20,8 @@ async function bootstrap() {
 
   // CORS restrictivo
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
-    'http://192.168.1.77:4200',
     'http://localhost:4200',
+    // 'http://192.168.1.11:4200',
     'http://192.168.1.15:4200'
   ];
   // const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [

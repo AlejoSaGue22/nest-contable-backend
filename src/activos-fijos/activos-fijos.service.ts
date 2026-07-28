@@ -84,7 +84,7 @@ export class ActivosFijosService {
   async getDepreciaciones(activoId: string): Promise<DepreciacionActivoFijo[]> {
     return this.depreciacionRepository.find({
       where: { activoFijoId: activoId },
-      relations: ['asientoContable'],
+      relations: ['asientoContable', 'asientoContable.detalles', 'asientoContable.detalles.cuenta'],
       order: { anio: 'DESC', mes: 'DESC' },
     });
   }

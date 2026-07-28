@@ -136,7 +136,7 @@ export class FacturasComprasService {
                 const descuentoPorcentaje = itemDto.discount || 0;
                 const descuentoValor = MathUtil.percentage(totalSinDescuento, descuentoPorcentaje);
 
-                const itemSubtotal = MathUtil.sub(totalSinDescuento, descuentoValor);
+                const itemImporte = MathUtil.sub(totalSinDescuento, descuentoValor);
 
                 const porcentajeIva = itemDto.iva || (articulo ? articulo.porcentajeIva : 0);
                 let impuestoIdSeleccionado: string | undefined = undefined;
@@ -152,10 +152,9 @@ export class FacturasComprasService {
                     impuestoIdSeleccionado = (articulo ? (articulo.impuestoId || undefined) : undefined);
                 }
 
-                const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
+                const valorIva = MathUtil.percentage(itemImporte, porcentajeIva);
 
-                // (itemSubtotal - descuentoValor) + valorIva 
-                const itemTotal = MathUtil.sum(itemSubtotal, valorIva);
+                const itemTotal = MathUtil.sum(itemImporte, valorIva);
 
                 detalles.push({
                     articuloId: articulo ? articulo.id : null,
@@ -166,18 +165,18 @@ export class FacturasComprasService {
                     porcentajeIva,
                     impuestoId: impuestoIdSeleccionado,
                     valorIva,
-                    valorSubtotal: itemSubtotal,
+                    valorSubtotal: totalSinDescuento,
                     descuento: itemDto.discount || 0,
                     valorDescuento: descuentoValor,
                     itemTotal
                 });
 
-                subtotal = MathUtil.sum(subtotal, itemSubtotal);
+                subtotal = MathUtil.sum(subtotal, totalSinDescuento);
                 totalIva = MathUtil.sum(totalIva, valorIva);
                 descuento = MathUtil.sum(descuento, descuentoValor);
             }
 
-            const total = MathUtil.sum(subtotal, totalIva);
+            const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), totalIva);
             const isDraft = createFacturaCompraDto.isDraft;
             const numero = isDraft == true ? null : await this.generarNumeroGasto(queryRunner);
 
@@ -338,14 +337,14 @@ export class FacturasComprasService {
                             cuentaTerceroDefaultId = (await this.asientosContablesService.obtenerCuentaPorCodigo(defaultCodigo)).id;
                         }
 
-                        const cuentaTerceroId = proveedorConCuenta?.cuentaContable?.id || 
-                            proveedorConCuenta?.cuentaContableId || 
+                        const cuentaTerceroId = proveedorConCuenta?.cuentaContable?.id ||
+                            proveedorConCuenta?.cuentaContableId ||
                             cuentaTerceroDefaultId;
 
                         for (const app of aplicacionesActivas) {
                             const anticipo = app.anticipo;
-                            const cuentaAnticipoId = anticipo.cuentaContableId || 
-                              (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
+                            const cuentaAnticipoId = anticipo.cuentaContableId ||
+                                (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
 
                             const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
                                 {
@@ -569,8 +568,8 @@ export class FacturasComprasService {
             await queryRunner.manager.update(
                 FacturaCompra,
                 { id },
-                { 
-                    numero, 
+                {
+                    numero,
                     estado: GastoEstado.REGISTRADO,
                     paymentStatus,
                     saldoPendiente,
@@ -596,39 +595,39 @@ export class FacturasComprasService {
                     relations: ['anticipo'],
                 });
 
-                    if (aplicacionesActivas.length > 0) {
-                        const proveedorConCuenta = await queryRunner.manager.findOne(Proveedor, {
-                            where: { id: facturaActualizada!.proveedorId },
-                            relations: ['cuentaContable'],
+                if (aplicacionesActivas.length > 0) {
+                    const proveedorConCuenta = await queryRunner.manager.findOne(Proveedor, {
+                        where: { id: facturaActualizada!.proveedorId },
+                        relations: ['cuentaContable'],
+                    });
+
+                    const config = await this.parametrizacionService.getConfiguracion();
+                    let cuentaTerceroDefaultId = config?.cuentaPagarProveedoresId;
+                    let defaultCodigo = '2205';
+
+                    if (facturaActualizada!.items && facturaActualizada!.items.length > 0) {
+                        const articulos = await queryRunner.manager.find(Articulo, {
+                            where: { id: In(facturaActualizada!.items.map(i => i.articuloId)) },
+                            relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal'],
                         });
-
-                        const config = await this.parametrizacionService.getConfiguracion();
-                        let cuentaTerceroDefaultId = config?.cuentaPagarProveedoresId;
-                        let defaultCodigo = '2205';
-
-                        if (facturaActualizada!.items && facturaActualizada!.items.length > 0) {
-                            const articulos = await queryRunner.manager.find(Articulo, {
-                                where: { id: In(facturaActualizada!.items.map(i => i.articuloId)) },
-                                relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal'],
-                            });
-                            if (articulos.some(a => a.categoriaArticulo?.cuentaPrincipal?.codigo?.startsWith('5'))) {
-                                cuentaTerceroDefaultId = config?.cuentaPagarGastosId;
-                                defaultCodigo = '2335';
-                            }
+                        if (articulos.some(a => a.categoriaArticulo?.cuentaPrincipal?.codigo?.startsWith('5'))) {
+                            cuentaTerceroDefaultId = config?.cuentaPagarGastosId;
+                            defaultCodigo = '2335';
                         }
+                    }
 
-                        if (!cuentaTerceroDefaultId) {
-                            cuentaTerceroDefaultId = (await this.asientosContablesService.obtenerCuentaPorCodigo(defaultCodigo)).id;
-                        }
+                    if (!cuentaTerceroDefaultId) {
+                        cuentaTerceroDefaultId = (await this.asientosContablesService.obtenerCuentaPorCodigo(defaultCodigo)).id;
+                    }
 
-                        const cuentaTerceroId = proveedorConCuenta?.cuentaContable?.id || 
-                            proveedorConCuenta?.cuentaContableId || 
-                            cuentaTerceroDefaultId;
+                    const cuentaTerceroId = proveedorConCuenta?.cuentaContable?.id ||
+                        proveedorConCuenta?.cuentaContableId ||
+                        cuentaTerceroDefaultId;
 
                     for (const app of aplicacionesActivas) {
                         const anticipo = app.anticipo;
-                        const cuentaAnticipoId = anticipo.cuentaContableId || 
-                          (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
+                        const cuentaAnticipoId = anticipo.cuentaContableId ||
+                            (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
 
                         const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
                             {
@@ -742,7 +741,7 @@ export class FacturasComprasService {
                 if (anticipo) {
                     const nuevoSaldo = MathUtil.sum(anticipo.saldoDisponible, app.montoAplicado);
                     const nuevoEstado = nuevoSaldo === anticipo.montoOriginal ? AnticipoEstado.PENDIENTE : AnticipoEstado.PARCIAL;
-                    
+
                     await queryRunner.manager.update(Anticipo, { id: anticipo.id }, {
                         saldoDisponible: nuevoSaldo,
                         estado: nuevoEstado
@@ -1033,12 +1032,12 @@ export class FacturasComprasService {
                 impuestoIdSeleccionado = articulo ? (articulo.impuestoId || undefined) : undefined;
             }
 
-            const itemSubtotal = MathUtil.mul(precioUnitario, cantidad);
-            const valorIva = MathUtil.percentage(itemSubtotal, porcentajeIva);
-            const descuentoValor = MathUtil.percentage(itemSubtotal, porcentajeDescuento);
+            const totalSinDescuento = MathUtil.mul(precioUnitario, cantidad);
+            const descuentoValor = MathUtil.percentage(totalSinDescuento, porcentajeDescuento);
+            const itemImporte = MathUtil.sub(totalSinDescuento, descuentoValor);
+            const valorIva = MathUtil.percentage(itemImporte, porcentajeIva);
 
-            // itemSubtotal + valorIva - descuentoValor
-            const itemTotal = MathUtil.sub(MathUtil.sum(itemSubtotal, valorIva), descuentoValor);
+            const itemTotal = MathUtil.sum(itemImporte, valorIva);
 
             detalles.push({
                 articuloId: articulo ? articulo.id : null,
@@ -1049,13 +1048,13 @@ export class FacturasComprasService {
                 porcentajeIva: porcentajeIva,
                 impuestoId: impuestoIdSeleccionado,
                 descuento: porcentajeDescuento,
-                valorSubtotal: itemSubtotal,
+                valorSubtotal: totalSinDescuento,
                 valorIva: valorIva,
                 valorDescuento: descuentoValor,
                 itemTotal: itemTotal
             });
 
-            subtotal = MathUtil.sum(subtotal, itemSubtotal);
+            subtotal = MathUtil.sum(subtotal, totalSinDescuento);
             totalIva = MathUtil.sum(totalIva, valorIva);
             descuento = MathUtil.sum(descuento, descuentoValor);
         }
@@ -1105,8 +1104,8 @@ export class FacturasComprasService {
 
                 for (const app of aplicacionesActivas) {
                     const anticipo = app.anticipo;
-                    const cuentaAnticipoId = anticipo.cuentaContableId || 
-                      (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
+                    const cuentaAnticipoId = anticipo.cuentaContableId ||
+                        (await this.asientosContablesService.obtenerCuentaPorCodigo('133005')).id;
 
                     const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
                         {
