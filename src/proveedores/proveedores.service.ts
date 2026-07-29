@@ -38,7 +38,7 @@ export class ProveedoresService {
         const limit = paginationDto.limit || 10;
         const offset = (page - 1) * limit;
         const { search } = paginationDto;
-        
+
         const proveedores = await this.proveedorRepository.find({
             take: limit,
             skip: offset,
@@ -69,7 +69,7 @@ export class ProveedoresService {
         };
     }
 
-    async findOne(id: string) { 
+    async findOne(id: string) {
         const proveedor = await this.proveedorRepository.findOne({
             where: { id },
             relations: {
@@ -87,7 +87,7 @@ export class ProveedoresService {
     async update(id: string, updateProveedorDto: UpdateProveedorDto) {
         const proveedor = await this.findOne(id);
         this.proveedorRepository.merge(proveedor, updateProveedorDto);
-        
+
         return this.proveedorRepository.save(proveedor);
     }
 

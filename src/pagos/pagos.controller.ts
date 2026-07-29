@@ -469,7 +469,7 @@ export class PagosController {
   }
 
   @Patch(':id/anular')
-  @Permissions(Permission.PAGO_UPDATE)
+  @Permissions(Permission.PAGO_MOVIMIENTOS)
   async anularPago(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('motivo') motivo: string,
