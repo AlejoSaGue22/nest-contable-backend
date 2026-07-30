@@ -11,6 +11,11 @@ import { EntidadSeguridadSocial } from './entities/entidad-seguridad-social.enti
 import { TipoContratoEntity } from './entities/tipo-contrato.entity';
 import { Cargo } from './entities/cargo.entity';
 import { CentroCosto } from './entities/centro-costo.entity';
+import { ConceptoNomina } from './entities/concepto-nomina.entity';
+import { EmpleadoConceptoRecurrente } from './entities/empleado-concepto-recurrente.entity';
+import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
+import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
+import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 
 @Module({
@@ -24,6 +29,11 @@ import { AsientosContablesModule } from 'src/asientos-contables/asientos-contabl
             TipoContratoEntity,
             Cargo,
             CentroCosto,
+            ConceptoNomina,
+            EmpleadoConceptoRecurrente,
+            PeriodoEmpleado,
+            ParametroNominaVersion,
+            LiquidacionDetalle,
         ]),
         AsientosContablesModule,
     ],

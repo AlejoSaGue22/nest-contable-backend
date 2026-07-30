@@ -39,20 +39,30 @@ export class ProveedoresService {
         const offset = (page - 1) * limit;
         const { search } = paginationDto;
 
-        const proveedores = await this.proveedorRepository.find({
-            take: limit,
-            skip: offset,
-            order: {
-                id: 'DESC'
-            },
-            relations: {
-                tipoDocumentoRel: true,
-                ciudadRel: true,
-                cuentaContable: true,
-            }
-        });
+        const qb = this.proveedorRepository
+            .createQueryBuilder('p')
+            .leftJoinAndSelect('p.tipoDocumentoRel', 'tipoDocumentoRel')
+            .leftJoinAndSelect('p.ciudadRel', 'ciudadRel')
+            .leftJoinAndSelect('p.cuentaContable', 'cuentaContable')
+            .orderBy('p.id', 'DESC')
+            .take(limit)
+            .skip(offset);
 
-        const totalProveedores = await this.proveedorRepository.count();
+        if (search && search.trim().length > 0) {
+            const term = `%${search.trim().toLowerCase()}%`;
+            qb.andWhere(
+                `(LOWER(p.nombre) LIKE :term 
+                OR LOWER(p.apellido) LIKE :term 
+                OR LOWER(p.razonSocial) LIKE :term 
+                OR LOWER(p.identificacion) LIKE :term 
+                OR LOWER(p.email) LIKE :term 
+                OR LOWER(p.telefono) LIKE :term)`,
+                { term }
+            );
+        }
+
+        const [proveedores, totalProveedores] = await qb.getManyAndCount();
+
         const proveedoresMap = proveedores.map((prov, indx) => {
             return {
                 ...prov,

@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,6 +20,13 @@ import { TipoContratoEntity } from './entities/tipo-contrato.entity';
 import { TipoContrato } from './enums/tipo-contrato.enum';
 import { Cargo } from './entities/cargo.entity';
 import { CentroCosto } from './entities/centro-costo.entity';
+import { ConceptoNomina } from './entities/concepto-nomina.entity';
+import { EmpleadoConceptoRecurrente } from './entities/empleado-concepto-recurrente.entity';
+import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
+import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
+import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
+import { TipoConceptoNomina } from './enums/tipo-concepto.enum';
+import { CategoriaConceptoNomina } from './enums/categoria-concepto.enum';
 import { CreateEmpleadoDto } from './dto/create-empleado.dto';
 import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
@@ -34,7 +42,7 @@ const SMMLV_2026 = 1423500;
 const AUXILIO_TRANSPORTE_2026 = 200000;
 
 @Injectable()
-export class NominaService {
+export class NominaService implements OnModuleInit {
   private readonly logger = new Logger(NominaService.name);
 
   constructor(
@@ -54,8 +62,64 @@ export class NominaService {
     private readonly pagoNominaRepo: Repository<PagoNomina>,
     @InjectRepository(TipoContratoEntity)
     private readonly tipoContratoRepo: Repository<TipoContratoEntity>,
+    @InjectRepository(ConceptoNomina)
+    private readonly conceptoRepo: Repository<ConceptoNomina>,
+    @InjectRepository(EmpleadoConceptoRecurrente)
+    private readonly empleadoConceptoRepo: Repository<EmpleadoConceptoRecurrente>,
+    @InjectRepository(PeriodoEmpleado)
+    private readonly periodoEmpleadoRepo: Repository<PeriodoEmpleado>,
+    @InjectRepository(ParametroNominaVersion)
+    private readonly parametroRepo: Repository<ParametroNominaVersion>,
+    @InjectRepository(LiquidacionDetalle)
+    private readonly liquidacionDetalleRepo: Repository<LiquidacionDetalle>,
     private readonly asientosContablesService: AsientosContablesService,
   ) {}
+
+  async onModuleInit() {
+    await this.seedConceptosEstandard();
+    await this.seedParametrosLegales();
+  }
+
+  private async seedConceptosEstandard() {
+    const count = await this.conceptoRepo.count();
+    if (count > 0) return;
+
+    const conceptos = [
+      { codigo: 'DEV-BONIF', nombre: 'Bonificación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DEV-AUXADIC', nombre: 'Auxilio Adicional', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DEV-COMISION', nombre: 'Comisión', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.SALARIAL, aplicaIbc: true, aplicaPrestaciones: true },
+      { codigo: 'DEV-DOTACION', nombre: 'Dotación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DED-LIBRANZA', nombre: 'Libranza', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DED-EMBARGO', nombre: 'Embargo', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DED-SINDICATO', nombre: 'Cuota Sindicato', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DED-INTERNO', nombre: 'Descuento Interno', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'LEY-SALUD', nombre: 'Salud', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_LEY, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'LEY-PENSION', nombre: 'Pensión', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_LEY, aplicaIbc: false, aplicaPrestaciones: false },
+    ];
+
+    await this.conceptoRepo.save(conceptos);
+    this.logger.log('Conceptos máster de nómina sembrados con éxito');
+  }
+
+  private async seedParametrosLegales() {
+    const count = await this.parametroRepo.count();
+    if (count > 0) return;
+
+    await this.parametroRepo.save({
+      anio: 2026,
+      fechaInicioVigencia: new Date('2026-01-01'),
+      smmlv: SMMLV_2026,
+      auxilioTransporte: AUXILIO_TRANSPORTE_2026,
+      porcentajeSaludEmpleado: 4.0,
+      porcentajePensionEmpleado: 4.0,
+      porcentajeSaludEmpresa: 8.5,
+      porcentajePensionEmpresa: 12.0,
+      porcentajeCcf: 4.0,
+      porcentajeSena: 2.0,
+      porcentajeIcbf: 3.0,
+    });
+    this.logger.log('Parámetros legales de nómina 2026 sembrados con éxito');
+  }
 
   // ═══════════════════════════════════════════════════════════════════
   //  EMPLEADOS
@@ -280,54 +344,77 @@ export class NominaService {
       throw new BadRequestException('El período no está en estado BORRADOR');
     }
 
-    const liquidaciones: Liquidacion[] = [];
-    const empleadosItems = dto.empleados?.length
-      ? dto.empleados
-      : (await this.empleadoRepo.find({ where: { activo: true } })).map(
-          (e) => ({ empleadoId: e.id, diasTrabajados: 30 }),
-        );
+    // 1. Obtener empleados asignados a través de PeriodoEmpleado
+    let asignados = await this.periodoEmpleadoRepo.find({
+      where: { periodoId, estado: 'INCLUIDO' },
+      relations: ['empleado'],
+    });
 
-    for (const item of empleadosItems) {
-      const empleado = await this.findOneEmpleado(item.empleadoId);
-      const liq = await this.calcularLiquidacion(empleado, periodo, item);
-      liquidaciones.push(liq);
+    // Fallback: si no hay asignados expresamente, asignar automáticamente a todos los activos
+    if (asignados.length === 0) {
+      const activos = await this.empleadoRepo.find({ where: { activo: true } });
+      if (activos.length === 0) {
+        throw new BadRequestException('No hay empleados activos para liquidar en este período');
+      }
+      await this.assignEmpleadosToPeriodo(periodoId, activos.map((e) => e.id));
+      asignados = await this.periodoEmpleadoRepo.find({
+        where: { periodoId, estado: 'INCLUIDO' },
+        relations: ['empleado'],
+      });
     }
 
-    const saved = await this.liquidacionRepo.save(liquidaciones);
+    // 2. Obtener parámetros de ley vigentes para el período
+    const paramsLegal = await this.getParametrosVigentes(periodo.fechaFin);
+    const smmlv = paramsLegal ? Number(paramsLegal.smmlv) : SMMLV_2026;
+    const auxTransporteMonto = paramsLegal ? Number(paramsLegal.auxilioTransporte) : AUXILIO_TRANSPORTE_2026;
+    const pctSaludEmp = paramsLegal ? Number(paramsLegal.porcentajeSaludEmpleado) : 4.0;
+    const pctPensionEmp = paramsLegal ? Number(paramsLegal.porcentajePensionEmpleado) : 4.0;
 
-    const totalDevengado = saved.reduce(
-      (s, l) => s + Number(l.totalDevengado),
-      0,
-    );
-    const totalDeducciones = saved.reduce(
-      (s, l) => s + Number(l.totalDeducciones),
-      0,
-    );
+    const liquidaciones: Liquidacion[] = [];
+    const detallesToSave: Partial<LiquidacionDetalle>[] = [];
+
+    // Limpiar liquidaciones previas del mismo borrador (si re-liquida)
+    const prevLiqs = await this.liquidacionRepo.find({ where: { periodoId } });
+    if (prevLiqs.length > 0) {
+      await this.liquidacionRepo.remove(prevLiqs);
+    }
+
+    for (const pe of asignados) {
+      const empleado = pe.empleado;
+      const { liq, detalles } = await this.calcularLiquidacionConSnapshot(
+        empleado,
+        periodo,
+        pe.diasNovedad,
+        smmlv,
+        auxTransporteMonto,
+        pctSaludEmp,
+        pctPensionEmp,
+      );
+      const savedLiq = await this.liquidacionRepo.save(liq);
+
+      for (const d of detalles) {
+        d.liquidacionId = savedLiq.id;
+        detallesToSave.push(d);
+      }
+      liquidaciones.push(savedLiq);
+    }
+
+    if (detallesToSave.length > 0) {
+      await this.liquidacionDetalleRepo.save(detallesToSave);
+    }
+
+    const saved = liquidaciones;
+    const totalDevengado = saved.reduce((s, l) => s + Number(l.totalDevengado), 0);
+    const totalDeducciones = saved.reduce((s, l) => s + Number(l.totalDeducciones), 0);
     const totalNeto = saved.reduce((s, l) => s + Number(l.netoPagar), 0);
     const totalCosto = saved.reduce(
-      (s, l) =>
-        s +
-        Number(l.totalDevengado) +
-        Number(l.totalAportes) +
-        Number(l.totalProvisiones),
+      (s, l) => s + Number(l.totalDevengado) + Number(l.totalAportes) + Number(l.totalProvisiones),
       0,
     );
-    const totalAportesPeriodo = saved.reduce(
-      (s, l) => s + Number(l.totalAportes),
-      0,
-    );
-    const totalProvisionesPeriodo = saved.reduce(
-      (s, l) => s + Number(l.totalProvisiones),
-      0,
-    );
-    const saludPension = saved.reduce(
-      (s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado),
-      0,
-    );
-    const totalRetefuente = saved.reduce(
-      (s, l) => s + Number(l.retencionFuente),
-      0,
-    );
+    const totalAportesPeriodo = saved.reduce((s, l) => s + Number(l.totalAportes), 0);
+    const totalProvisionesPeriodo = saved.reduce((s, l) => s + Number(l.totalProvisiones), 0);
+    const saludPension = saved.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
+    const totalRetefuente = saved.reduce((s, l) => s + Number(l.retencionFuente), 0);
 
     // Generar asiento contable de provisión
     const asiento = await this.asientosContablesService.generarAsientoNomina({
@@ -356,6 +443,181 @@ export class NominaService {
       data: saved,
       asientoProvision: asiento,
     };
+  }
+
+  private async calcularLiquidacionConSnapshot(
+    empleado: Empleado,
+    periodo: PeriodoNomina,
+    dias: number,
+    smmlv: number,
+    auxTransporteMonto: number,
+    pctSaludEmp: number,
+    pctPensionEmp: number,
+  ) {
+    const salarioDiario = Number(empleado.salarioBase) / 30;
+    const salarioDevengado = Math.round(salarioDiario * dias * 100) / 100;
+
+    // Cargar conceptos recurrentes del empleado
+    const recurrentes = await this.empleadoConceptoRepo
+      .createQueryBuilder('ec')
+      .innerJoinAndSelect('ec.concepto', 'c')
+      .where('ec.empleadoId = :empId', { empId: empleado.id })
+      .andWhere('ec.activo = true')
+      .andWhere('ec.fechaInicio <= :fin', { fin: periodo.fechaFin })
+      .andWhere('(ec.fechaFin IS NULL OR ec.fechaFin >= :inicio)', { inicio: periodo.fechaInicio })
+      .getMany();
+
+    let devengadosSalarialesRec = 0;
+    let devengadosNoSalarialesRec = 0;
+    let deduccionesRecurrentes = 0;
+
+    const detallesSnapshots: Partial<LiquidacionDetalle>[] = [];
+
+    // Detalle por defecto: Salario Base
+    detallesSnapshots.push({
+      conceptoNombreSnapshot: 'Salario Base Proporcional',
+      tipo: TipoConceptoNomina.DEVENGADO,
+      valor: salarioDevengado,
+      esRecurrente: false,
+    });
+
+    for (const r of recurrentes) {
+      let valorCalc = 0;
+      if (r.tipoValor === 'PORCENTAJE') {
+        valorCalc = Math.round(((salarioDevengado * Number(r.valor)) / 100) * 100) / 100;
+      } else {
+        valorCalc = Number(r.valor);
+      }
+
+      if (r.concepto.tipo === TipoConceptoNomina.DEVENGADO) {
+        if (r.concepto.categoria === CategoriaConceptoNomina.SALARIAL) {
+          devengadosSalarialesRec += valorCalc;
+        } else {
+          devengadosNoSalarialesRec += valorCalc;
+        }
+      } else {
+        deduccionesRecurrentes += valorCalc;
+      }
+
+      detallesSnapshots.push({
+        conceptoId: r.conceptoId,
+        conceptoNombreSnapshot: r.concepto.nombre,
+        tipo: r.concepto.tipo,
+        valor: valorCalc,
+        esRecurrente: true,
+      });
+    }
+
+    // Auxilio de Transporte
+    let auxilioTransporte = 0;
+    if (empleado.auxilioTransporte && Number(empleado.salarioBase) <= 2 * smmlv) {
+      auxilioTransporte = Math.round((auxTransporteMonto / 30) * dias * 100) / 100;
+      detallesSnapshots.push({
+        conceptoNombreSnapshot: 'Auxilio de Transporte',
+        tipo: TipoConceptoNomina.DEVENGADO,
+        valor: auxilioTransporte,
+        esRecurrente: false,
+      });
+    }
+
+    const totalDevengado = Math.round(
+      (salarioDevengado + devengadosSalarialesRec + devengadosNoSalarialesRec + auxilioTransporte) * 100,
+    ) / 100;
+
+    // Ley 1393/2010 (Tope 40% no salarial para IBC)
+    const totalRemuneracion = salarioDevengado + devengadosSalarialesRec + devengadosNoSalarialesRec;
+    const tope40 = totalRemuneracion * 0.40;
+    let excesoNoSalarial = 0;
+    if (devengadosNoSalarialesRec > tope40) {
+      excesoNoSalarial = devengadosNoSalarialesRec - tope40;
+    }
+
+    let ibcBase = salarioDevengado + devengadosSalarialesRec + excesoNoSalarial;
+    const ibcPiso = (smmlv / 30) * dias;
+    const ibcTecho = smmlv * 25;
+    const ibc = Math.round(Math.min(Math.max(ibcBase, ibcPiso), ibcTecho) * 100) / 100;
+
+    // Deducciones Legales
+    const saludEmpleado = Math.round((ibc * (pctSaludEmp / 100)) * 100) / 100;
+    const pensionEmpleado = Math.round((ibc * (pctPensionEmp / 100)) * 100) / 100;
+    const retencionFuente = this.calcularRetencionFuente(
+      Number(empleado.salarioBase),
+      totalDevengado,
+      empleado.salarioIntegral,
+    );
+
+    detallesSnapshots.push({
+      conceptoNombreSnapshot: 'Salud Empleado',
+      tipo: TipoConceptoNomina.DEDUCCION,
+      valor: saludEmpleado,
+      esRecurrente: false,
+    });
+
+    detallesSnapshots.push({
+      conceptoNombreSnapshot: 'Pensión Empleado',
+      tipo: TipoConceptoNomina.DEDUCCION,
+      valor: pensionEmpleado,
+      esRecurrente: false,
+    });
+
+    // Protección del salario (Límite deducciones recurrentes al 50% devengado neto)
+    const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
+    const maxDeduccionesPermitidas = (totalDevengado - subtotalLegales) * 0.50;
+    if (deduccionesRecurrentes > maxDeduccionesPermitidas && maxDeduccionesPermitidas > 0) {
+      deduccionesRecurrentes = Math.round(maxDeduccionesPermitidas * 100) / 100;
+    }
+
+    const totalDeducciones = Math.round((subtotalLegales + deduccionesRecurrentes) * 100) / 100;
+    const netoPagar = Math.max(0, Math.round((totalDevengado - totalDeducciones) * 100) / 100);
+
+    // Aportes empleador y provisiones
+    const tasasARL = [0, 0.00348, 0.01044, 0.02436, 0.0435, 0.087];
+    const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00348;
+
+    const aportes = [
+      { concepto: 'Salud', valor: Math.round(ibc * 0.085 * 100) / 100 },
+      { concepto: 'Pensión', valor: Math.round(ibc * 0.12 * 100) / 100 },
+      { concepto: 'ARL', valor: Math.round(ibc * tasaARL * 100) / 100 },
+      { concepto: 'Caja Compensación', valor: Math.round(ibc * 0.04 * 100) / 100 },
+      { concepto: 'SENA', valor: Math.round(ibc * 0.02 * 100) / 100 },
+      { concepto: 'ICBF', valor: Math.round(ibc * 0.03 * 100) / 100 },
+    ];
+    const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
+
+    const provisiones = [
+      { concepto: 'Cesantías', valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100 },
+      { concepto: 'Intereses Cesantías', valor: Math.round(((salarioDevengado * dias) / 360) * 0.12 * 100) / 100 },
+      { concepto: 'Prima de Servicios', valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100 },
+      { concepto: 'Vacaciones', valor: Math.round(((Number(empleado.salarioBase) * dias) / 720) * 100) / 100 },
+    ];
+    const totalProvisiones = provisiones.reduce((s, p) => s + p.valor, 0);
+
+    const liq = this.liquidacionRepo.create({
+      periodoId: periodo.id,
+      empleadoId: empleado.id,
+      diasTrabajados: dias,
+      salarioDevengado,
+      auxilioTransporte,
+      horasExtras: [],
+      totalHorasExtras: 0,
+      bonificaciones: [],
+      totalBonificaciones: devengadosNoSalarialesRec,
+      comisiones: devengadosSalarialesRec,
+      totalDevengado,
+      saludEmpleado,
+      pensionEmpleado,
+      retencionFuente,
+      otrasDeducciones: [],
+      totalDeducciones,
+      netoPagar,
+      ibc,
+      aportesEmpleador: aportes,
+      totalAportes,
+      provisiones,
+      totalProvisiones,
+    });
+
+    return { liq, detalles: detallesSnapshots };
   }
 
   async findLiquidacionesByPeriodo(periodoId: string) {
@@ -1053,5 +1315,183 @@ export class NominaService {
       totales,
       detalleEmpleados,
     };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  CATÁLOGO DE CONCEPTOS
+  // ═══════════════════════════════════════════════════════════════════
+
+  async getConceptos(empresaId?: string) {
+    const qb = this.conceptoRepo.createQueryBuilder('c');
+    if (empresaId) {
+      qb.where('c.empresaId = :empresaId OR c.empresaId IS NULL', { empresaId });
+    }
+    qb.orderBy('c.codigo', 'ASC');
+    return qb.getMany();
+  }
+
+  async createConcepto(dto: any, empresaId?: string) {
+    const exists = await this.conceptoRepo.findOne({ where: { codigo: dto.codigo } });
+    if (exists) throw new BadRequestException(`El código de concepto "${dto.codigo}" ya existe`);
+    const concepto = this.conceptoRepo.create({ ...dto, empresaId });
+    return this.conceptoRepo.save(concepto);
+  }
+
+  async updateConcepto(id: string, dto: any) {
+    const concepto = await this.conceptoRepo.findOne({ where: { id } });
+    if (!concepto) throw new NotFoundException(`Concepto ${id} no encontrado`);
+    Object.assign(concepto, dto);
+    return this.conceptoRepo.save(concepto);
+  }
+
+  async toggleConceptoActive(id: string) {
+    const concepto = await this.conceptoRepo.findOne({ where: { id } });
+    if (!concepto) throw new NotFoundException(`Concepto ${id} no encontrado`);
+    concepto.activo = !concepto.activo;
+    return this.conceptoRepo.save(concepto);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  CONCEPTOS RECURRENTES POR EMPLEADO
+  // ═══════════════════════════════════════════════════════════════════
+
+  async getConceptosRecurrentesByEmpleado(empleadoId: string) {
+    return this.empleadoConceptoRepo.find({
+      where: { empleadoId },
+      relations: ['concepto'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async createEmpleadoConcepto(empleadoId: string, dto: any) {
+    const empleado = await this.empleadoRepo.findOne({ where: { id: empleadoId } });
+    if (!empleado) throw new NotFoundException(`Empleado ${empleadoId} no encontrado`);
+
+    const concepto = await this.conceptoRepo.findOne({ where: { id: dto.conceptoId } });
+    if (!concepto) throw new NotFoundException(`Concepto ${dto.conceptoId} no encontrado`);
+
+    const item = this.empleadoConceptoRepo.create({
+      empleadoId,
+      ...dto,
+    });
+    return this.empleadoConceptoRepo.save(item);
+  }
+
+  async updateEmpleadoConcepto(id: string, dto: any) {
+    const item = await this.empleadoConceptoRepo.findOne({ where: { id } });
+    if (!item) throw new NotFoundException(`Registro ${id} no encontrado`);
+    Object.assign(item, dto);
+    return this.empleadoConceptoRepo.save(item);
+  }
+
+  async toggleEmpleadoConcepto(id: string) {
+    const item = await this.empleadoConceptoRepo.findOne({ where: { id } });
+    if (!item) throw new NotFoundException(`Registro ${id} no encontrado`);
+    item.activo = !item.activo;
+    return this.empleadoConceptoRepo.save(item);
+  }
+
+  async deleteEmpleadoConcepto(id: string) {
+    const res = await this.empleadoConceptoRepo.delete(id);
+    if (!res.affected) throw new NotFoundException(`Registro ${id} no encontrado`);
+    return { success: true };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  GESTIÓN DE EMPLEADOS EN EL PERÍODO
+  // ═══════════════════════════════════════════════════════════════════
+
+  async getEmpleadosOfPeriodo(periodoId: string) {
+    return this.periodoEmpleadoRepo.find({
+      where: { periodoId },
+      relations: ['empleado', 'empleado.cargo', 'empleado.centroCosto'],
+    });
+  }
+
+  async assignEmpleadosToPeriodo(periodoId: string, empleadoIds: string[], diasNovedad: number = 30) {
+    const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
+    if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+    if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
+      throw new BadRequestException('Solo se pueden modificar los empleados en un período en borrador');
+    }
+
+    const duplicados: string[] = [];
+
+    for (const empId of empleadoIds) {
+      // Verificar si ya pertenece a otro período activo con solapamiento de fechas
+      const solapado = await this.periodoEmpleadoRepo
+        .createQueryBuilder('pe')
+        .innerJoin('pe.periodo', 'p')
+        .innerJoin('pe.empleado', 'e')
+        .where('pe.empleadoId = :empId', { empId })
+        .andWhere('pe.periodoId != :periodoId', { periodoId })
+        .andWhere('p.estado IN (:...estados)', { estados: [EstadoPeriodoNomina.BORRADOR, EstadoPeriodoNomina.LIQUIDADA] })
+        .andWhere('p.fechaInicio <= :fin AND p.fechaFin >= :inicio', { inicio: periodo.fechaInicio, fin: periodo.fechaFin })
+        .select(['p.nombre', 'e.primerNombre', 'e.primerApellido'])
+        .getRawOne();
+
+      if (solapado) {
+        const nombreEmp = `${solapado.e_primerNombre} ${solapado.e_primerApellido}`;
+        duplicados.push(`El empleado ${nombreEmp} ya está asignado al período "${solapado.p_nombre}" que se solapa.`);
+      }
+    }
+
+    if (duplicados.length > 0) {
+      throw new BadRequestException(duplicados.join(' | '));
+    }
+
+    // Insertar evitando duplicados dentro del mismo periodo
+    for (const empId of empleadoIds) {
+      const exists = await this.periodoEmpleadoRepo.findOne({ where: { periodoId, empleadoId: empId } });
+      if (!exists) {
+        await this.periodoEmpleadoRepo.save({
+          periodoId,
+          empleadoId: empId,
+          diasNovedad,
+          estado: 'INCLUIDO',
+        });
+      }
+    }
+
+    return this.getEmpleadosOfPeriodo(periodoId);
+  }
+
+  async removeEmpleadoFromPeriodo(periodoId: string, empleadoId: string) {
+    const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
+    if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+    if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
+      throw new BadRequestException('No se pueden remover empleados de un período que no esté en borrador');
+    }
+
+    await this.periodoEmpleadoRepo.delete({ periodoId, empleadoId });
+    return { success: true };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  PARAMETRIZACIÓN LEGAL VERSIONADA
+  // ═══════════════════════════════════════════════════════════════════
+
+  async getParametrosVigentes(fecha: Date = new Date()) {
+    const parametro = await this.parametroRepo
+      .createQueryBuilder('p')
+      .where('p.fechaInicioVigencia <= :fecha', { fecha })
+      .andWhere('(p.fechaFinVigencia IS NULL OR p.fechaFinVigencia >= :fecha)', { fecha })
+      .orderBy('p.fechaInicioVigencia', 'DESC')
+      .getOne();
+
+    if (!parametro) {
+      return this.parametroRepo.findOne({ order: { fechaInicioVigencia: 'DESC' } });
+    }
+
+    return parametro;
+  }
+
+  async getHistorialParametros() {
+    return this.parametroRepo.find({ order: { fechaInicioVigencia: 'DESC' } });
+  }
+
+  async createParametroVersion(dto: any) {
+    const version = this.parametroRepo.create(dto);
+    return this.parametroRepo.save(version);
   }
 }
