@@ -51,6 +51,37 @@ export class NominaController {
     return this.nominaService.findAllEmpleados(pagination);
   }
 
+  @Get('empleados/:id/conceptos-recurrentes')
+  getConceptosRecurrentesByEmpleado(@Param('id') id: string) {
+    return this.nominaService.getConceptosRecurrentesByEmpleado(id);
+  }
+
+  @Post('empleados/:id/conceptos-recurrentes')
+  createEmpleadoConcepto(
+    @Param('id') id: string,
+    @Body() dto: CreateEmpleadoConceptoDto,
+  ) {
+    return this.nominaService.createEmpleadoConcepto(id, dto);
+  }
+
+  @Patch('empleados/conceptos-recurrentes/:id/toggle')
+  toggleEmpleadoConcepto(@Param('id') id: string) {
+    return this.nominaService.toggleEmpleadoConcepto(id);
+  }
+
+  @Patch('empleados/conceptos-recurrentes/:id')
+  updateEmpleadoConcepto(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateEmpleadoConceptoDto>,
+  ) {
+    return this.nominaService.updateEmpleadoConcepto(id, dto);
+  }
+
+  @Delete('empleados/conceptos-recurrentes/:id')
+  deleteEmpleadoConcepto(@Param('id') id: string) {
+    return this.nominaService.deleteEmpleadoConcepto(id);
+  }
+
   @Get('empleados/:id')
   // @Permissions(Permission.NOMINA_EMPLOYEE_READ)
   findOneEmpleado(@Param('id') id: string) {
@@ -69,6 +100,27 @@ export class NominaController {
     return this.nominaService.removeEmpleado(id);
   }
 
+  // ── Conceptos ──────────────────────────────────────────────────────────
+  @Get('conceptos')
+  getConceptos(@Query('empresaId') empresaId?: string) {
+    return this.nominaService.getConceptos(empresaId);
+  }
+
+  @Post('conceptos')
+  createConcepto(@Body() dto: CreateConceptoDto) {
+    return this.nominaService.createConcepto(dto);
+  }
+
+  @Patch('conceptos/:id/toggle')
+  toggleConceptoActive(@Param('id') id: string) {
+    return this.nominaService.toggleConceptoActive(id);
+  }
+
+  @Patch('conceptos/:id')
+  updateConcepto(@Param('id') id: string, @Body() dto: Partial<CreateConceptoDto>) {
+    return this.nominaService.updateConcepto(id, dto);
+  }
+
   // ── Períodos ───────────────────────────────────────────────────────────
   @Post('periodos')
   // @Permissions(Permission.NOMINA_PERIOD_CREATE)
@@ -80,6 +132,27 @@ export class NominaController {
   // @Permissions(Permission.NOMINA_PERIOD_READ)
   findAllPeriodos(@Query() pagination: PaginatioDto) {
     return this.nominaService.findAllPeriodos(pagination);
+  }
+
+  @Get('periodos/:id/empleados')
+  getEmpleadosOfPeriodo(@Param('id') id: string) {
+    return this.nominaService.getEmpleadosOfPeriodo(id);
+  }
+
+  @Post('periodos/:id/empleados')
+  assignEmpleadosToPeriodo(
+    @Param('id') id: string,
+    @Body() dto: AssignPeriodoEmpleadosDto,
+  ) {
+    return this.nominaService.assignEmpleadosToPeriodo(id, dto.empleadoIds, dto.diasNovedad);
+  }
+
+  @Delete('periodos/:periodoId/empleados/:empleadoId')
+  removeEmpleadoFromPeriodo(
+    @Param('periodoId') periodoId: string,
+    @Param('empleadoId') empleadoId: string,
+  ) {
+    return this.nominaService.removeEmpleadoFromPeriodo(periodoId, empleadoId);
   }
 
   @Get('periodos/:id')
@@ -169,6 +242,17 @@ export class NominaController {
   @Get('tipos-contrato')
   findAllTiposContrato() {
     return this.nominaService.findAllTiposContrato();
+  }
+
+  // ── Parametrización Legal ──────────────────────────────────────────────
+  @Get('parametros/vigentes')
+  getParametrosVigentes(@Query('fecha') fecha?: string) {
+    return this.nominaService.getParametrosVigentes(fecha ? new Date(fecha) : undefined);
+  }
+
+  @Post('parametros')
+  createParametroVersion(@Body() dto: any) {
+    return this.nominaService.createParametroVersion(dto);
   }
 
   // ── Reportes ───────────────────────────────────────────────────────────
