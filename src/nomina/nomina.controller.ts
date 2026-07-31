@@ -23,6 +23,7 @@ import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { CreateConceptoDto } from './dto/create-concepto.dto';
 import { CreateEmpleadoConceptoDto } from './dto/create-empleado-concepto.dto';
 import { AssignPeriodoEmpleadosDto } from './dto/assign-periodo-empleados.dto';
+import { CreatePeriodoEmpleadoConceptoDto } from './dto/create-periodo-empleado-concepto.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
@@ -153,6 +154,28 @@ export class NominaController {
     @Param('empleadoId') empleadoId: string,
   ) {
     return this.nominaService.removeEmpleadoFromPeriodo(periodoId, empleadoId);
+  }
+
+  @Get('periodos/:periodoId/empleados/:empleadoId/conceptos')
+  getConceptosConsolidadosPeriodoEmpleado(
+    @Param('periodoId') periodoId: string,
+    @Param('empleadoId') empleadoId: string,
+  ) {
+    return this.nominaService.getConceptosConsolidadosPeriodoEmpleado(periodoId, empleadoId);
+  }
+
+  @Post('periodos/:periodoId/empleados/:empleadoId/conceptos')
+  addConceptoOcasionalPeriodo(
+    @Param('periodoId') periodoId: string,
+    @Param('empleadoId') empleadoId: string,
+    @Body() dto: CreatePeriodoEmpleadoConceptoDto,
+  ) {
+    return this.nominaService.addConceptoOcasionalPeriodo(periodoId, empleadoId, dto);
+  }
+
+  @Delete('periodos/empleados/conceptos/:id')
+  removeConceptoOcasionalPeriodo(@Param('id') id: string) {
+    return this.nominaService.removeConceptoOcasionalPeriodo(id);
   }
 
   @Get('periodos/:id')

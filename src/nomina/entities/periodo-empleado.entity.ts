@@ -3,6 +3,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   ManyToOne,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
@@ -10,6 +11,7 @@ import {
 } from 'typeorm';
 import { PeriodoNomina } from './periodo-nomina.entity';
 import { Empleado } from './empleado.entity';
+import { PeriodoEmpleadoConcepto } from './periodo-empleado-concepto.entity';
 
 @Entity('periodos_empleados')
 @Unique(['periodoId', 'empleadoId'])
@@ -36,6 +38,11 @@ export class PeriodoEmpleado {
 
   @Column({ type: 'varchar', default: 'INCLUIDO' })
   estado: string;
+
+  @OneToMany(() => PeriodoEmpleadoConcepto, (pec) => pec.periodoEmpleado, {
+    cascade: true,
+  })
+  conceptosOcasionales: PeriodoEmpleadoConcepto[];
 
   @CreateDateColumn()
   createdAt: Date;

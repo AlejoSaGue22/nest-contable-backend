@@ -23,16 +23,19 @@ import { CentroCosto } from './entities/centro-costo.entity';
 import { ConceptoNomina } from './entities/concepto-nomina.entity';
 import { EmpleadoConceptoRecurrente } from './entities/empleado-concepto-recurrente.entity';
 import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
+import { PeriodoEmpleadoConcepto } from './entities/periodo-empleado-concepto.entity';
 import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
 import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
 import { TipoConceptoNomina } from './enums/tipo-concepto.enum';
 import { CategoriaConceptoNomina } from './enums/categoria-concepto.enum';
+import { TipoValorConcepto } from './enums/tipo-valor-concepto.enum';
 import { CreateEmpleadoDto } from './dto/create-empleado.dto';
 import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
 import { LiquidarNominaDto } from './dto/liquidar-nomina.dto';
 import { PagarNominaDto } from './dto/pagar-nomina.dto';
 import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
+import { CreatePeriodoEmpleadoConceptoDto } from './dto/create-periodo-empleado-concepto.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -72,6 +75,8 @@ export class NominaService implements OnModuleInit {
     private readonly parametroRepo: Repository<ParametroNominaVersion>,
     @InjectRepository(LiquidacionDetalle)
     private readonly liquidacionDetalleRepo: Repository<LiquidacionDetalle>,
+    @InjectRepository(PeriodoEmpleadoConcepto)
+    private readonly periodoEmpleadoConceptoRepo: Repository<PeriodoEmpleadoConcepto>,
     private readonly asientosContablesService: AsientosContablesService,
   ) {}
 
@@ -505,6 +510,40 @@ export class NominaService implements OnModuleInit {
         tipo: r.concepto.tipo,
         valor: valorCalc,
         esRecurrente: true,
+      });
+    }
+
+    // Cargar conceptos ocasionales específicos de esta nómina
+    const pe = await this.periodoEmpleadoRepo.findOne({
+      where: { periodoId: periodo.id, empleadoId: empleado.id },
+      relations: ['conceptosOcasionales', 'conceptosOcasionales.concepto'],
+    });
+
+    const ocasionales = pe?.conceptosOcasionales || [];
+    for (const o of ocasionales) {
+      let valorCalc = 0;
+      if (o.tipoValor === TipoValorConcepto.PORCENTAJE) {
+        valorCalc = Math.round(((salarioDevengado * Number(o.valor)) / 100) * 100) / 100;
+      } else {
+        valorCalc = Number(o.valor);
+      }
+
+      if (o.concepto.tipo === TipoConceptoNomina.DEVENGADO) {
+        if (o.concepto.categoria === CategoriaConceptoNomina.SALARIAL) {
+          devengadosSalarialesRec += valorCalc;
+        } else {
+          devengadosNoSalarialesRec += valorCalc;
+        }
+      } else {
+        deduccionesRecurrentes += valorCalc;
+      }
+
+      detallesSnapshots.push({
+        conceptoId: o.conceptoId,
+        conceptoNombreSnapshot: o.concepto.nombre + (o.observacion ? ` (${o.observacion})` : ''),
+        tipo: o.concepto.tipo,
+        valor: valorCalc,
+        esRecurrente: false,
       });
     }
 
@@ -1402,10 +1441,100 @@ export class NominaService implements OnModuleInit {
   // ═══════════════════════════════════════════════════════════════════
 
   async getEmpleadosOfPeriodo(periodoId: string) {
-    return this.periodoEmpleadoRepo.find({
+    const periodData = await this.periodoRepo.findOne({ where: { id: periodoId } });
+    if (!periodData) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+
+    const asignados = await this.periodoEmpleadoRepo.find({
       where: { periodoId },
-      relations: ['empleado', 'empleado.cargo', 'empleado.centroCosto'],
+      relations: [
+        'empleado',
+        'empleado.cargo',
+        'empleado.centroCosto',
+        'conceptosOcasionales',
+        'conceptosOcasionales.concepto',
+      ],
     });
+
+    const paramsLegal = await this.getParametrosVigentes(periodData.fechaFin);
+    const smmlv = paramsLegal ? Number(paramsLegal.smmlv) : SMMLV_2026;
+    const auxTransporteMonto = paramsLegal ? Number(paramsLegal.auxilioTransporte) : AUXILIO_TRANSPORTE_2026;
+    const pctSaludEmp = paramsLegal ? Number(paramsLegal.porcentajeSaludEmpleado) : 4.0;
+    const pctPensionEmp = paramsLegal ? Number(paramsLegal.porcentajePensionEmpleado) : 4.0;
+
+    const data: any[] = [];
+    for (const pe of asignados) {
+      try {
+        const { liq } = await this.calcularLiquidacionConSnapshot(
+          pe.empleado,
+          periodData,
+          pe.diasNovedad,
+          smmlv,
+          auxTransporteMonto,
+          pctSaludEmp,
+          pctPensionEmp,
+        );
+
+        let totalIngresosAdicionales = 0;
+        let totalDeduccionesAdicionales = 0;
+
+        // Recurrentes
+        const recurrentes = await this.empleadoConceptoRepo
+          .createQueryBuilder('ec')
+          .innerJoinAndSelect('ec.concepto', 'c')
+          .where('ec.empleadoId = :empId', { empId: pe.empleadoId })
+          .andWhere('ec.activo = true')
+          .andWhere('ec.fechaInicio <= :fin', { fin: periodData.fechaFin })
+          .andWhere('(ec.fechaFin IS NULL OR ec.fechaFin >= :inicio)', { inicio: periodData.fechaInicio })
+          .getMany();
+
+        for (const r of recurrentes) {
+          let valorCalc = 0;
+          if (r.tipoValor === 'PORCENTAJE') {
+            const salarioProporcional = (Number(pe.empleado.salarioBase) / 30) * pe.diasNovedad;
+            valorCalc = Math.round(((salarioProporcional * Number(r.valor)) / 100) * 100) / 100;
+          } else {
+            valorCalc = Number(r.valor);
+          }
+
+          if (r.concepto.tipo === TipoConceptoNomina.DEVENGADO) {
+            totalIngresosAdicionales += valorCalc;
+          } else {
+            totalDeduccionesAdicionales += valorCalc;
+          }
+        }
+
+        // Ocasionales
+        const ocasionales = pe.conceptosOcasionales || [];
+        for (const o of ocasionales) {
+          let valorCalc = 0;
+          if (o.tipoValor === TipoValorConcepto.PORCENTAJE) {
+            const salarioProporcional = (Number(pe.empleado.salarioBase) / 30) * pe.diasNovedad;
+            valorCalc = Math.round(((salarioProporcional * Number(o.valor)) / 100) * 100) / 100;
+          } else {
+            valorCalc = Number(o.valor);
+          }
+
+          if (o.concepto?.tipo === TipoConceptoNomina.DEVENGADO) {
+            totalIngresosAdicionales += valorCalc;
+          } else {
+            totalDeduccionesAdicionales += valorCalc;
+          }
+        }
+
+        data.push({
+          ...pe,
+          totalDevengado: Number(liq.totalDevengado),
+          totalDeducciones: Number(liq.totalDeducciones),
+          netoPagar: Number(liq.netoPagar),
+          totalIngresosAdicionales,
+          totalDeduccionesAdicionales,
+        });
+      } catch (err) {
+        data.push(pe);
+      }
+    }
+
+    return data;
   }
 
   async assignEmpleadosToPeriodo(periodoId: string, empleadoIds: string[], diasNovedad: number = 30) {
@@ -1493,5 +1622,99 @@ export class NominaService implements OnModuleInit {
   async createParametroVersion(dto: any) {
     const version = this.parametroRepo.create(dto);
     return this.parametroRepo.save(version);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  CONCEPTOS OCASIONALES POR PERÍODO (ESTA NÓMINA)
+  // ═══════════════════════════════════════════════════════════════════
+
+  async addConceptoOcasionalPeriodo(
+    periodoId: string,
+    empleadoId: string,
+    dto: CreatePeriodoEmpleadoConceptoDto,
+  ) {
+    let pe = await this.periodoEmpleadoRepo.findOne({
+      where: { periodoId, empleadoId },
+    });
+    if (!pe) {
+      const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
+      if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+      if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
+        throw new BadRequestException('Solo se pueden agregar conceptos en un período en borrador');
+      }
+      pe = await this.periodoEmpleadoRepo.save({
+        periodoId,
+        empleadoId,
+        diasNovedad: 30,
+        estado: 'INCLUIDO',
+      });
+    }
+
+    const concepto = await this.conceptoRepo.findOne({ where: { id: dto.conceptoId } });
+    if (!concepto) throw new NotFoundException(`Concepto ${dto.conceptoId} no encontrado`);
+
+    const item = this.periodoEmpleadoConceptoRepo.create({
+      periodoEmpleadoId: pe.id,
+      conceptoId: dto.conceptoId,
+      valor: dto.valor,
+      tipoValor: dto.tipoValor || TipoValorConcepto.FIJO,
+      observacion: dto.observacion,
+    });
+    return this.periodoEmpleadoConceptoRepo.save(item);
+  }
+
+  async removeConceptoOcasionalPeriodo(id: string) {
+    const res = await this.periodoEmpleadoConceptoRepo.delete(id);
+    if (!res.affected) throw new NotFoundException(`Concepto ocasional ${id} no encontrado`);
+    return { success: true };
+  }
+
+  async getConceptosConsolidadosPeriodoEmpleado(periodoId: string, empleadoId: string) {
+    const periodo = await this.findOnePeriodo(periodoId);
+    const empleado = await this.findOneEmpleado(empleadoId);
+
+    const pe = await this.periodoEmpleadoRepo.findOne({
+      where: { periodoId, empleadoId },
+      relations: ['conceptosOcasionales', 'conceptosOcasionales.concepto'],
+    });
+
+    const recurrentes = await this.empleadoConceptoRepo
+      .createQueryBuilder('ec')
+      .innerJoinAndSelect('ec.concepto', 'c')
+      .where('ec.empleadoId = :empleadoId', { empleadoId })
+      .andWhere('ec.activo = true')
+      .andWhere('ec.fechaInicio <= :fin', { fin: periodo.fechaFin })
+      .andWhere('(ec.fechaFin IS NULL OR ec.fechaFin >= :inicio)', { inicio: periodo.fechaInicio })
+      .getMany();
+
+    const ocasionales = pe?.conceptosOcasionales || [];
+
+    return {
+      empleado,
+      periodo,
+      recurrentes: recurrentes.map((r) => ({
+        id: r.id,
+        conceptoId: r.conceptoId,
+        conceptoNombre: r.concepto.nombre,
+        tipo: r.concepto.tipo,
+        categoria: r.concepto.categoria,
+        valor: Number(r.valor),
+        tipoValor: r.tipoValor,
+        origen: 'RECURRENTE',
+        badge: 'Recurrente',
+      })),
+      ocasionales: ocasionales.map((o) => ({
+        id: o.id,
+        conceptoId: o.conceptoId,
+        conceptoNombre: o.concepto?.nombre || 'Concepto',
+        tipo: o.concepto?.tipo || 'DEVENGADO',
+        categoria: o.concepto?.categoria || 'SALARIAL',
+        valor: Number(o.valor),
+        tipoValor: o.tipoValor,
+        observacion: o.observacion,
+        origen: 'ESTA_NOMINA',
+        badge: 'Esta nómina',
+      })),
+    };
   }
 }

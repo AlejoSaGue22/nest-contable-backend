@@ -66,8 +66,8 @@ class LiquidacionEmpleadoInput {
 
 export class LiquidarNominaDto {
     @IsArray()
+    @IsOptional()
     @ValidateNested({ each: true })
     @Type(() => LiquidacionEmpleadoInput)
-    @ArrayMinSize(1)
-    empleados: LiquidacionEmpleadoInput[];
+    empleados?: LiquidacionEmpleadoInput[];
 }

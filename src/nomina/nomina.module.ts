@@ -14,31 +14,33 @@ import { CentroCosto } from './entities/centro-costo.entity';
 import { ConceptoNomina } from './entities/concepto-nomina.entity';
 import { EmpleadoConceptoRecurrente } from './entities/empleado-concepto-recurrente.entity';
 import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
+import { PeriodoEmpleadoConcepto } from './entities/periodo-empleado-concepto.entity';
 import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
 import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([
-            Empleado,
-            PeriodoNomina,
-            Liquidacion,
-            PagoNomina,
-            EntidadSeguridadSocial,
-            TipoContratoEntity,
-            Cargo,
-            CentroCosto,
-            ConceptoNomina,
-            EmpleadoConceptoRecurrente,
-            PeriodoEmpleado,
-            ParametroNominaVersion,
-            LiquidacionDetalle,
-        ]),
-        AsientosContablesModule,
-    ],
-    controllers: [NominaController],
-    providers: [NominaService, NominaDianService],
-    exports: [NominaService],
+  imports: [
+    TypeOrmModule.forFeature([
+      Empleado,
+      PeriodoNomina,
+      Liquidacion,
+      PagoNomina,
+      EntidadSeguridadSocial,
+      TipoContratoEntity,
+      Cargo,
+      CentroCosto,
+      ConceptoNomina,
+      EmpleadoConceptoRecurrente,
+      PeriodoEmpleado,
+      PeriodoEmpleadoConcepto,
+      ParametroNominaVersion,
+      LiquidacionDetalle,
+    ]),
+    AsientosContablesModule,
+  ],
+  controllers: [NominaController],
+  providers: [NominaService, NominaDianService],
+  exports: [NominaService],
 })
-export class NominaModule { }
+export class NominaModule {}
