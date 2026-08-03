@@ -11,8 +11,13 @@ import {
 import { Type } from 'class-transformer';
 import { TipoDocumentoIdentidad } from '../enums/tipo-documento.enum';
 import { TipoContrato } from '../enums/tipo-contrato.enum';
+import { AreaEmpleado } from '../enums/area-empleado.enum';
 
 export class CreateEmpleadoDto {
+  @IsEnum(AreaEmpleado)
+  @IsOptional()
+  area?: AreaEmpleado;
+
   @IsEnum(TipoDocumentoIdentidad)
   @IsNotEmpty()
   tipoDocumento: TipoDocumentoIdentidad;

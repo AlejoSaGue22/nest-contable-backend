@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { TipoDocumentoIdentidad } from '../enums/tipo-documento.enum';
 import { TipoContrato } from '../enums/tipo-contrato.enum';
+import { AreaEmpleado } from '../enums/area-empleado.enum';
 import { TipoContratoEntity } from './tipo-contrato.entity';
 import { EntidadSeguridadSocial } from './entidad-seguridad-social.entity';
 import { Cargo } from './cargo.entity';
@@ -70,6 +71,9 @@ export class Empleado {
 
   @Column({ default: true })
   activo: boolean;
+
+  @Column({ type: 'enum', enum: AreaEmpleado, default: AreaEmpleado.ADMINISTRATIVA })
+  area: AreaEmpleado;
 
   @ManyToOne(() => TipoContratoEntity, { nullable: true })
   @JoinColumn({ name: 'tipoContratoId' })

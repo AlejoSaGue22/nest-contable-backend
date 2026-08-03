@@ -1,0 +1,5 @@
+export enum AreaEmpleado {
+  ADMINISTRATIVA = 'ADMINISTRATIVA',
+  OPERATIVA = 'OPERATIVA',
+  VENTAS = 'VENTAS',
+}

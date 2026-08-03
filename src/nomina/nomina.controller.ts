@@ -14,6 +14,7 @@ import {
 import { Response } from 'express';
 import { NominaService } from './nomina.service';
 import { NominaDianService } from './services/nomina-dian.service';
+import { AreaEmpleado } from './enums/area-empleado.enum';
 import { CreateEmpleadoDto } from './dto/create-empleado.dto';
 import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
@@ -301,5 +302,16 @@ export class NominaController {
   @Permissions(Permission.NOMINA_REPORT_READ)
   async resumenAportes(@Param('periodoId') periodoId: string) {
     return this.nominaService.reporteResumenAportes(periodoId);
+  }
+
+  // ── Configuración Contable de Nómina ───────────────────────────────────
+  @Get('configuracion-contable')
+  getConfiguracionesContables() {
+    return this.nominaService.getConfiguracionesContables();
+  }
+
+  @Post('configuracion-contable')
+  saveConfiguracionContable(@Body() body: { area: AreaEmpleado; configuracion: any }) {
+    return this.nominaService.saveConfiguracionContable(body.area, body.configuracion);
   }
 }

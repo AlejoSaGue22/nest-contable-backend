@@ -2067,6 +2067,14 @@ export class AsientosContablesService {
     return cuenta;
   }
 
+  public async obtenerCuentaPorId(
+    id: string,
+  ): Promise<CuentaContable | null> {
+    return await this.cuentaRepository.findOne({
+      where: { id },
+    });
+  }
+
   async generarAsientoSaldoInicial(params: {
     nombreCuenta: string;
     monto: number;
@@ -2243,6 +2251,7 @@ export class AsientosContablesService {
     saludPensionEmpleado: number;
     retencionFuente: number;
     userId: string;
+    detallesCustom?: { cuentaId: string; debito: number; credito: number; descripcion: string }[];
   }): Promise<AsientoContable> {
     const {
       periodoNombre,
@@ -2254,6 +2263,7 @@ export class AsientosContablesService {
       saludPensionEmpleado,
       retencionFuente,
       userId,
+      detallesCustom,
     } = params;
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -2261,59 +2271,65 @@ export class AsientosContablesService {
     await queryRunner.startTransaction();
 
     try {
-      const cuentaGastosPersonal = await this.obtenerCuentaPorCodigo('5105');
-      const cuentaPrestaciones = await this.obtenerCuentaPorCodigo('5110');
-      const cuentaAportesParafiscales =
-        await this.obtenerCuentaPorCodigo('5115');
-      const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
-      const cuentaRetencionNomina = await this.obtenerCuentaPorCodigo('2370');
-      const cuentaRetefuente = await this.obtenerCuentaPorCodigo('2365');
-      const cuentaAportesXPagar = await this.obtenerCuentaPorCodigo('2368');
+      let detalles: DetalleAsiento[] = [];
 
-      const detalles: DetalleAsiento[] = [
-        {
-          cuentaId: cuentaGastosPersonal.id,
-          debito: totalDevengado,
-          credito: 0,
-          descripcion: 'Sueldos y salarios',
-        },
-        {
-          cuentaId: cuentaPrestaciones.id,
-          debito: totalProvisiones,
-          credito: 0,
-          descripcion: 'Prestaciones sociales',
-        },
-        {
-          cuentaId: cuentaAportesParafiscales.id,
-          debito: totalAportes,
-          credito: 0,
-          descripcion: 'Aportes parafiscales',
-        },
-        {
-          cuentaId: cuentaObligacionesLab.id,
-          debito: 0,
-          credito: netoPagar + totalProvisiones,
-          descripcion: 'Obligaciones laborales',
-        },
-        {
-          cuentaId: cuentaRetencionNomina.id,
-          debito: 0,
-          credito: saludPensionEmpleado,
-          descripcion: 'Retenciones salud y pensión',
-        },
-        {
-          cuentaId: cuentaRetefuente.id,
-          debito: 0,
-          credito: retencionFuente,
-          descripcion: 'Retención en la fuente',
-        },
-        {
-          cuentaId: cuentaAportesXPagar.id,
-          debito: 0,
-          credito: totalAportes,
-          descripcion: 'Aportes parafiscales por pagar',
-        },
-      ];
+      if (detallesCustom && detallesCustom.length > 0) {
+        detalles = detallesCustom;
+      } else {
+        const cuentaGastosPersonal = await this.obtenerCuentaPorCodigo('5105');
+        const cuentaPrestaciones = await this.obtenerCuentaPorCodigo('5110');
+        const cuentaAportesParafiscales =
+          await this.obtenerCuentaPorCodigo('5115');
+        const cuentaObligacionesLab = await this.obtenerCuentaPorCodigo('2610');
+        const cuentaRetencionNomina = await this.obtenerCuentaPorCodigo('2370');
+        const cuentaRetefuente = await this.obtenerCuentaPorCodigo('2365');
+        const cuentaAportesXPagar = await this.obtenerCuentaPorCodigo('2368');
+
+        detalles = [
+          {
+            cuentaId: cuentaGastosPersonal.id,
+            debito: totalDevengado,
+            credito: 0,
+            descripcion: 'Sueldos y salarios',
+          },
+          {
+            cuentaId: cuentaPrestaciones.id,
+            debito: totalProvisiones,
+            credito: 0,
+            descripcion: 'Prestaciones sociales',
+          },
+          {
+            cuentaId: cuentaAportesParafiscales.id,
+            debito: totalAportes,
+            credito: 0,
+            descripcion: 'Aportes parafiscales',
+          },
+          {
+            cuentaId: cuentaObligacionesLab.id,
+            debito: 0,
+            credito: netoPagar + totalProvisiones,
+            descripcion: 'Obligaciones laborales',
+          },
+          {
+            cuentaId: cuentaRetencionNomina.id,
+            debito: 0,
+            credito: saludPensionEmpleado,
+            descripcion: 'Retenciones salud y pensión',
+          },
+          {
+            cuentaId: cuentaRetefuente.id,
+            debito: 0,
+            credito: retencionFuente,
+            descripcion: 'Retención en la fuente',
+          },
+          {
+            cuentaId: cuentaAportesXPagar.id,
+            debito: 0,
+            credito: totalAportes,
+            descripcion: 'Aportes parafiscales por pagar',
+          },
+        ];
+      }
 
       const asiento = await this.crearAsiento(
         {

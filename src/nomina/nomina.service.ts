@@ -26,6 +26,8 @@ import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
 import { PeriodoEmpleadoConcepto } from './entities/periodo-empleado-concepto.entity';
 import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
 import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
+import { ConfiguracionContableNomina } from './entities/configuracion-contable-nomina.entity';
+import { AreaEmpleado } from './enums/area-empleado.enum';
 import { TipoConceptoNomina } from './enums/tipo-concepto.enum';
 import { CategoriaConceptoNomina } from './enums/categoria-concepto.enum';
 import { TipoValorConcepto } from './enums/tipo-valor-concepto.enum';
@@ -77,8 +79,10 @@ export class NominaService implements OnModuleInit {
     private readonly liquidacionDetalleRepo: Repository<LiquidacionDetalle>,
     @InjectRepository(PeriodoEmpleadoConcepto)
     private readonly periodoEmpleadoConceptoRepo: Repository<PeriodoEmpleadoConcepto>,
+    @InjectRepository(ConfiguracionContableNomina)
+    private readonly configContableRepo: Repository<ConfiguracionContableNomina>,
     private readonly asientosContablesService: AsientosContablesService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     await this.seedConceptosEstandard();
@@ -91,7 +95,7 @@ export class NominaService implements OnModuleInit {
 
     const conceptos = [
       { codigo: 'DEV-BONIF', nombre: 'Bonificación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
-      { codigo: 'DEV-AUXADIC', nombre: 'Auxilio Adicional', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DEV-VIATICO', nombre: 'Viaticos Salariales', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DEV-COMISION', nombre: 'Comisión', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.SALARIAL, aplicaIbc: true, aplicaPrestaciones: true },
       { codigo: 'DEV-DOTACION', nombre: 'Dotación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DED-LIBRANZA', nombre: 'Libranza', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
@@ -421,6 +425,172 @@ export class NominaService implements OnModuleInit {
     const saludPension = saved.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
     const totalRetefuente = saved.reduce((s, l) => s + Number(l.retencionFuente), 0);
 
+    // --- CONSTRUIR ASIENTO CONTABLE CUSTOM SEGÚN CONFIGURACIÓN POR ÁREA ---
+    const configNominaPorArea = await this.getConfiguracionesContables();
+
+    // Mapa de empleadoId -> area
+    const empleadoAreaMap = new Map<string, AreaEmpleado>();
+    for (const pe of asignados) {
+      empleadoAreaMap.set(pe.empleadoId, pe.empleado.area || AreaEmpleado.ADMINISTRATIVA);
+    }
+
+    const resolvedAccounts = new Map<string, any>();
+    const getAccount = async (cuentaId: string | null, fallbackCodigo: string): Promise<any> => {
+      const cacheKey = cuentaId ? `id:${cuentaId}` : `code:${fallbackCodigo}`;
+      if (resolvedAccounts.has(cacheKey)) {
+        return resolvedAccounts.get(cacheKey);
+      }
+      let account: any = null;
+      if (cuentaId) {
+        account = await this.asientosContablesService.obtenerCuentaPorId(cuentaId);
+      }
+      if (!account) {
+        try {
+          account = await this.asientosContablesService.obtenerCuentaPorCodigo(fallbackCodigo);
+        } catch {
+          // Fallback
+        }
+      }
+      resolvedAccounts.set(cacheKey, account);
+      return account;
+    };
+
+    const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
+    const addEntry = (cuenta: any, debito: number, credito: number) => {
+      if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
+      const existing = detailsMap.get(cuenta.id);
+      if (existing) {
+        existing.debito = Math.round((existing.debito + debito) * 100) / 100;
+        existing.credito = Math.round((existing.credito + credito) * 100) / 100;
+      } else {
+        detailsMap.set(cuenta.id, {
+          cuentaId: cuenta.id,
+          debito: Math.round(debito * 100) / 100,
+          credito: Math.round(credito * 100) / 100,
+          descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
+        });
+      }
+    };
+
+    for (const l of saved) {
+      const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
+      const config = configNominaPorArea[area];
+
+      // Cuenta obligacion laboral (Pasivo contrapartida neto a pagar)
+      const obligacionLabAccount = await getAccount(config.cajaBanco?.cuentaObligacionesLabId, '2505');
+
+      // 1. Salario Devengado
+      const salarioVal = Number(l.salarioDevengado);
+      if (salarioVal > 0) {
+        const fallbackSalario = area === AreaEmpleado.VENTAS ? '520506' : (area === AreaEmpleado.OPERATIVA ? '720506' : '510506');
+        const salarioAccount = await getAccount(config.conceptos?.salario?.cuentaId, fallbackSalario);
+        addEntry(salarioAccount, salarioVal, 0); // Debito gasto
+        addEntry(obligacionLabAccount, 0, salarioVal); // Credito obligacion
+      }
+
+      // 2. Auxilio de Transporte
+      const auxTransVal = Number(l.auxilioTransporte);
+      if (auxTransVal > 0) {
+        const fallbackAux = area === AreaEmpleado.VENTAS ? '520527' : (area === AreaEmpleado.OPERATIVA ? '720527' : '510527');
+        const auxAccount = await getAccount(config.conceptos?.auxilioTransporte?.cuentaId, fallbackAux);
+        addEntry(auxAccount, auxTransVal, 0); // Debito gasto
+        addEntry(obligacionLabAccount, 0, auxTransVal); // Credito obligacion
+      }
+
+      // 3. Salud Empleado (Deducción)
+      const saludVal = Number(l.saludEmpleado);
+      if (saludVal > 0) {
+        const saludAccount = await getAccount(config.seguridadSocial?.salud?.cuentaPasivoId, '237005');
+        addEntry(obligacionLabAccount, saludVal, 0); // Debito obligacion
+        addEntry(saludAccount, 0, saludVal); // Credito salud por pagar
+      }
+
+      // 4. Pensión Empleado (Deducción)
+      const pensionVal = Number(l.pensionEmpleado);
+      if (pensionVal > 0) {
+        const pensionAccount = await getAccount(config.seguridadSocial?.pension?.cuentaPasivoId, '238030');
+        addEntry(obligacionLabAccount, pensionVal, 0); // Debito obligacion
+        addEntry(pensionAccount, 0, pensionVal); // Credito pension por pagar
+      }
+
+      // 5. Retención en la fuente (Deducción)
+      const retefuenteVal = Number(l.retencionFuente);
+      if (retefuenteVal > 0) {
+        const retefuenteAccount = await getAccount(null, '236505');
+        addEntry(obligacionLabAccount, retefuenteVal, 0); // Debito obligacion
+        addEntry(retefuenteAccount, 0, retefuenteVal); // Credito pasivo
+      }
+
+      // 6. Conceptos dinámicos (recurrentes / ocasionales)
+      const detallesEmp = detallesToSave.filter(d => d.liquidacionId === l.id && d.conceptoId);
+      for (const d of detallesEmp) {
+        const valorVal = Number(d.valor);
+        if (valorVal <= 0) continue;
+
+        const mappedCuentaId = config.conceptos?.[d.conceptoId!]?.cuentaId;
+        const conceptoReal = await this.conceptoRepo.findOne({ where: { id: d.conceptoId! } });
+
+        if (d.tipo === TipoConceptoNomina.DEVENGADO) {
+          const fallbackDev = area === AreaEmpleado.VENTAS ? '520599' : (area === AreaEmpleado.OPERATIVA ? '720599' : '510599');
+          const devAccount = await getAccount(mappedCuentaId || conceptoReal?.cuentaContableDebito, fallbackDev);
+          addEntry(devAccount, valorVal, 0); // Debito gasto
+          addEntry(obligacionLabAccount, 0, valorVal); // Credito obligacion
+        } else {
+          const dedAccount = await getAccount(mappedCuentaId || conceptoReal?.cuentaContableCredito, '237099');
+          addEntry(obligacionLabAccount, valorVal, 0); // Debito obligacion
+          addEntry(dedAccount, 0, valorVal); // Credito pasivo
+        }
+      }
+
+      // 7. Aportes Empleador (Seguridad Social)
+      const aportes = l.aportesEmpleador || [];
+      const ssConfigMap: Record<string, { configKey: string; fallbackGasto: string; fallbackPasivo: string }> = {
+        'Salud': { configKey: 'salud', fallbackGasto: area === AreaEmpleado.VENTAS ? '520569' : (area === AreaEmpleado.OPERATIVA ? '720569' : '510569'), fallbackPasivo: '237005' },
+        'Pensión': { configKey: 'pension', fallbackGasto: area === AreaEmpleado.VENTAS ? '520570' : (area === AreaEmpleado.OPERATIVA ? '720570' : '510570'), fallbackPasivo: '238030' },
+        'ARL': { configKey: 'arl', fallbackGasto: area === AreaEmpleado.VENTAS ? '520568' : (area === AreaEmpleado.OPERATIVA ? '720568' : '510568'), fallbackPasivo: '237006' },
+        'Caja Compensación': { configKey: 'ccf', fallbackGasto: area === AreaEmpleado.VENTAS ? '520572' : (area === AreaEmpleado.OPERATIVA ? '720572' : '510572'), fallbackPasivo: '237010' },
+        'SENA': { configKey: 'sena', fallbackGasto: area === AreaEmpleado.VENTAS ? '520575' : (area === AreaEmpleado.OPERATIVA ? '720575' : '510575'), fallbackPasivo: '237010' },
+        'ICBF': { configKey: 'icbf', fallbackGasto: area === AreaEmpleado.VENTAS ? '520578' : (area === AreaEmpleado.OPERATIVA ? '720578' : '510578'), fallbackPasivo: '237010' },
+      };
+
+      for (const ap of aportes) {
+        const apVal = Number(ap.valor);
+        if (apVal <= 0) continue;
+        const mapping = ssConfigMap[ap.concepto];
+        if (mapping) {
+          const ssItem = config.seguridadSocial?.[mapping.configKey];
+          const ssGastoAcc = await getAccount(ssItem?.cuentaGastoId, mapping.fallbackGasto);
+          const ssPasivoAcc = await getAccount(ssItem?.cuentaPasivoId, mapping.fallbackPasivo);
+          addEntry(ssGastoAcc, apVal, 0);
+          addEntry(ssPasivoAcc, 0, apVal);
+        }
+      }
+
+      // 8. Provisiones
+      const provisiones = l.provisiones || [];
+      const provConfigMap: Record<string, { configKey: string; fallbackGasto: string; fallbackPasivo: string }> = {
+        'Cesantías': { configKey: 'cesantias', fallbackGasto: area === AreaEmpleado.VENTAS ? '520530' : (area === AreaEmpleado.OPERATIVA ? '720530' : '510530'), fallbackPasivo: '261015' },
+        'Intereses Cesantías': { configKey: 'interesesCesantias', fallbackGasto: area === AreaEmpleado.VENTAS ? '520533' : (area === AreaEmpleado.OPERATIVA ? '720533' : '510533'), fallbackPasivo: '261016' },
+        'Prima de Servicios': { configKey: 'prima', fallbackGasto: area === AreaEmpleado.VENTAS ? '520536' : (area === AreaEmpleado.OPERATIVA ? '720536' : '510536'), fallbackPasivo: '261020' },
+        'Vacaciones': { configKey: 'vacaciones', fallbackGasto: area === AreaEmpleado.VENTAS ? '520539' : (area === AreaEmpleado.OPERATIVA ? '720539' : '510539'), fallbackPasivo: '261010' },
+      };
+
+      for (const prov of provisiones) {
+        const provVal = Number(prov.valor);
+        if (provVal <= 0) continue;
+        const mapping = provConfigMap[prov.concepto];
+        if (mapping) {
+          const provItem = config.provisiones?.[mapping.configKey];
+          const provGastoAcc = await getAccount(provItem?.cuentaGastoId, mapping.fallbackGasto);
+          const provPasivoAcc = await getAccount(provItem?.cuentaPasivoId, mapping.fallbackPasivo);
+          addEntry(provGastoAcc, provVal, 0);
+          addEntry(provPasivoAcc, 0, provVal);
+        }
+      }
+    }
+
+    const detallesCustom = Array.from(detailsMap.values());
+
     // Generar asiento contable de provisión
     const asiento = await this.asientosContablesService.generarAsientoNomina({
       periodoNombre: periodo.nombre,
@@ -432,6 +602,7 @@ export class NominaService implements OnModuleInit {
       saludPensionEmpleado: saludPension,
       retencionFuente: totalRetefuente,
       userId,
+      detallesCustom,
     });
 
     await this.periodoRepo.update(periodoId, {
@@ -459,8 +630,28 @@ export class NominaService implements OnModuleInit {
     pctSaludEmp: number,
     pctPensionEmp: number,
   ) {
+    // Calcular días efectivamente trabajados según fecha de ingreso y retiro
+    const fechaInicio = new Date(periodo.fechaInicio);
+    const fechaFin = new Date(periodo.fechaFin);
+    const fechaIngreso = new Date(empleado.fechaIngreso);
+    const fechaRetiro = empleado.fechaRetiro ? new Date(empleado.fechaRetiro) : null;
+
+    // Fecha efectiva de inicio: la mayor entre fechaInicio del período y fechaIngreso
+    const fechaEfectivaInicio = fechaIngreso > fechaInicio ? fechaIngreso : fechaInicio;
+
+    // Fecha efectiva de fin: la menor entre fechaFin del período y fechaRetiro (si existe)
+    const fechaEfectivaFin = fechaRetiro && fechaRetiro <= fechaFin ? fechaRetiro : fechaFin;
+
+    // Calcular días efectivamente trabajados
+    const diasTrabajados = fechaEfectivaInicio <= fechaEfectivaFin
+      ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : 0;
+
+    // Usar el menor entre diasNovedad asignado y diasTrabajados calculados
+    const diasEfectivos = diasTrabajados > 0 ? Math.min(dias, diasTrabajados) : dias;
+
     const salarioDiario = Number(empleado.salarioBase) / 30;
-    const salarioDevengado = Math.round(salarioDiario * dias * 100) / 100;
+    const salarioDevengado = Math.round(salarioDiario * diasEfectivos * 100) / 100;
 
     // Cargar conceptos recurrentes del empleado
     const recurrentes = await this.empleadoConceptoRepo
@@ -634,7 +825,7 @@ export class NominaService implements OnModuleInit {
     const liq = this.liquidacionRepo.create({
       periodoId: periodo.id,
       empleadoId: empleado.id,
-      diasTrabajados: dias,
+      diasTrabajados: diasEfectivos,
       salarioDevengado,
       auxilioTransporte,
       horasExtras: [],
@@ -838,7 +1029,7 @@ export class NominaService implements OnModuleInit {
 
     const auxilioTransporte =
       empleado.auxilioTransporte &&
-      Number(empleado.salarioBase) <= 2 * SMMLV_2026
+        Number(empleado.salarioBase) <= 2 * SMMLV_2026
         ? Math.round((AUXILIO_TRANSPORTE_2026 / 30) * dias * 100) / 100
         : 0;
 
@@ -859,7 +1050,7 @@ export class NominaService implements OnModuleInit {
           totalHorasExtras +
           totalBonificaciones +
           Number(comisiones)) *
-          100,
+        100,
       ) / 100;
 
     // ── IBC (Ingreso Base de Cotización) ──
@@ -891,7 +1082,7 @@ export class NominaService implements OnModuleInit {
           pensionEmpleado +
           retencionFuente +
           totalOtrasDeducciones) *
-          100,
+        100,
       ) / 100;
 
     const netoPagar =
@@ -1260,17 +1451,17 @@ export class NominaService implements OnModuleInit {
         },
         periodo2: l2
           ? {
-              devengado: Number(l2.totalDevengado),
-              deducciones: Number(l2.totalDeducciones),
-              neto: Number(l2.netoPagar),
-            }
+            devengado: Number(l2.totalDevengado),
+            deducciones: Number(l2.totalDeducciones),
+            neto: Number(l2.netoPagar),
+          }
           : null,
         variacion: l2
           ? Math.round(
-              (((Number(l2.totalDevengado) - Number(l1.totalDevengado)) * 100) /
-                (Number(l1.totalDevengado) || 1)) *
-                100,
-            ) / 100
+            (((Number(l2.totalDevengado) - Number(l1.totalDevengado)) * 100) /
+              (Number(l1.totalDevengado) || 1)) *
+            100,
+          ) / 100
           : null,
       };
     });
@@ -1573,10 +1764,24 @@ export class NominaService implements OnModuleInit {
     for (const empId of empleadoIds) {
       const exists = await this.periodoEmpleadoRepo.findOne({ where: { periodoId, empleadoId: empId } });
       if (!exists) {
+        // Calcular días proporcionales según fecha de ingreso
+        const empleado = await this.empleadoRepo.findOne({ where: { id: empId } });
+        const fechaInicio = new Date(periodo.fechaInicio);
+        const fechaFin = new Date(periodo.fechaFin);
+        const fechaIngreso = empleado?.fechaIngreso ? new Date(empleado.fechaIngreso) : fechaInicio;
+        const fechaRetiro = empleado?.fechaRetiro ? new Date(empleado.fechaRetiro) : null;
+
+        const fechaEfectivaInicio = fechaIngreso > fechaInicio ? fechaIngreso : fechaInicio;
+        const fechaEfectivaFin = fechaRetiro && fechaRetiro <= fechaFin ? fechaRetiro : fechaFin;
+
+        const diasProporcionales = fechaEfectivaInicio <= fechaEfectivaFin
+          ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
+          : diasNovedad;
+
         await this.periodoEmpleadoRepo.save({
           periodoId,
           empleadoId: empId,
-          diasNovedad,
+          diasNovedad: diasProporcionales > 0 ? diasProporcionales : diasNovedad,
           estado: 'INCLUIDO',
         });
       }
@@ -1716,5 +1921,54 @@ export class NominaService implements OnModuleInit {
         badge: 'Esta nómina',
       })),
     };
+  }
+
+  async getConfiguracionesContables() {
+    const areas = [AreaEmpleado.ADMINISTRATIVA, AreaEmpleado.OPERATIVA, AreaEmpleado.VENTAS];
+    const result: Record<string, any> = {};
+
+    for (const area of areas) {
+      let config = await this.configContableRepo.findOne({ where: { area } });
+      if (!config) {
+        result[area] = {
+          conceptos: {
+            salario: { cuentaId: null, codigo: null, nombre: null },
+            auxilioTransporte: { cuentaId: null, codigo: null, nombre: null },
+          },
+          seguridadSocial: {
+            salud: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            pension: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            arl: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            ccf: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            sena: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            icbf: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+          },
+          provisiones: {
+            prima: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            cesantias: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            interesesCesantias: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+            vacaciones: { cuentaGastoId: null, cuentaGastoCodigo: null, cuentaGastoNombre: null, cuentaPasivoId: null, cuentaPasivoCodigo: null, cuentaPasivoNombre: null },
+          },
+          cajaBanco: {
+            cuentaObligacionesLabId: null,
+            cuentaObligacionesLabCodigo: null,
+            cuentaObligacionesLabNombre: null,
+          }
+        };
+      } else {
+        result[area] = config.configuracion;
+      }
+    }
+    return result;
+  }
+
+  async saveConfiguracionContable(area: AreaEmpleado, configuracion: any) {
+    let config = await this.configContableRepo.findOne({ where: { area } });
+    if (!config) {
+      config = this.configContableRepo.create({ area, configuracion });
+    } else {
+      config.configuracion = configuracion;
+    }
+    return await this.configContableRepo.save(config);
   }
 }

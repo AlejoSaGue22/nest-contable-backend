@@ -17,6 +17,7 @@ import { PeriodoEmpleado } from './entities/periodo-empleado.entity';
 import { PeriodoEmpleadoConcepto } from './entities/periodo-empleado-concepto.entity';
 import { ParametroNominaVersion } from './entities/parametro-nomina-version.entity';
 import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
+import { ConfiguracionContableNomina } from './entities/configuracion-contable-nomina.entity';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { AsientosContablesModule } from 'src/asientos-contables/asientos-contabl
       PeriodoEmpleadoConcepto,
       ParametroNominaVersion,
       LiquidacionDetalle,
+      ConfiguracionContableNomina,
     ]),
     AsientosContablesModule,
   ],
