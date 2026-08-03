@@ -359,17 +359,8 @@ export class NominaService implements OnModuleInit {
       relations: ['empleado'],
     });
 
-    // Fallback: si no hay asignados expresamente, asignar automáticamente a todos los activos
     if (asignados.length === 0) {
-      const activos = await this.empleadoRepo.find({ where: { activo: true } });
-      if (activos.length === 0) {
-        throw new BadRequestException('No hay empleados activos para liquidar en este período');
-      }
-      await this.assignEmpleadosToPeriodo(periodoId, activos.map((e) => e.id));
-      asignados = await this.periodoEmpleadoRepo.find({
-        where: { periodoId, estado: 'INCLUIDO' },
-        relations: ['empleado'],
-      });
+      throw new BadRequestException('Debe haber al menos un empleado asignado para poder liquidar la nómina.');
     }
 
     // 2. Obtener parámetros de ley vigentes para el período
@@ -1719,6 +1710,10 @@ export class NominaService implements OnModuleInit {
           netoPagar: Number(liq.netoPagar),
           totalIngresosAdicionales,
           totalDeduccionesAdicionales,
+          // Desglose deducciones legales estimadas
+          saludEmpleado: Number(liq.saludEmpleado),
+          pensionEmpleado: Number(liq.pensionEmpleado),
+          retencionFuente: Number(liq.retencionFuente),
         });
       } catch (err) {
         data.push(pe);
