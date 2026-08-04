@@ -19,6 +19,8 @@ import { ParametroNominaVersion } from './entities/parametro-nomina-version.enti
 import { LiquidacionDetalle } from './entities/liquidacion-detalle.entity';
 import { ConfiguracionContableNomina } from './entities/configuracion-contable-nomina.entity';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
+import { NominaJob } from './entities/nomina-job.entity';
+import { NominaJobsService } from './nomina-jobs.service';
 
 @Module({
   imports: [
@@ -38,11 +40,12 @@ import { AsientosContablesModule } from 'src/asientos-contables/asientos-contabl
       ParametroNominaVersion,
       LiquidacionDetalle,
       ConfiguracionContableNomina,
+      NominaJob,
     ]),
     AsientosContablesModule,
   ],
   controllers: [NominaController],
-  providers: [NominaService, NominaDianService],
+  providers: [NominaService, NominaDianService, NominaJobsService],
   exports: [NominaService],
 })
 export class NominaModule {}

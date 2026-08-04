@@ -10,6 +10,8 @@ import {
   UseGuards,
   Req,
   Res,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { NominaService } from './nomina.service';
@@ -185,8 +187,15 @@ export class NominaController {
     return this.nominaService.findOnePeriodo(id);
   }
 
+  @Delete('periodos/:id')
+  // @Permissions(Permission.NOMINA_PERIOD_DELETE)
+  removePeriodo(@Param('id') id: string) {
+    return this.nominaService.deletePeriodo(id);
+  }
+
   // ── Liquidación ────────────────────────────────────────────────────────
   @Post('periodos/:id/liquidar')
+  @HttpCode(HttpStatus.ACCEPTED)
   // @Permissions(Permission.NOMINA_PERIOD_LIQUIDATE)
   liquidarPeriodo(
     @Param('id') id: string,
@@ -194,6 +203,11 @@ export class NominaController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.nominaService.liquidarPeriodo(id, dto, req.user.sub);
+  }
+
+  @Get('periodos/:id/estado-trabajo')
+  estadoTrabajo(@Param('id') id: string) {
+    return this.nominaService.getJobStatus(id);
   }
 
   @Get('periodos/:id/liquidaciones')
@@ -216,6 +230,11 @@ export class NominaController {
   // @Permissions(Permission.NOMINA_PERIOD_ANUL)
   anularNomina(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.nominaService.anularNomina(id, req.user.sub);
+  }
+
+  @Post('periodos/:id/reversar')
+  reversarLiquidacion(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.nominaService.reversarLiquidacion(id, req.user.sub);
   }
 
   // ── Pagos ──────────────────────────────────────────────────────────────

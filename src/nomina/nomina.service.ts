@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Empleado } from './entities/empleado.entity';
 import { PeriodoNomina } from './entities/periodo-nomina.entity';
 import { Liquidacion } from './entities/liquidacion.entity';
@@ -42,6 +42,8 @@ import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
+import { TipoPeriodoNomina } from './enums/tipo-periodo.enum';
+import { NominaJob, EstadoNominaJob } from './entities/nomina-job.entity';
 
 const SMMLV_2026 = 1750905;
 const AUXILIO_TRANSPORTE_2026 = 249095;
@@ -80,8 +82,11 @@ export class NominaService implements OnModuleInit {
     @InjectRepository(PeriodoEmpleadoConcepto)
     private readonly periodoEmpleadoConceptoRepo: Repository<PeriodoEmpleadoConcepto>,
     @InjectRepository(ConfiguracionContableNomina)
-    private readonly configContableRepo: Repository<ConfiguracionContableNomina>,
+    private configuracionContableRepo: Repository<ConfiguracionContableNomina>,
+    @InjectRepository(NominaJob)
+    private nominaJobRepo: Repository<NominaJob>,
     private readonly asientosContablesService: AsientosContablesService,
+    private dataSource: DataSource,
   ) { }
 
   async onModuleInit() {
@@ -139,8 +144,9 @@ export class NominaService implements OnModuleInit {
       const cleanedDto = this.cleanEmptyStrings(dto);
 
       const params = await this.getParametrosVigentes();
-      if (cleanedDto.salarioBase !== undefined && cleanedDto.salarioBase < params.smmlv) {
-        throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${params.smmlv})`);
+      const smmlv2 = params?.smmlv || SMMLV_2026;
+      if (cleanedDto.salarioBase !== undefined && cleanedDto.salarioBase < smmlv2) {
+        throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${smmlv2})`);
       }
 
       const exists = await this.empleadoRepo.findOne({
@@ -257,8 +263,9 @@ export class NominaService implements OnModuleInit {
 
       if (cleanedDto.salarioBase !== undefined) {
         const params = await this.getParametrosVigentes();
-        if (cleanedDto.salarioBase < params.smmlv) {
-          throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${params.smmlv})`);
+        const smmlv2 = params?.smmlv || SMMLV_2026;
+        if (cleanedDto.salarioBase < smmlv2) {
+          throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${smmlv2})`);
         }
       }
 
@@ -351,6 +358,21 @@ export class NominaService implements OnModuleInit {
     return periodo;
   }
 
+  async deletePeriodo(id: string) {
+    const periodo = await this.findOnePeriodo(id);
+
+    if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
+      throw new BadRequestException('Solo se pueden eliminar períodos en estado BORRADOR');
+    }
+
+    // Por restricciones de llave foránea con onDelete: CASCADE (si aplica) 
+    // o para limpiar explícitamente las asignaciones:
+    await this.periodoEmpleadoRepo.delete({ periodoId: id });
+    await this.periodoRepo.delete(id);
+
+    return { message: 'Período eliminado exitosamente' };
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   //  LIQUIDACIÓN
   // ═══════════════════════════════════════════════════════════════════
@@ -365,262 +387,48 @@ export class NominaService implements OnModuleInit {
       throw new BadRequestException('El período no está en estado BORRADOR');
     }
 
-    // 1. Obtener empleados asignados a través de PeriodoEmpleado
-    let asignados = await this.periodoEmpleadoRepo.find({
-      where: { periodoId, estado: 'INCLUIDO' },
-      relations: ['empleado'],
+    // Verificar si ya hay un job en curso
+    const existingJob = await this.nominaJobRepo.findOne({
+      where: {
+        periodoId,
+        estado: In([EstadoNominaJob.PENDIENTE, EstadoNominaJob.PROCESANDO]),
+      },
     });
 
-    if (asignados.length === 0) {
-      throw new BadRequestException('Debe haber al menos un empleado asignado para poder liquidar la nómina.');
+    if (existingJob) {
+      throw new BadRequestException('Ya existe un proceso de liquidación en curso para este período.');
     }
 
-    // 2. Obtener parámetros de ley vigentes para el período
-    const paramsLegal = await this.getParametrosVigentes(periodo.fechaFin);
-    const smmlv = paramsLegal ? Number(paramsLegal.smmlv) : SMMLV_2026;
-    const auxTransporteMonto = paramsLegal ? Number(paramsLegal.auxilioTransporte) : AUXILIO_TRANSPORTE_2026;
-    const pctSaludEmp = paramsLegal ? Number(paramsLegal.porcentajeSaludEmpleado) : 4.0;
-    const pctPensionEmp = paramsLegal ? Number(paramsLegal.porcentajePensionEmpleado) : 4.0;
-
-    const liquidaciones: Liquidacion[] = [];
-    const detallesToSave: Partial<LiquidacionDetalle>[] = [];
-
-    // Limpiar liquidaciones previas del mismo borrador (si re-liquida)
-    const prevLiqs = await this.liquidacionRepo.find({ where: { periodoId } });
-    if (prevLiqs.length > 0) {
-      await this.liquidacionRepo.remove(prevLiqs);
-    }
-
-    for (const pe of asignados) {
-      const empleado = pe.empleado;
-      const { liq, detalles } = await this.calcularLiquidacionConSnapshot(
-        empleado,
-        periodo,
-        pe.diasNovedad,
-        smmlv,
-        auxTransporteMonto,
-        pctSaludEmp,
-        pctPensionEmp,
-      );
-      const savedLiq = await this.liquidacionRepo.save(liq);
-
-      for (const d of detalles) {
-        d.liquidacionId = savedLiq.id;
-        detallesToSave.push(d);
-      }
-      liquidaciones.push(savedLiq);
-    }
-
-    if (detallesToSave.length > 0) {
-      await this.liquidacionDetalleRepo.save(detallesToSave);
-    }
-
-    const saved = liquidaciones;
-    const totalDevengado = saved.reduce((s, l) => s + Number(l.totalDevengado), 0);
-    const totalDeducciones = saved.reduce((s, l) => s + Number(l.totalDeducciones), 0);
-    const totalNeto = saved.reduce((s, l) => s + Number(l.netoPagar), 0);
-    const totalCosto = saved.reduce(
-      (s, l) => s + Number(l.totalDevengado) + Number(l.totalAportes) + Number(l.totalProvisiones),
-      0,
-    );
-    const totalAportesPeriodo = saved.reduce((s, l) => s + Number(l.totalAportes), 0);
-    const totalProvisionesPeriodo = saved.reduce((s, l) => s + Number(l.totalProvisiones), 0);
-    const saludPension = saved.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
-    const totalRetefuente = saved.reduce((s, l) => s + Number(l.retencionFuente), 0);
-
-    // --- CONSTRUIR ASIENTO CONTABLE CUSTOM SEGÚN CONFIGURACIÓN POR ÁREA ---
-    const configNominaPorArea = await this.getConfiguracionesContables();
-
-    // Mapa de empleadoId -> area
-    const empleadoAreaMap = new Map<string, AreaEmpleado>();
-    for (const pe of asignados) {
-      empleadoAreaMap.set(pe.empleadoId, pe.empleado.area || AreaEmpleado.ADMINISTRATIVA);
-    }
-
-    const resolvedAccounts = new Map<string, any>();
-    const getAccount = async (cuentaId: string | null, fallbackCodigo: string): Promise<any> => {
-      const cacheKey = cuentaId ? `id:${cuentaId}` : `code:${fallbackCodigo}`;
-      if (resolvedAccounts.has(cacheKey)) {
-        return resolvedAccounts.get(cacheKey);
-      }
-      let account: any = null;
-      if (cuentaId) {
-        account = await this.asientosContablesService.obtenerCuentaPorId(cuentaId);
-      }
-      if (!account) {
-        try {
-          account = await this.asientosContablesService.obtenerCuentaPorCodigo(fallbackCodigo);
-        } catch {
-          // Fallback
-        }
-      }
-      resolvedAccounts.set(cacheKey, account);
-      return account;
-    };
-
-    const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
-    const addEntry = (cuenta: any, debito: number, credito: number) => {
-      if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
-      const existing = detailsMap.get(cuenta.id);
-      if (existing) {
-        existing.debito = Math.round((existing.debito + debito) * 100) / 100;
-        existing.credito = Math.round((existing.credito + credito) * 100) / 100;
-      } else {
-        detailsMap.set(cuenta.id, {
-          cuentaId: cuenta.id,
-          debito: Math.round(debito * 100) / 100,
-          credito: Math.round(credito * 100) / 100,
-          descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
-        });
-      }
-    };
-
-    for (const l of saved) {
-      const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
-      const config = configNominaPorArea[area];
-
-      // Cuenta obligacion laboral (Pasivo contrapartida neto a pagar)
-      const obligacionLabAccount = await getAccount(config.cajaBanco?.cuentaObligacionesLabId, '2505');
-
-      // 1. Salario Devengado
-      const salarioVal = Number(l.salarioDevengado);
-      if (salarioVal > 0) {
-        const fallbackSalario = area === AreaEmpleado.VENTAS ? '520506' : (area === AreaEmpleado.OPERATIVA ? '720506' : '510506');
-        const salarioAccount = await getAccount(config.conceptos?.salario?.cuentaId, fallbackSalario);
-        addEntry(salarioAccount, salarioVal, 0); // Debito gasto
-        addEntry(obligacionLabAccount, 0, salarioVal); // Credito obligacion
-      }
-
-      // 2. Auxilio de Transporte
-      const auxTransVal = Number(l.auxilioTransporte);
-      if (auxTransVal > 0) {
-        const fallbackAux = area === AreaEmpleado.VENTAS ? '520527' : (area === AreaEmpleado.OPERATIVA ? '720527' : '510527');
-        const auxAccount = await getAccount(config.conceptos?.auxilioTransporte?.cuentaId, fallbackAux);
-        addEntry(auxAccount, auxTransVal, 0); // Debito gasto
-        addEntry(obligacionLabAccount, 0, auxTransVal); // Credito obligacion
-      }
-
-      // 3. Salud Empleado (Deducción)
-      const saludVal = Number(l.saludEmpleado);
-      if (saludVal > 0) {
-        const saludAccount = await getAccount(config.seguridadSocial?.salud?.cuentaPasivoId, '237005');
-        addEntry(obligacionLabAccount, saludVal, 0); // Debito obligacion
-        addEntry(saludAccount, 0, saludVal); // Credito salud por pagar
-      }
-
-      // 4. Pensión Empleado (Deducción)
-      const pensionVal = Number(l.pensionEmpleado);
-      if (pensionVal > 0) {
-        const pensionAccount = await getAccount(config.seguridadSocial?.pension?.cuentaPasivoId, '238030');
-        addEntry(obligacionLabAccount, pensionVal, 0); // Debito obligacion
-        addEntry(pensionAccount, 0, pensionVal); // Credito pension por pagar
-      }
-
-      // 5. Retención en la fuente (Deducción)
-      const retefuenteVal = Number(l.retencionFuente);
-      if (retefuenteVal > 0) {
-        const retefuenteAccount = await getAccount(null, '236505');
-        addEntry(obligacionLabAccount, retefuenteVal, 0); // Debito obligacion
-        addEntry(retefuenteAccount, 0, retefuenteVal); // Credito pasivo
-      }
-
-      // 6. Conceptos dinámicos (recurrentes / ocasionales)
-      const detallesEmp = detallesToSave.filter(d => d.liquidacionId === l.id && d.conceptoId);
-      for (const d of detallesEmp) {
-        const valorVal = Number(d.valor);
-        if (valorVal <= 0) continue;
-
-        const mappedCuentaId = config.conceptos?.[d.conceptoId!]?.cuentaId;
-        const conceptoReal = await this.conceptoRepo.findOne({ where: { id: d.conceptoId! } });
-
-        if (d.tipo === TipoConceptoNomina.DEVENGADO) {
-          const fallbackDev = area === AreaEmpleado.VENTAS ? '520599' : (area === AreaEmpleado.OPERATIVA ? '720599' : '510599');
-          const devAccount = await getAccount(mappedCuentaId || conceptoReal?.cuentaContableDebito, fallbackDev);
-          addEntry(devAccount, valorVal, 0); // Debito gasto
-          addEntry(obligacionLabAccount, 0, valorVal); // Credito obligacion
-        } else {
-          const dedAccount = await getAccount(mappedCuentaId || conceptoReal?.cuentaContableCredito, '237099');
-          addEntry(obligacionLabAccount, valorVal, 0); // Debito obligacion
-          addEntry(dedAccount, 0, valorVal); // Credito pasivo
-        }
-      }
-
-      // 7. Aportes Empleador (Seguridad Social)
-      const aportes = l.aportesEmpleador || [];
-      const ssConfigMap: Record<string, { configKey: string; fallbackGasto: string; fallbackPasivo: string }> = {
-        'Salud': { configKey: 'salud', fallbackGasto: area === AreaEmpleado.VENTAS ? '520569' : (area === AreaEmpleado.OPERATIVA ? '720569' : '510569'), fallbackPasivo: '237005' },
-        'Pensión': { configKey: 'pension', fallbackGasto: area === AreaEmpleado.VENTAS ? '520570' : (area === AreaEmpleado.OPERATIVA ? '720570' : '510570'), fallbackPasivo: '238030' },
-        'ARL': { configKey: 'arl', fallbackGasto: area === AreaEmpleado.VENTAS ? '520568' : (area === AreaEmpleado.OPERATIVA ? '720568' : '510568'), fallbackPasivo: '237006' },
-        'Caja Compensación': { configKey: 'ccf', fallbackGasto: area === AreaEmpleado.VENTAS ? '520572' : (area === AreaEmpleado.OPERATIVA ? '720572' : '510572'), fallbackPasivo: '237010' },
-        'SENA': { configKey: 'sena', fallbackGasto: area === AreaEmpleado.VENTAS ? '520575' : (area === AreaEmpleado.OPERATIVA ? '720575' : '510575'), fallbackPasivo: '237010' },
-        'ICBF': { configKey: 'icbf', fallbackGasto: area === AreaEmpleado.VENTAS ? '520578' : (area === AreaEmpleado.OPERATIVA ? '720578' : '510578'), fallbackPasivo: '237010' },
-      };
-
-      for (const ap of aportes) {
-        const apVal = Number(ap.valor);
-        if (apVal <= 0) continue;
-        const mapping = ssConfigMap[ap.concepto];
-        if (mapping) {
-          const ssItem = config.seguridadSocial?.[mapping.configKey];
-          const ssGastoAcc = await getAccount(ssItem?.cuentaGastoId, mapping.fallbackGasto);
-          const ssPasivoAcc = await getAccount(ssItem?.cuentaPasivoId, mapping.fallbackPasivo);
-          addEntry(ssGastoAcc, apVal, 0);
-          addEntry(ssPasivoAcc, 0, apVal);
-        }
-      }
-
-      // 8. Provisiones
-      const provisiones = l.provisiones || [];
-      const provConfigMap: Record<string, { configKey: string; fallbackGasto: string; fallbackPasivo: string }> = {
-        'Cesantías': { configKey: 'cesantias', fallbackGasto: area === AreaEmpleado.VENTAS ? '520530' : (area === AreaEmpleado.OPERATIVA ? '720530' : '510530'), fallbackPasivo: '261015' },
-        'Intereses Cesantías': { configKey: 'interesesCesantias', fallbackGasto: area === AreaEmpleado.VENTAS ? '520533' : (area === AreaEmpleado.OPERATIVA ? '720533' : '510533'), fallbackPasivo: '261016' },
-        'Prima de Servicios': { configKey: 'prima', fallbackGasto: area === AreaEmpleado.VENTAS ? '520536' : (area === AreaEmpleado.OPERATIVA ? '720536' : '510536'), fallbackPasivo: '261020' },
-        'Vacaciones': { configKey: 'vacaciones', fallbackGasto: area === AreaEmpleado.VENTAS ? '520539' : (area === AreaEmpleado.OPERATIVA ? '720539' : '510539'), fallbackPasivo: '261010' },
-      };
-
-      for (const prov of provisiones) {
-        const provVal = Number(prov.valor);
-        if (provVal <= 0) continue;
-        const mapping = provConfigMap[prov.concepto];
-        if (mapping) {
-          const provItem = config.provisiones?.[mapping.configKey];
-          const provGastoAcc = await getAccount(provItem?.cuentaGastoId, mapping.fallbackGasto);
-          const provPasivoAcc = await getAccount(provItem?.cuentaPasivoId, mapping.fallbackPasivo);
-          addEntry(provGastoAcc, provVal, 0);
-          addEntry(provPasivoAcc, 0, provVal);
-        }
-      }
-    }
-
-    const detallesCustom = Array.from(detailsMap.values());
-
-    // Generar asiento contable de provisión
-    const asiento = await this.asientosContablesService.generarAsientoNomina({
-      periodoNombre: periodo.nombre,
-      fecha: periodo.fechaFin,
-      totalDevengado,
-      totalProvisiones: totalProvisionesPeriodo,
-      totalAportes: totalAportesPeriodo,
-      netoPagar: totalNeto,
-      saludPensionEmpleado: saludPension,
-      retencionFuente: totalRetefuente,
+    const job = this.nominaJobRepo.create({
+      periodoId,
+      tipo: 'LIQUIDACION',
+      estado: EstadoNominaJob.PENDIENTE,
       userId,
-      detallesCustom,
     });
-
-    await this.periodoRepo.update(periodoId, {
-      estado: EstadoPeriodoNomina.LIQUIDADA,
-      totalDevengado,
-      totalDeducciones,
-      totalNeto,
-      totalCostoEmpresa: totalCosto,
-      asientoProvisionId: asiento.id,
-    });
+    
+    await this.nominaJobRepo.save(job);
 
     return {
-      message: 'Nómina liquidada exitosamente',
-      data: saved,
-      asientoProvision: asiento,
+      message: 'El proceso de liquidación ha sido encolado y se ejecutará en segundo plano.',
+      jobId: job.id,
+    };
+  }
+
+  async getJobStatus(periodoId: string) {
+    const job = await this.nominaJobRepo.findOne({
+      where: { periodoId, tipo: 'LIQUIDACION' },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!job) {
+      return { estado: 'NINGUNO' };
+    }
+
+    return {
+      id: job.id,
+      estado: job.estado,
+      errores: job.errores,
+      updatedAt: job.updatedAt,
     };
   }
 
@@ -774,8 +582,9 @@ export class NominaService implements OnModuleInit {
     const saludEmpleado = Math.round((ibc * (pctSaludEmp / 100)) * 100) / 100;
     const pensionEmpleado = Math.round((ibc * (pctPensionEmp / 100)) * 100) / 100;
     const retencionFuente = this.calcularRetencionFuente(
-      Number(empleado.salarioBase),
       totalDevengado,
+      saludEmpleado,
+      pensionEmpleado,
       empleado.salarioIntegral,
     );
 
@@ -794,8 +603,7 @@ export class NominaService implements OnModuleInit {
     });
 
     // Protección del salario (Límite deducciones recurrentes al 50% devengado neto)
-    // const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
-    const subtotalLegales = saludEmpleado + pensionEmpleado;
+    const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
     const maxDeduccionesPermitidas = (totalDevengado - subtotalLegales) * 0.50;
     if (deduccionesRecurrentes > maxDeduccionesPermitidas && maxDeduccionesPermitidas > 0) {
       deduccionesRecurrentes = Math.round(maxDeduccionesPermitidas * 100) / 100;
@@ -984,6 +792,49 @@ export class NominaService implements OnModuleInit {
     };
   }
 
+  async reversarLiquidacion(periodoId: string, userId: string) {
+    const periodo = await this.findOnePeriodo(periodoId);
+    
+    if (periodo.estado !== EstadoPeriodoNomina.LIQUIDADA) {
+      if (periodo.estado === EstadoPeriodoNomina.PAGADA) {
+        throw new BadRequestException('No se puede reversar un período pagado. Debe anular el pago en tesorería primero.');
+      }
+      throw new BadRequestException('El período debe estar en estado LIQUIDADA para poder reversarlo.');
+    }
+
+    // 1. Reversar asiento de provisión
+    if (periodo.asientoProvisionId) {
+      const asientoProvision = await this.asientosContablesService.findOneAsientoConDetalles(periodo.asientoProvisionId);
+      await this.asientosContablesService.anularAsientoNomina({
+        periodoNombre: periodo.nombre,
+        fecha: new Date(), // O la fecha en la que se reversa
+        asientoOriginal: asientoProvision,
+        userId,
+      });
+    }
+
+    // 2. Limpiar liquidaciones
+    await this.liquidacionDetalleRepo.delete({ liquidacion: { periodoId } });
+    await this.liquidacionRepo.delete({ periodoId });
+    
+    // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidación
+    await this.nominaJobRepo.delete({ periodoId });
+
+    // 3. Volver a BORRADOR
+    await this.periodoRepo.update(periodoId, {
+      estado: EstadoPeriodoNomina.BORRADOR,
+      totalDevengado: 0,
+      totalDeducciones: 0,
+      totalNeto: 0,
+      totalCostoEmpresa: 0,
+      asientoProvisionId: null,
+    });
+
+    return {
+      message: 'Liquidación reversada exitosamente. El período vuelve a estado BORRADOR.',
+    };
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   //  CATÁLOGOS
   // ═══════════════════════════════════════════════════════════════════
@@ -1069,8 +920,9 @@ export class NominaService implements OnModuleInit {
     const saludEmpleado = Math.round(ibc * 0.04 * 100) / 100;
     const pensionEmpleado = Math.round(ibc * 0.04 * 100) / 100;
     const retencionFuente = this.calcularRetencionFuente(
-      Number(empleado.salarioBase),
       totalDevengado,
+      saludEmpleado,
+      pensionEmpleado,
       empleado.salarioIntegral,
     );
 
@@ -1168,8 +1020,9 @@ export class NominaService implements OnModuleInit {
   }
 
   private calcularRetencionFuente(
-    salarioBase: number,
     totalDevengado: number,
+    saludEmpleado: number,
+    pensionEmpleado: number,
     salarioIntegral: boolean,
   ): number {
     if (salarioIntegral) {
@@ -1178,29 +1031,33 @@ export class NominaService implements OnModuleInit {
 
     const UVT = 51816;
 
-    // 1. Deducción automática 25% (Art. 206 E.T.), tope 240 UVT mensuales
-    const deduccion = Math.min(totalDevengado * 0.25, 240 * UVT);
-    const baseMensual = totalDevengado - deduccion;
+    // 1. Ingreso no constitutivo de renta
+    const ingresosNoConstitutivos = saludEmpleado + pensionEmpleado;
+    const subtotal = Math.max(0, totalDevengado - ingresosNoConstitutivos);
 
-    // 2. Annualizar
-    const baseAnual = baseMensual * 12;
+    // 2. Deducción 25% Renta Exenta (Art. 206 E.T.), tope 790 UVT anuales -> 65.83 UVT mensuales
+    const deduccion = Math.min(subtotal * 0.25, (790 / 12) * UVT);
+    const baseMensual = subtotal - deduccion;
 
-    // 3. Tabla progresiva DIAN 2026 (Art. 383 E.T.)
-    // 0-95 UVT: exento | 95-150: 19% | 150-360: 28% | 360+: 33%
-    let impuestoAnual = 0;
-    if (baseAnual > 95 * UVT) {
-      const base95_150 = Math.min(baseAnual, 150 * UVT) - 95 * UVT;
-      if (base95_150 > 0) impuestoAnual += base95_150 * 0.19;
-    }
-    if (baseAnual > 150 * UVT) {
-      const base150_360 = Math.min(baseAnual, 360 * UVT) - 150 * UVT;
-      if (base150_360 > 0) impuestoAnual += base150_360 * 0.28;
-    }
-    if (baseAnual > 360 * UVT) {
-      impuestoAnual += (baseAnual - 360 * UVT) * 0.33;
+    const baseUvt = baseMensual / UVT;
+
+    // 3. Tabla progresiva DIAN (Art. 383 E.T. expresada en UVT mensual)
+    let impuestoUvt = 0;
+    if (baseUvt > 95 && baseUvt <= 150) {
+      impuestoUvt = (baseUvt - 95) * 0.19;
+    } else if (baseUvt > 150 && baseUvt <= 360) {
+      impuestoUvt = (baseUvt - 150) * 0.28 + 10;
+    } else if (baseUvt > 360 && baseUvt <= 640) {
+      impuestoUvt = (baseUvt - 360) * 0.33 + 69;
+    } else if (baseUvt > 640 && baseUvt <= 945) {
+      impuestoUvt = (baseUvt - 640) * 0.35 + 162;
+    } else if (baseUvt > 945 && baseUvt <= 2300) {
+      impuestoUvt = (baseUvt - 945) * 0.37 + 268;
+    } else if (baseUvt > 2300) {
+      impuestoUvt = (baseUvt - 2300) * 0.39 + 770;
     }
 
-    return Math.round((impuestoAnual / 12) * 100) / 100;
+    return Math.round(impuestoUvt * UVT * 100) / 100;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1782,14 +1639,21 @@ export class NominaService implements OnModuleInit {
         const fechaEfectivaInicio = fechaIngreso > fechaInicio ? fechaIngreso : fechaInicio;
         const fechaEfectivaFin = fechaRetiro && fechaRetiro <= fechaFin ? fechaRetiro : fechaFin;
 
-        const diasProporcionales = fechaEfectivaInicio <= fechaEfectivaFin
+        let diasProporcionales = fechaEfectivaInicio <= fechaEfectivaFin
           ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
-          : diasNovedad;
+          : 0;
+
+        if (diasProporcionales === 0) {
+          diasProporcionales = diasNovedad;
+        }
+
+        const maxDias = periodo.tipo === TipoPeriodoNomina.QUINCENAL ? 15 : 30;
+        const finalDias = Math.min(diasProporcionales, maxDias);
 
         await this.periodoEmpleadoRepo.save({
           periodoId,
           empleadoId: empId,
-          diasNovedad: diasProporcionales > 0 ? diasProporcionales : diasNovedad,
+          diasNovedad: finalDias,
           estado: 'INCLUIDO',
         });
       }
@@ -1971,12 +1835,281 @@ export class NominaService implements OnModuleInit {
   }
 
   async saveConfiguracionContable(area: AreaEmpleado, configuracion: any) {
-    let config = await this.configContableRepo.findOne({ where: { area } });
+    let config = await this.configuracionContableRepo.findOne({ where: { area } });
     if (!config) {
-      config = this.configContableRepo.create({ area, configuracion });
+      config = this.configuracionContableRepo.create({ area, configuracion });
     } else {
       config.configuracion = configuracion;
     }
-    return await this.configContableRepo.save(config);
+    return await this.configuracionContableRepo.save(config);
+  }
+  async procesarLiquidacionAsincrona(periodoId: string, userId: string = 'system') {
+    const periodo = await this.findOnePeriodo(periodoId);
+    if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
+      throw new BadRequestException('El período no está en estado BORRADOR');
+    }
+
+    let asignados = await this.periodoEmpleadoRepo.find({
+      where: { periodoId, estado: 'INCLUIDO' },
+      relations: ['empleado'],
+    });
+
+    if (asignados.length === 0) {
+      throw new BadRequestException('Debe haber al menos un empleado asignado para poder liquidar la nómina.');
+    }
+
+    const paramsLegal = await this.getParametrosVigentes(periodo.fechaFin);
+    const smmlv = paramsLegal ? Number(paramsLegal.smmlv) : SMMLV_2026;
+    const auxTransporteMonto = paramsLegal ? Number(paramsLegal.auxilioTransporte) : AUXILIO_TRANSPORTE_2026;
+    const pctSaludEmp = paramsLegal ? Number(paramsLegal.porcentajeSaludEmpleado) : 4.0;
+    const pctPensionEmp = paramsLegal ? Number(paramsLegal.porcentajePensionEmpleado) : 4.0;
+
+    const liquidaciones: Liquidacion[] = [];
+    const detallesToSave: Partial<LiquidacionDetalle>[] = [];
+
+    // Empezamos la transacción
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Limpiar previas dentro de la transacción
+      await queryRunner.manager.delete(LiquidacionDetalle, { liquidacion: { periodoId } });
+      await queryRunner.manager.delete(Liquidacion, { periodoId });
+
+      for (const pe of asignados) {
+        const empleado = pe.empleado;
+        const { liq, detalles } = await this.calcularLiquidacionConSnapshot(
+          empleado,
+          periodo,
+          pe.diasNovedad,
+          smmlv,
+          auxTransporteMonto,
+          pctSaludEmp,
+          pctPensionEmp,
+        );
+        
+        // Save liquidacion
+        const savedLiq = await queryRunner.manager.save(Liquidacion, queryRunner.manager.create(Liquidacion, liq));
+
+        for (const d of detalles) {
+          d.liquidacionId = savedLiq.id;
+          detallesToSave.push(d);
+        }
+        liquidaciones.push(savedLiq);
+      }
+
+      if (detallesToSave.length > 0) {
+        const batchSize = 500;
+        for (let i = 0; i < detallesToSave.length; i += batchSize) {
+          const chunk = detallesToSave.slice(i, i + batchSize);
+          await queryRunner.manager.insert(LiquidacionDetalle, chunk);
+        }
+      }
+
+      // 2. Acumuladores
+      const totalDevengado = liquidaciones.reduce((s, l) => s + Number(l.totalDevengado), 0);
+      const totalDeducciones = liquidaciones.reduce((s, l) => s + Number(l.totalDeducciones), 0);
+      const totalNeto = liquidaciones.reduce((s, l) => s + Number(l.netoPagar), 0);
+      const totalCosto = liquidaciones.reduce(
+        (s, l) => s + Number(l.totalDevengado) + Number(l.totalAportes) + Number(l.totalProvisiones),
+        0,
+      );
+      const totalAportesPeriodo = liquidaciones.reduce((s, l) => s + Number(l.totalAportes), 0);
+      const totalProvisionesPeriodo = liquidaciones.reduce((s, l) => s + Number(l.totalProvisiones), 0);
+      const saludPension = liquidaciones.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
+      const totalRetefuente = liquidaciones.reduce((s, l) => s + Number(l.retencionFuente), 0);
+
+      // 3. Contabilización Estricta
+      const configNominaPorArea = await this.getConfiguracionesContables();
+      const empleadoAreaMap = new Map<string, AreaEmpleado>();
+      for (const pe of asignados) {
+        empleadoAreaMap.set(pe.empleadoId, pe.empleado.area || AreaEmpleado.ADMINISTRATIVA);
+      }
+
+      const resolvedAccounts = new Map<string, any>();
+      const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
+        if (!cuentaId) {
+          throw new BadRequestException(`Validación Contable: Falta configurar cuenta contable para el concepto "${descripcionConcepto}".`);
+        }
+        const cacheKey = `id:${cuentaId}`;
+        if (resolvedAccounts.has(cacheKey)) {
+          return resolvedAccounts.get(cacheKey);
+        }
+        const account = await this.asientosContablesService.obtenerCuentaPorId(cuentaId);
+        if (!account) {
+          throw new BadRequestException(`Validación Contable: La cuenta contable configurada para "${descripcionConcepto}" no existe o está inactiva.`);
+        }
+        resolvedAccounts.set(cacheKey, account);
+        return account;
+      };
+
+      const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
+      const addEntry = (cuenta: any, debito: number, credito: number) => {
+        if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
+        const existing = detailsMap.get(cuenta.id);
+        if (existing) {
+          existing.debito = Math.round((existing.debito + debito) * 100) / 100;
+          existing.credito = Math.round((existing.credito + credito) * 100) / 100;
+        } else {
+          detailsMap.set(cuenta.id, {
+            cuentaId: cuenta.id,
+            debito: Math.round(debito * 100) / 100,
+            credito: Math.round(credito * 100) / 100,
+            descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
+          });
+        }
+      };
+
+      for (const l of liquidaciones) {
+        const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
+        const config = configNominaPorArea[area];
+
+        const obligacionLabAccount = await getAccountStrict(config.cajaBanco?.cuentaObligacionesLabId, 'Obligaciones Laborales (Salarios por Pagar)');
+
+        const salarioVal = Number(l.salarioDevengado);
+        if (salarioVal > 0) {
+          const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Área ${area})`);
+          addEntry(salarioAccount, salarioVal, 0);
+          addEntry(obligacionLabAccount, 0, salarioVal);
+        }
+
+        const auxTransVal = Number(l.auxilioTransporte);
+        if (auxTransVal > 0) {
+          const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Área ${area})`);
+          addEntry(auxAccount, auxTransVal, 0);
+          addEntry(obligacionLabAccount, 0, auxTransVal);
+        }
+
+        const saludVal = Number(l.saludEmpleado);
+        if (saludVal > 0) {
+          const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
+          addEntry(obligacionLabAccount, saludVal, 0);
+          addEntry(saludAccount, 0, saludVal);
+        }
+
+        const pensionVal = Number(l.pensionEmpleado);
+        if (pensionVal > 0) {
+          const pensionAccount = await getAccountStrict(config.seguridadSocial?.pension?.cuentaPasivoId, 'Pasivo Pensión (Deducción Empleado)');
+          addEntry(obligacionLabAccount, pensionVal, 0);
+          addEntry(pensionAccount, 0, pensionVal);
+        }
+
+        const retefuenteVal = Number(l.retencionFuente);
+        if (retefuenteVal > 0) {
+          let retefuenteAccount = null;
+          try {
+            retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
+          } catch(e) {}
+          if (!retefuenteAccount) {
+            throw new BadRequestException(`Validación Contable: No se encontró la cuenta 236505 para Retención en la fuente por Salarios.`);
+          }
+          addEntry(obligacionLabAccount, retefuenteVal, 0);
+          addEntry(retefuenteAccount, 0, retefuenteVal);
+        }
+
+        // Conceptos dinámicos
+        const detallesEmp = detallesToSave.filter(d => d.liquidacionId === l.id && d.conceptoId);
+        for (const d of detallesEmp) {
+          const valorVal = Number(d.valor);
+          if (valorVal <= 0) continue;
+
+          const mappedCuentaId = config.conceptos?.[d.conceptoId!]?.cuentaId;
+          const conceptoReal = await queryRunner.manager.findOne(ConceptoNomina, { where: { id: d.conceptoId! } });
+          const nombreConcepto = conceptoReal?.nombre || d.conceptoId;
+
+          if (d.tipo === TipoConceptoNomina.DEVENGADO) {
+            const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
+            addEntry(devAccount, valorVal, 0);
+            addEntry(obligacionLabAccount, 0, valorVal);
+          } else {
+            const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deducción: ${nombreConcepto}`);
+            addEntry(obligacionLabAccount, valorVal, 0);
+            addEntry(dedAccount, 0, valorVal);
+          }
+        }
+
+        // Aportes Empleador
+        const aportes = l.aportesEmpleador || [];
+        const ssConfigMap: Record<string, string> = {
+          'Salud': 'salud', 'Pensión': 'pension', 'ARL': 'arl',
+          'Caja Compensación': 'ccf', 'SENA': 'sena', 'ICBF': 'icbf',
+        };
+
+        for (const ap of aportes) {
+          const apVal = Number(ap.valor);
+          if (apVal <= 0) continue;
+          const configKey = ssConfigMap[ap.concepto];
+          if (configKey) {
+            const ssItem = config.seguridadSocial?.[configKey as keyof typeof config.seguridadSocial];
+            const ssGastoAcc = await getAccountStrict(ssItem?.cuentaGastoId, `Gasto Aporte Empleador: ${ap.concepto}`);
+            const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
+            addEntry(ssGastoAcc, apVal, 0);
+            addEntry(ssPasivoAcc, 0, apVal);
+          }
+        }
+
+        // Provisiones
+        const provisiones = l.provisiones || [];
+        const provConfigMap: Record<string, string> = {
+          'Cesantías': 'cesantias', 'Intereses Cesantías': 'interesesCesantias',
+          'Prima de Servicios': 'prima', 'Vacaciones': 'vacaciones',
+        };
+
+        for (const prov of provisiones) {
+          const provVal = Number(prov.valor);
+          if (provVal <= 0) continue;
+          const configKey = provConfigMap[prov.concepto];
+          if (configKey) {
+            const provItem = config.provisiones?.[configKey as keyof typeof config.provisiones];
+            const provGastoAcc = await getAccountStrict(provItem?.cuentaGastoId, `Gasto Provisión: ${prov.concepto}`);
+            const provPasivoAcc = await getAccountStrict(provItem?.cuentaPasivoId, `Pasivo Provisión: ${prov.concepto}`);
+            addEntry(provGastoAcc, provVal, 0);
+            addEntry(provPasivoAcc, 0, provVal);
+          }
+        }
+      }
+
+      // Verificación Partida Doble Total
+      const detallesCustom = Array.from(detailsMap.values());
+      const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
+      const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
+      
+      if (Math.abs(sumaDebitos - sumaCreditos) > 0.01) {
+        throw new BadRequestException(`Validación Contable: Asiento descuadrado. Débitos: ${sumaDebitos}, Créditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
+      }
+
+      const asientoDefinicion = {
+        tipo: 'NOMINA',
+        fecha: periodo.fechaFin,
+        referencia: `Nómina ${periodo.nombre}`,
+        descripcion: `Contabilización automática de nómina: ${periodo.nombre}`,
+        detalles: detallesCustom.map(d => ({
+          cuentaId: d.cuentaId,
+          debito: d.debito,
+          credito: d.credito,
+          descripcion: d.descripcion,
+        })),
+      };
+
+      const asiento = await this.asientosContablesService.crearAsientoDesdeDefinicion(asientoDefinicion as any, userId, queryRunner as any);
+
+      await queryRunner.manager.update(PeriodoNomina, periodoId, {
+        estado: EstadoPeriodoNomina.LIQUIDADA,
+        totalDevengado,
+        totalDeducciones,
+        totalNeto,
+        totalCostoEmpresa: totalCosto,
+        asientoProvisionId: asiento.id,
+      });
+
+      await queryRunner.commitTransaction();
+      
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
