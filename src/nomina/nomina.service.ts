@@ -43,8 +43,8 @@ import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
 
-const SMMLV_2026 = 1423500;
-const AUXILIO_TRANSPORTE_2026 = 200000;
+const SMMLV_2026 = 1750905;
+const AUXILIO_TRANSPORTE_2026 = 249095;
 
 @Injectable()
 export class NominaService implements OnModuleInit {
@@ -137,6 +137,11 @@ export class NominaService implements OnModuleInit {
   async createEmpleado(dto: CreateEmpleadoDto) {
     try {
       const cleanedDto = this.cleanEmptyStrings(dto);
+
+      const params = await this.getParametrosVigentes();
+      if (cleanedDto.salarioBase !== undefined && cleanedDto.salarioBase < params.smmlv) {
+        throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${params.smmlv})`);
+      }
 
       const exists = await this.empleadoRepo.findOne({
         where: { numeroDocumento: cleanedDto.numeroDocumento },
@@ -249,6 +254,13 @@ export class NominaService implements OnModuleInit {
   async updateEmpleado(id: string, dto: UpdateEmpleadoDto) {
     try {
       const cleanedDto = this.cleanEmptyStrings(dto);
+
+      if (cleanedDto.salarioBase !== undefined) {
+        const params = await this.getParametrosVigentes();
+        if (cleanedDto.salarioBase < params.smmlv) {
+          throw new BadRequestException(`El salario base no puede ser inferior al SMMLV vigente ($${params.smmlv})`);
+        }
+      }
 
       if (cleanedDto.tipoContratoId) {
         const tipo = await this.tipoContratoRepo.findOne({
@@ -732,7 +744,7 @@ export class NominaService implements OnModuleInit {
     // Auxilio de Transporte
     let auxilioTransporte = 0;
     if (empleado.auxilioTransporte && Number(empleado.salarioBase) <= 2 * smmlv) {
-      auxilioTransporte = Math.round((auxTransporteMonto / 30) * dias * 100) / 100;
+      auxilioTransporte = Math.round((auxTransporteMonto / 30) * diasEfectivos * 100) / 100;
       detallesSnapshots.push({
         conceptoNombreSnapshot: 'Auxilio de Transporte',
         tipo: TipoConceptoNomina.DEVENGADO,
@@ -754,7 +766,7 @@ export class NominaService implements OnModuleInit {
     }
 
     let ibcBase = salarioDevengado + devengadosSalarialesRec + excesoNoSalarial;
-    const ibcPiso = (smmlv / 30) * dias;
+    const ibcPiso = (smmlv / 30) * diasEfectivos;
     const ibcTecho = smmlv * 25;
     const ibc = Math.round(Math.min(Math.max(ibcBase, ibcPiso), ibcTecho) * 100) / 100;
 
@@ -782,7 +794,8 @@ export class NominaService implements OnModuleInit {
     });
 
     // Protección del salario (Límite deducciones recurrentes al 50% devengado neto)
-    const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
+    // const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
+    const subtotalLegales = saludEmpleado + pensionEmpleado;
     const maxDeduccionesPermitidas = (totalDevengado - subtotalLegales) * 0.50;
     if (deduccionesRecurrentes > maxDeduccionesPermitidas && maxDeduccionesPermitidas > 0) {
       deduccionesRecurrentes = Math.round(maxDeduccionesPermitidas * 100) / 100;
@@ -806,10 +819,10 @@ export class NominaService implements OnModuleInit {
     const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
 
     const provisiones = [
-      { concepto: 'Cesantías', valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100 },
-      { concepto: 'Intereses Cesantías', valor: Math.round(((salarioDevengado * dias) / 360) * 0.12 * 100) / 100 },
-      { concepto: 'Prima de Servicios', valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100 },
-      { concepto: 'Vacaciones', valor: Math.round(((Number(empleado.salarioBase) * dias) / 720) * 100) / 100 },
+      { concepto: 'Cesantías', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 100) / 100 },
+      { concepto: 'Intereses Cesantías', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 0.12 * 100) / 100 },
+      { concepto: 'Prima de Servicios', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 100) / 100 },
+      { concepto: 'Vacaciones', valor: Math.round(((Number(empleado.salarioBase) * diasEfectivos) / 720) * 100) / 100 },
     ];
     const totalProvisiones = provisiones.reduce((s, p) => s + p.valor, 0);
 
