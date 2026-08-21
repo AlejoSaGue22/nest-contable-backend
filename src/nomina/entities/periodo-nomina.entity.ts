@@ -35,11 +35,11 @@ export class PeriodoNomina {
     @Column({ type: 'date', nullable: true })
     fechaPago: Date;
 
-    @Column({ nullable: true })
-    asientoProvisionId: string;
+    @Column({ nullable: true, type: 'varchar', length: 500 })
+    asientoProvisionId: string | null;
 
-    @Column({ nullable: true })
-    asientoPagoId: string;
+    @Column({ nullable: true, type: 'varchar', length: 500 })
+    asientoPagoId: string | null;
 
     @Column({ type: 'enum', enum: EstadoDianNomina, default: EstadoDianNomina.NO_ENVIADA })
     dianEstado: EstadoDianNomina;

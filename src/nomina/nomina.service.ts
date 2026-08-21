@@ -42,6 +42,7 @@ import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { TipoPeriodoNomina } from './enums/tipo-periodo.enum';
 import { NominaJob, EstadoNominaJob } from './entities/nomina-job.entity';
 
@@ -814,8 +815,12 @@ export class NominaService implements OnModuleInit {
     }
 
     // 2. Limpiar liquidaciones
-    await this.liquidacionDetalleRepo.delete({ liquidacion: { periodoId } });
-    await this.liquidacionRepo.delete({ periodoId });
+    const prevLiqs = await this.liquidacionRepo.find({ where: { periodoId }, select: ['id'] });
+    if (prevLiqs.length > 0) {
+      const ids = prevLiqs.map(l => l.id);
+      await this.liquidacionDetalleRepo.delete({ liquidacionId: In(ids) });
+      await this.liquidacionRepo.delete({ id: In(ids) });
+    }
     
     // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidación
     await this.nominaJobRepo.delete({ periodoId });
@@ -1800,7 +1805,7 @@ export class NominaService implements OnModuleInit {
     const result: Record<string, any> = {};
 
     for (const area of areas) {
-      let config = await this.configContableRepo.findOne({ where: { area } });
+      let config = await this.configuracionContableRepo.findOne({ where: { area } });
       if (!config) {
         result[area] = {
           conceptos: {
@@ -1874,8 +1879,12 @@ export class NominaService implements OnModuleInit {
 
     try {
       // 1. Limpiar previas dentro de la transacción
-      await queryRunner.manager.delete(LiquidacionDetalle, { liquidacion: { periodoId } });
-      await queryRunner.manager.delete(Liquidacion, { periodoId });
+      const liquidacionesPrevias = await queryRunner.manager.find(Liquidacion, { where: { periodoId }, select: ['id'] });
+      if (liquidacionesPrevias.length > 0) {
+        const ids = liquidacionesPrevias.map(l => l.id);
+        await queryRunner.manager.delete(LiquidacionDetalle, { liquidacionId: In(ids) });
+        await queryRunner.manager.delete(Liquidacion, { id: In(ids) });
+      }
 
       for (const pe of asignados) {
         const empleado = pe.empleado;
@@ -1997,7 +2006,7 @@ export class NominaService implements OnModuleInit {
 
         const retefuenteVal = Number(l.retencionFuente);
         if (retefuenteVal > 0) {
-          let retefuenteAccount = null;
+          let retefuenteAccount: CuentaContable | null = null;
           try {
             retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
           } catch(e) {}
