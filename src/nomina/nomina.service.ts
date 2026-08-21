@@ -39,6 +39,7 @@ import { PagarNominaDto } from './dto/pagar-nomina.dto';
 import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { CreatePeriodoEmpleadoConceptoDto } from './dto/create-periodo-empleado-concepto.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { GetPeriodosFilterDto } from './dto/get-periodos-filter.dto';
 import { EstadoPeriodoNomina } from './enums/estado-periodo.enum';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { AsientoContable } from 'src/asientos-contables/entities/asientos-contable.entity';
@@ -335,16 +336,43 @@ export class NominaService implements OnModuleInit {
     return this.periodoRepo.save(periodo);
   }
 
-  async findAllPeriodos(paginationDto: PaginatioDto) {
+  async findAllPeriodos(paginationDto: GetPeriodosFilterDto) {
     const page = paginationDto.offset || 1;
     const limit = paginationDto.limit || 10;
     const skip = (page - 1) * limit;
 
-    const [periodos, total] = await this.periodoRepo.findAndCount({
-      order: { fechaInicio: 'DESC' },
-      take: limit,
-      skip,
-    });
+    const queryBuilder = this.periodoRepo.createQueryBuilder('periodo');
+
+    if (paginationDto.estado) {
+      queryBuilder.andWhere('periodo.estado = :estado', { estado: paginationDto.estado });
+    }
+
+    if (paginationDto.tipo) {
+      queryBuilder.andWhere('periodo.tipo = :tipo', { tipo: paginationDto.tipo });
+    }
+
+    if (paginationDto.fecha) {
+      queryBuilder.andWhere('DATE(periodo.fechaInicio) = :fecha', { fecha: paginationDto.fecha });
+    }
+
+    if (paginationDto.anio) {
+      queryBuilder.andWhere('EXTRACT(YEAR FROM periodo.fechaInicio) = :anio', { anio: Number(paginationDto.anio) });
+    }
+
+    if (paginationDto.search) {
+      const searchPattern = `%${paginationDto.search.toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(periodo.nombre) LIKE :search OR LOWER(periodo.tipo) LIKE :search)',
+        { search: searchPattern }
+      );
+    }
+
+    queryBuilder
+      .orderBy('periodo.fechaInicio', 'DESC')
+      .take(limit)
+      .skip(skip);
+
+    const [periodos, total] = await queryBuilder.getManyAndCount();
 
     return {
       count: total,
@@ -406,7 +434,7 @@ export class NominaService implements OnModuleInit {
       estado: EstadoNominaJob.PENDIENTE,
       userId,
     });
-    
+
     await this.nominaJobRepo.save(job);
 
     return {
@@ -795,7 +823,7 @@ export class NominaService implements OnModuleInit {
 
   async reversarLiquidacion(periodoId: string, userId: string) {
     const periodo = await this.findOnePeriodo(periodoId);
-    
+
     if (periodo.estado !== EstadoPeriodoNomina.LIQUIDADA) {
       if (periodo.estado === EstadoPeriodoNomina.PAGADA) {
         throw new BadRequestException('No se puede reversar un período pagado. Debe anular el pago en tesorería primero.');
@@ -821,7 +849,7 @@ export class NominaService implements OnModuleInit {
       await this.liquidacionDetalleRepo.delete({ liquidacionId: In(ids) });
       await this.liquidacionRepo.delete({ id: In(ids) });
     }
-    
+
     // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidación
     await this.nominaJobRepo.delete({ periodoId });
 
@@ -1897,7 +1925,7 @@ export class NominaService implements OnModuleInit {
           pctSaludEmp,
           pctPensionEmp,
         );
-        
+
         // Save liquidacion
         const savedLiq = await queryRunner.manager.save(Liquidacion, queryRunner.manager.create(Liquidacion, liq));
 
@@ -1920,10 +1948,7 @@ export class NominaService implements OnModuleInit {
       const totalDevengado = liquidaciones.reduce((s, l) => s + Number(l.totalDevengado), 0);
       const totalDeducciones = liquidaciones.reduce((s, l) => s + Number(l.totalDeducciones), 0);
       const totalNeto = liquidaciones.reduce((s, l) => s + Number(l.netoPagar), 0);
-      const totalCosto = liquidaciones.reduce(
-        (s, l) => s + Number(l.totalDevengado) + Number(l.totalAportes) + Number(l.totalProvisiones),
-        0,
-      );
+      const totalCosto = liquidaciones.reduce((s, l) => s + Number(l.totalDevengado) + Number(l.totalAportes) + Number(l.totalProvisiones), 0);
       const totalAportesPeriodo = liquidaciones.reduce((s, l) => s + Number(l.totalAportes), 0);
       const totalProvisionesPeriodo = liquidaciones.reduce((s, l) => s + Number(l.totalProvisiones), 0);
       const saludPension = liquidaciones.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
@@ -1957,6 +1982,7 @@ export class NominaService implements OnModuleInit {
       const addEntry = (cuenta: any, debito: number, credito: number) => {
         if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
         const existing = detailsMap.get(cuenta.id);
+
         if (existing) {
           existing.debito = Math.round((existing.debito + debito) * 100) / 100;
           existing.credito = Math.round((existing.credito + credito) * 100) / 100;
@@ -1990,12 +2016,13 @@ export class NominaService implements OnModuleInit {
           addEntry(obligacionLabAccount, 0, auxTransVal);
         }
 
-        const saludVal = Number(l.saludEmpleado);
-        if (saludVal > 0) {
-          const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
-          addEntry(obligacionLabAccount, saludVal, 0);
-          addEntry(saludAccount, 0, saludVal);
-        }
+        // La Salud no se descuenta del empleado solo se descuenta el aporte de la empresa
+        // const saludVal = Number(l.saludEmpleado);  
+        // if (saludVal > 0) {
+        //   const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
+        //   addEntry(obligacionLabAccount, saludVal, 0);
+        //   addEntry(saludAccount, 0, saludVal);
+        // }
 
         const pensionVal = Number(l.pensionEmpleado);
         if (pensionVal > 0) {
@@ -2009,7 +2036,7 @@ export class NominaService implements OnModuleInit {
           let retefuenteAccount: CuentaContable | null = null;
           try {
             retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
-          } catch(e) {}
+          } catch (e) { }
           if (!retefuenteAccount) {
             throw new BadRequestException(`Validación Contable: No se encontró la cuenta 236505 para Retención en la fuente por Salarios.`);
           }
@@ -2083,7 +2110,7 @@ export class NominaService implements OnModuleInit {
       const detallesCustom = Array.from(detailsMap.values());
       const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
       const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
-      
+
       if (Math.abs(sumaDebitos - sumaCreditos) > 0.01) {
         throw new BadRequestException(`Validación Contable: Asiento descuadrado. Débitos: ${sumaDebitos}, Créditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
       }
@@ -2113,7 +2140,7 @@ export class NominaService implements OnModuleInit {
       });
 
       await queryRunner.commitTransaction();
-      
+
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;

@@ -28,6 +28,7 @@ import { CreateEmpleadoConceptoDto } from './dto/create-empleado-concepto.dto';
 import { AssignPeriodoEmpleadosDto } from './dto/assign-periodo-empleados.dto';
 import { CreatePeriodoEmpleadoConceptoDto } from './dto/create-periodo-empleado-concepto.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { GetPeriodosFilterDto } from './dto/get-periodos-filter.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
@@ -134,7 +135,7 @@ export class NominaController {
 
   @Get('periodos')
   // @Permissions(Permission.NOMINA_PERIOD_READ)
-  findAllPeriodos(@Query() pagination: PaginatioDto) {
+  findAllPeriodos(@Query() pagination: GetPeriodosFilterDto) {
     return this.nominaService.findAllPeriodos(pagination);
   }
 
