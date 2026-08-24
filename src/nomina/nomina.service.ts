@@ -2016,13 +2016,12 @@ export class NominaService implements OnModuleInit {
           addEntry(obligacionLabAccount, 0, auxTransVal);
         }
 
-        // La Salud no se descuenta del empleado solo se descuenta el aporte de la empresa
-        // const saludVal = Number(l.saludEmpleado);  
-        // if (saludVal > 0) {
-        //   const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
-        //   addEntry(obligacionLabAccount, saludVal, 0);
-        //   addEntry(saludAccount, 0, saludVal);
-        // }
+        const saludVal = Number(l.saludEmpleado);
+        if (saludVal > 0) {
+          const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
+          addEntry(obligacionLabAccount, saludVal, 0);
+          addEntry(saludAccount, 0, saludVal);
+        }
 
         const pensionVal = Number(l.pensionEmpleado);
         if (pensionVal > 0) {
