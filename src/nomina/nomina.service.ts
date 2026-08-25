@@ -645,13 +645,16 @@ export class NominaService implements OnModuleInit {
     const tasasARL = [0, 0.00348, 0.01044, 0.02436, 0.0435, 0.087];
     const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00348;
 
+    const ibcMensualizado = diasEfectivos > 0 ? (ibc / diasEfectivos) * 30 : 0;
+    const esExonerado = ibcMensualizado < (10 * smmlv);
+
     const aportes = [
-      { concepto: 'Salud', valor: Math.round(ibc * 0.085 * 100) / 100 },
+      { concepto: 'Salud', valor: esExonerado ? 0 : Math.round(ibc * 0.085 * 100) / 100 },
       { concepto: 'Pensión', valor: Math.round(ibc * 0.12 * 100) / 100 },
       { concepto: 'ARL', valor: Math.round(ibc * tasaARL * 100) / 100 },
       { concepto: 'Caja Compensación', valor: Math.round(ibc * 0.04 * 100) / 100 },
-      { concepto: 'SENA', valor: Math.round(ibc * 0.02 * 100) / 100 },
-      { concepto: 'ICBF', valor: Math.round(ibc * 0.03 * 100) / 100 },
+      { concepto: 'SENA', valor: esExonerado ? 0 : Math.round(ibc * 0.02 * 100) / 100 },
+      { concepto: 'ICBF', valor: esExonerado ? 0 : Math.round(ibc * 0.03 * 100) / 100 },
     ];
     const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
 
@@ -1876,6 +1879,7 @@ export class NominaService implements OnModuleInit {
     }
     return await this.configuracionContableRepo.save(config);
   }
+
   async procesarLiquidacionAsincrona(periodoId: string, userId: string = 'system') {
     const periodo = await this.findOnePeriodo(periodoId);
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
@@ -2018,14 +2022,28 @@ export class NominaService implements OnModuleInit {
 
         const saludVal = Number(l.saludEmpleado);
         if (saludVal > 0) {
-          const saludAccount = await getAccountStrict(config.seguridadSocial?.salud?.cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
+          let cuentaPasivoId = config.seguridadSocial?.salud?.cuentaPasivoId;
+          if (!cuentaPasivoId) {
+            const conceptoSalud = await queryRunner.manager.findOne(ConceptoNomina, { where: { codigo: 'LEY-SALUD' } });
+            if (conceptoSalud) {
+              cuentaPasivoId = config.conceptos?.[conceptoSalud.id]?.cuentaId || conceptoSalud.cuentaContableCredito;
+            }
+          }
+          const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
           addEntry(obligacionLabAccount, saludVal, 0);
           addEntry(saludAccount, 0, saludVal);
         }
 
         const pensionVal = Number(l.pensionEmpleado);
         if (pensionVal > 0) {
-          const pensionAccount = await getAccountStrict(config.seguridadSocial?.pension?.cuentaPasivoId, 'Pasivo Pensión (Deducción Empleado)');
+          let cuentaPasivoId = config.seguridadSocial?.pension?.cuentaPasivoId;
+          if (!cuentaPasivoId) {
+            const conceptoPension = await queryRunner.manager.findOne(ConceptoNomina, { where: { codigo: 'LEY-PENSION' } });
+            if (conceptoPension) {
+              cuentaPasivoId = config.conceptos?.[conceptoPension.id]?.cuentaId || conceptoPension.cuentaContableCredito;
+            }
+          }
+          const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pensión (Deducción Empleado)');
           addEntry(obligacionLabAccount, pensionVal, 0);
           addEntry(pensionAccount, 0, pensionVal);
         }
