@@ -2022,7 +2022,7 @@ export class NominaService implements OnModuleInit {
 
         const saludVal = Number(l.saludEmpleado);
         if (saludVal > 0) {
-          let cuentaPasivoId = config.seguridadSocial?.salud?.cuentaPasivoId;
+          let cuentaPasivoId = config.deduccionesTrabajador?.salud?.cuentaPasivoId || config.seguridadSocial?.salud?.cuentaPasivoId;
           if (!cuentaPasivoId) {
             const conceptoSalud = await queryRunner.manager.findOne(ConceptoNomina, { where: { codigo: 'LEY-SALUD' } });
             if (conceptoSalud) {
@@ -2036,7 +2036,7 @@ export class NominaService implements OnModuleInit {
 
         const pensionVal = Number(l.pensionEmpleado);
         if (pensionVal > 0) {
-          let cuentaPasivoId = config.seguridadSocial?.pension?.cuentaPasivoId;
+          let cuentaPasivoId = config.deduccionesTrabajador?.pension?.cuentaPasivoId || config.seguridadSocial?.pension?.cuentaPasivoId;
           if (!cuentaPasivoId) {
             const conceptoPension = await queryRunner.manager.findOne(ConceptoNomina, { where: { codigo: 'LEY-PENSION' } });
             if (conceptoPension) {
@@ -2085,16 +2085,23 @@ export class NominaService implements OnModuleInit {
         // Aportes Empleador
         const aportes = l.aportesEmpleador || [];
         const ssConfigMap: Record<string, string> = {
-          'Salud': 'salud', 'Pensión': 'pension', 'ARL': 'arl',
+          'Salud': 'saludPatronal', 'Pensión': 'pension', 'ARL': 'arl',
           'Caja Compensación': 'ccf', 'SENA': 'sena', 'ICBF': 'icbf',
         };
 
         for (const ap of aportes) {
           const apVal = Number(ap.valor);
           if (apVal <= 0) continue;
-          const configKey = ssConfigMap[ap.concepto];
+          
+          let configKey = ssConfigMap[ap.concepto];
           if (configKey) {
-            const ssItem = config.seguridadSocial?.[configKey as keyof typeof config.seguridadSocial];
+            let ssItem = config.aportesEmpleador?.[configKey];
+            
+            if (!ssItem) {
+                const oldKey = ap.concepto === 'Salud' ? 'salud' : configKey;
+                ssItem = config.seguridadSocial?.[oldKey];
+            }
+
             const ssGastoAcc = await getAccountStrict(ssItem?.cuentaGastoId, `Gasto Aporte Empleador: ${ap.concepto}`);
             const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
             addEntry(ssGastoAcc, apVal, 0);
