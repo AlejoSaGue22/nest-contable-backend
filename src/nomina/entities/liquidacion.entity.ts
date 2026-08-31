@@ -2,6 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, Up
 import { PeriodoNomina } from './periodo-nomina.entity';
 import { Empleado } from './empleado.entity';
 import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
+import { ComprobanteContable } from 'src/comprobantes/entities/comprobante-contable.entity';
 
 @Entity('liquidaciones_nomina')
 export class Liquidacion {
@@ -88,6 +89,13 @@ export class Liquidacion {
 
     @Column('decimal', { precision: 15, scale: 2, default: 0 })
     totalProvisiones: number;
+
+    @ManyToOne(() => ComprobanteContable)
+    @JoinColumn({ name: 'comprobanteId' })
+    comprobante: ComprobanteContable;
+
+    @Column({ nullable: true })
+    comprobanteId: string;
 
     @CreateDateColumn()
     createdAt: Date;

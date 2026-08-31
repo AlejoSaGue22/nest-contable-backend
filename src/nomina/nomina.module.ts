@@ -21,6 +21,12 @@ import { ConfiguracionContableNomina } from './entities/configuracion-contable-n
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 import { NominaJob } from './entities/nomina-job.entity';
 import { NominaJobsService } from './nomina-jobs.service';
+import { ComprobanteContable } from 'src/comprobantes/entities/comprobante-contable.entity';
+import { ComprobantesService } from 'src/comprobantes/comprobantes.service';
+import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
+import { ComprobanteDetalle } from 'src/comprobantes/entities/comprobante-detalle.entity';
+import { ComprobantesValidatorService } from 'src/comprobantes/comprobantes-validator.service';
+import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 
 @Module({
   imports: [
@@ -40,12 +46,16 @@ import { NominaJobsService } from './nomina-jobs.service';
       ParametroNominaVersion,
       LiquidacionDetalle,
       ConfiguracionContableNomina,
+      ComprobanteContable,
+      ComprobanteDetalle,
       NominaJob,
+      TipoComprobante,
+      CuentaContable
     ]),
     AsientosContablesModule,
   ],
   controllers: [NominaController],
-  providers: [NominaService, NominaDianService, NominaJobsService],
+  providers: [NominaService, NominaDianService, NominaJobsService, ComprobantesService, ComprobantesValidatorService],
   exports: [NominaService],
 })
-export class NominaModule {}
+export class NominaModule { }

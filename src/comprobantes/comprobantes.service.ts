@@ -85,10 +85,13 @@ export class ComprobantesService {
   // B. GESTIÓN DE COMPROBANTES CONTABLES
   // ══════════════════════════════════════════════════════════════════════════
 
-  async create(dto: CreateComprobanteContableDto, userId: string): Promise<ComprobanteContable> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  async create(dto: CreateComprobanteContableDto, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
+    const isExternalTransaction = !!providedQueryRunner;
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    if (!isExternalTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       const tipo = await queryRunner.manager.findOne(TipoComprobante, {
@@ -150,21 +153,24 @@ export class ComprobantesService {
         await queryRunner.manager.save(ComprobanteDetalle, detalle);
       }
 
-      await queryRunner.commitTransaction();
+      if (!isExternalTransaction) await queryRunner.commitTransaction();
       return this.findOne(guardado.id);
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isExternalTransaction) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!isExternalTransaction) await queryRunner.release();
     }
   }
 
-  async update(id: string, dto: UpdateComprobanteContableDto, userId: string): Promise<ComprobanteContable> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  async update(id: string, dto: UpdateComprobanteContableDto, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
+    const isExternalTransaction = !!providedQueryRunner;
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    if (!isExternalTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       const comprobante = await queryRunner.manager.findOne(ComprobanteContable, {
@@ -226,14 +232,14 @@ export class ComprobantesService {
       comprobante.modificadoPorId = userId;
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
-      await queryRunner.commitTransaction();
+      if (!isExternalTransaction) await queryRunner.commitTransaction();
       return this.findOne(id);
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isExternalTransaction) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!isExternalTransaction) await queryRunner.release();
     }
   }
 
@@ -273,7 +279,7 @@ export class ComprobantesService {
   // C. CONTABILIZACIÓN Y ANULACIÓN (ACCIONES)
   // ══════════════════════════════════════════════════════════════════════════
 
-  async contabilizar(id: string, userId: string): Promise<ComprobanteContable> {
+  async contabilizar(id: string, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
     const comprobante = await this.findOne(id);
 
     if (comprobante.estado !== EstadoComprobante.BORRADOR) {
@@ -297,9 +303,12 @@ export class ComprobantesService {
 
     await this.validatorService.validarComprobante(comprobante.tipoComprobante, detallesDto);
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const isExternalTransaction = !!providedQueryRunner;
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    if (!isExternalTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       // Registrar el asiento definitivo en el motor contable
@@ -318,18 +327,18 @@ export class ComprobantesService {
 
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
-      await queryRunner.commitTransaction();
+      if (!isExternalTransaction) await queryRunner.commitTransaction();
       return this.findOne(id);
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isExternalTransaction) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!isExternalTransaction) await queryRunner.release();
     }
   }
 
-  async anular(id: string, motivo: string, userId: string): Promise<ComprobanteContable> {
+  async anular(id: string, motivo: string, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
     const comprobante = await this.findOne(id);
 
     if (comprobante.estado !== EstadoComprobante.CONTABILIZADO) {
@@ -344,9 +353,12 @@ export class ComprobantesService {
       throw new BadRequestException('Debe proporcionar un motivo de anulación válido.');
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const isExternalTransaction = !!providedQueryRunner;
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    if (!isExternalTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       // Generar el asiento de reverso
@@ -365,14 +377,14 @@ export class ComprobantesService {
 
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
-      await queryRunner.commitTransaction();
+      if (!isExternalTransaction) await queryRunner.commitTransaction();
       return this.findOne(id);
 
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isExternalTransaction) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!isExternalTransaction) await queryRunner.release();
     }
   }
 }

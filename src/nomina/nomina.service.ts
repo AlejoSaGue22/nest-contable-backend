@@ -46,6 +46,8 @@ import { AsientoContable } from 'src/asientos-contables/entities/asientos-contab
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { TipoPeriodoNomina } from './enums/tipo-periodo.enum';
 import { NominaJob, EstadoNominaJob } from './entities/nomina-job.entity';
+import { ComprobantesService } from 'src/comprobantes/comprobantes.service';
+import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
 
 const SMMLV_2026 = 1750905;
 const AUXILIO_TRANSPORTE_2026 = 249095;
@@ -88,6 +90,7 @@ export class NominaService implements OnModuleInit {
     @InjectRepository(NominaJob)
     private nominaJobRepo: Repository<NominaJob>,
     private readonly asientosContablesService: AsientosContablesService,
+    private readonly comprobantesService: ComprobantesService,
     private dataSource: DataSource,
   ) { }
 
@@ -697,7 +700,7 @@ export class NominaService implements OnModuleInit {
   async findLiquidacionesByPeriodo(periodoId: string) {
     return this.liquidacionRepo.find({
       where: { periodoId },
-      relations: ['empleado', 'empleado.cargo', 'empleado.centroCosto'],
+      relations: ['empleado', 'empleado.cargo', 'empleado.centroCosto', 'comprobante', 'comprobante.tipoComprobante'],
       order: { createdAt: 'ASC' },
     });
   }
@@ -1982,25 +1985,39 @@ export class NominaService implements OnModuleInit {
         return account;
       };
 
-      const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
-      const addEntry = (cuenta: any, debito: number, credito: number) => {
-        if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
-        const existing = detailsMap.get(cuenta.id);
-
-        if (existing) {
-          existing.debito = Math.round((existing.debito + debito) * 100) / 100;
-          existing.credito = Math.round((existing.credito + credito) * 100) / 100;
-        } else {
-          detailsMap.set(cuenta.id, {
-            cuentaId: cuenta.id,
-            debito: Math.round(debito * 100) / 100,
-            credito: Math.round(credito * 100) / 100,
-            descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
-          });
-        }
-      };
+      // Obtener o crear Tipo de Comprobante NOMINA
+      let tipoComprobante = await queryRunner.manager.findOne(TipoComprobante, { where: { codigo: 'NOM' } });
+      if (!tipoComprobante) {
+        tipoComprobante = queryRunner.manager.create(TipoComprobante, {
+          codigo: 'NOM',
+          nombre: 'Nómina',
+          prefijo: 'NOM',
+          numeracionAutomatica: true,
+          consecutivoActual: 1,
+          activo: true
+        });
+        await queryRunner.manager.save(TipoComprobante, tipoComprobante);
+      }
 
       for (const l of liquidaciones) {
+        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
+        const addEntry = (cuenta: any, debito: number, credito: number) => {
+          if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
+          const existing = detailsMap.get(cuenta.id);
+
+          if (existing) {
+            existing.debito = Math.round((existing.debito + debito) * 100) / 100;
+            existing.credito = Math.round((existing.credito + credito) * 100) / 100;
+          } else {
+            detailsMap.set(cuenta.id, {
+              cuentaId: cuenta.id,
+              debito: Math.round(debito * 100) / 100,
+              credito: Math.round(credito * 100) / 100,
+              descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
+            });
+          }
+        };
+
         const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
         const config = configNominaPorArea[area];
 
@@ -2128,31 +2145,40 @@ export class NominaService implements OnModuleInit {
             addEntry(provPasivoAcc, 0, provVal);
           }
         }
+
+        // Verificación Partida Doble por Empleado
+        const detallesCustom = Array.from(detailsMap.values());
+        const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
+        const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
+
+        if (Math.abs(sumaDebitos - sumaCreditos) > 0.01) {
+          throw new BadRequestException(`Validación Contable: Asiento descuadrado para empleado ${l.empleado?.numeroDocumento || l.empleadoId}. Débitos: ${sumaDebitos}, Créditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
+        }
+
+        // Crear Comprobante por Empleado
+        const comprobanteDto = {
+          tipoComprobanteId: tipoComprobante.id,
+          fechaDocumento: periodo.fechaFin,
+          observaciones: `Contabilización de nómina: ${periodo.nombre} - Empleado: ${l.empleado?.primerNombre} ${l.empleado?.primerApellido}`,
+          detalles: detallesCustom.map(d => ({
+            cuentaContableId: d.cuentaId,
+            debito: d.debito,
+            credito: d.credito,
+            descripcion: d.descripcion,
+          })),
+        };
+
+        // Generar Comprobante
+        const comprobante = await this.comprobantesService.create(comprobanteDto as any, userId, queryRunner);
+        
+        // Contabilizar Comprobante (genera AsientoContable automáticamente)
+        await this.comprobantesService.contabilizar(comprobante.id, userId, queryRunner);
+
+        // Actualizar Liquidacion con comprobanteId
+        await queryRunner.manager.update(Liquidacion, l.id, {
+          comprobanteId: comprobante.id
+        });
       }
-
-      // Verificación Partida Doble Total
-      const detallesCustom = Array.from(detailsMap.values());
-      const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
-      const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
-
-      if (Math.abs(sumaDebitos - sumaCreditos) > 0.01) {
-        throw new BadRequestException(`Validación Contable: Asiento descuadrado. Débitos: ${sumaDebitos}, Créditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
-      }
-
-      const asientoDefinicion = {
-        tipo: 'NOMINA',
-        fecha: periodo.fechaFin,
-        referencia: `Nómina ${periodo.nombre}`,
-        descripcion: `Contabilización automática de nómina: ${periodo.nombre}`,
-        detalles: detallesCustom.map(d => ({
-          cuentaId: d.cuentaId,
-          debito: d.debito,
-          credito: d.credito,
-          descripcion: d.descripcion,
-        })),
-      };
-
-      const asiento = await this.asientosContablesService.crearAsientoDesdeDefinicion(asientoDefinicion as any, userId, queryRunner as any);
 
       await queryRunner.manager.update(PeriodoNomina, periodoId, {
         estado: EstadoPeriodoNomina.LIQUIDADA,
@@ -2160,7 +2186,7 @@ export class NominaService implements OnModuleInit {
         totalDeducciones,
         totalNeto,
         totalCostoEmpresa: totalCosto,
-        asientoProvisionId: asiento.id,
+        asientoProvisionId: null, // Ya no hay un solo asiento, hay comprobantes por empleado
       });
 
       await queryRunner.commitTransaction();
