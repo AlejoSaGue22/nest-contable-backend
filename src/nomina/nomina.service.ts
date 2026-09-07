@@ -1552,6 +1552,14 @@ export class NominaService implements OnModuleInit {
     const pctSaludEmp = paramsLegal ? Number(paramsLegal.porcentajeSaludEmpleado) : 4.0;
     const pctPensionEmp = paramsLegal ? Number(paramsLegal.porcentajePensionEmpleado) : 4.0;
 
+    let liquidacionesGuardadas: any[] = [];
+    if (periodData.estado !== EstadoPeriodoNomina.BORRADOR) {
+      liquidacionesGuardadas = await this.liquidacionRepo.find({
+        where: { periodoId },
+        select: ['id', 'empleadoId', 'comprobanteId']
+      });
+    }
+
     const data: any[] = [];
     for (const pe of asignados) {
       try {
@@ -1623,6 +1631,8 @@ export class NominaService implements OnModuleInit {
           saludEmpleado: Number(liq.saludEmpleado),
           pensionEmpleado: Number(liq.pensionEmpleado),
           retencionFuente: Number(liq.retencionFuente),
+          comprobanteId: liquidacionesGuardadas.find(l => l.empleadoId === pe.empleadoId)?.comprobanteId || null,
+          liquidacionId: liquidacionesGuardadas.find(l => l.empleadoId === pe.empleadoId)?.id || null,
         });
       } catch (err) {
         data.push(pe);
@@ -2000,7 +2010,7 @@ export class NominaService implements OnModuleInit {
       }
 
       for (const l of liquidaciones) {
-        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string }>();
+        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string; centroCostoId: string | null }>();
         const addEntry = (cuenta: any, debito: number, credito: number) => {
           if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
           const existing = detailsMap.get(cuenta.id);
@@ -2013,7 +2023,8 @@ export class NominaService implements OnModuleInit {
               cuentaId: cuenta.id,
               debito: Math.round(debito * 100) / 100,
               credito: Math.round(credito * 100) / 100,
-              descripcion: `${cuenta.codigo} - ${cuenta.nombre}`
+              descripcion: `${cuenta.codigo} - ${cuenta.nombre}`,
+              centroCostoId: l.empleado?.centroCostoId || null
             });
           }
         };
@@ -2165,6 +2176,7 @@ export class NominaService implements OnModuleInit {
             debito: d.debito,
             credito: d.credito,
             descripcion: d.descripcion,
+            centroCostoId: d.centroCostoId,
           })),
         };
 

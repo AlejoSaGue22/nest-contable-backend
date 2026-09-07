@@ -10,7 +10,7 @@ export class ComprobantesValidatorService {
   constructor(
     @InjectRepository(CuentaContable)
     private readonly cuentaRepository: Repository<CuentaContable>,
-  ) {}
+  ) { }
 
   /**
    * Realiza todas las validaciones contables y de negocio para un comprobante
@@ -74,10 +74,9 @@ export class ComprobantesValidatorService {
       }
 
       // d. Validación de Centro de Costos
-      const esCuentaGastoOCosto = cuenta.codigo.startsWith('5') || cuenta.codigo.startsWith('6');
-      if ((cuenta.requiereCentroCostos || esCuentaGastoOCosto) && !d.centroCostoId) {
+      if (cuenta.requiereCentroCostos && !d.centroCostoId) {
         throw new BadRequestException(
-          `Línea ${linea}: La cuenta de costo/gasto ${cuenta.codigo} exige registrar un Centro de Costos.`,
+          `Línea ${linea}: La cuenta ${cuenta.codigo} exige registrar un Centro de Costos.`,
         );
       }
 

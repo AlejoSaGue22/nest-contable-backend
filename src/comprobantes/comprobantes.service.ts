@@ -154,7 +154,7 @@ export class ComprobantesService {
       }
 
       if (!isExternalTransaction) await queryRunner.commitTransaction();
-      return this.findOne(guardado.id);
+      return this.findOne(guardado.id, providedQueryRunner);
 
     } catch (error) {
       if (!isExternalTransaction) await queryRunner.rollbackTransaction();
@@ -233,7 +233,7 @@ export class ComprobantesService {
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
       if (!isExternalTransaction) await queryRunner.commitTransaction();
-      return this.findOne(id);
+      return this.findOne(id, providedQueryRunner);
 
     } catch (error) {
       if (!isExternalTransaction) await queryRunner.rollbackTransaction();
@@ -243,8 +243,9 @@ export class ComprobantesService {
     }
   }
 
-  async findOne(id: string): Promise<ComprobanteContable> {
-    const comprobante = await this.comprobanteRepository.findOne({
+  async findOne(id: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
+    const manager = providedQueryRunner ? providedQueryRunner.manager : this.comprobanteRepository.manager;
+    const comprobante = await manager.findOne(ComprobanteContable, {
       where: { id },
       relations: [
         'tipoComprobante',
@@ -280,7 +281,7 @@ export class ComprobantesService {
   // ══════════════════════════════════════════════════════════════════════════
 
   async contabilizar(id: string, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
-    const comprobante = await this.findOne(id);
+    const comprobante = await this.findOne(id, providedQueryRunner);
 
     if (comprobante.estado !== EstadoComprobante.BORRADOR) {
       throw new BadRequestException('Solo se pueden contabilizar comprobantes en estado BORRADOR.');
@@ -328,7 +329,7 @@ export class ComprobantesService {
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
       if (!isExternalTransaction) await queryRunner.commitTransaction();
-      return this.findOne(id);
+      return this.findOne(id, providedQueryRunner);
 
     } catch (error) {
       if (!isExternalTransaction) await queryRunner.rollbackTransaction();
@@ -339,7 +340,7 @@ export class ComprobantesService {
   }
 
   async anular(id: string, motivo: string, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
-    const comprobante = await this.findOne(id);
+    const comprobante = await this.findOne(id, providedQueryRunner);
 
     if (comprobante.estado !== EstadoComprobante.CONTABILIZADO) {
       throw new BadRequestException('Solo se pueden anular comprobantes en estado CONTABILIZADO.');
@@ -378,7 +379,7 @@ export class ComprobantesService {
       await queryRunner.manager.save(ComprobanteContable, comprobante);
 
       if (!isExternalTransaction) await queryRunner.commitTransaction();
-      return this.findOne(id);
+      return this.findOne(id, providedQueryRunner);
 
     } catch (error) {
       if (!isExternalTransaction) await queryRunner.rollbackTransaction();
