@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { EntidadSeguridadSocial } from '../../../nomina/entities/entidad-seguridad-social.entity';
 
 @Entity('empresas')
 export class Empresa {
@@ -25,6 +26,13 @@ export class Empresa {
 
   @Column('json', { nullable: true })
   configuracionDian: any;
+
+  @ManyToOne(() => EntidadSeguridadSocial, { nullable: true })
+  @JoinColumn({ name: 'arlId' })
+  arl: EntidadSeguridadSocial;
+
+  @Column({ nullable: true })
+  arlId: string;
 
   @CreateDateColumn()
   createdAt: Date;

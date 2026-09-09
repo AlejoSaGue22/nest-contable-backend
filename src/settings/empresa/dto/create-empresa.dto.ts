@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsNotEmpty, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsNotEmpty, IsObject, IsUUID } from 'class-validator';
 
 export class CreateEmpresaDto {
   @IsString()
@@ -28,4 +28,8 @@ export class CreateEmpresaDto {
   @IsOptional()
   @IsObject()
   configuracionDian?: any;
+
+  @IsOptional()
+  @IsUUID()
+  arlId?: string;
 }

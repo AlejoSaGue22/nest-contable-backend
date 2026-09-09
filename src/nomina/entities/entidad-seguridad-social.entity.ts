@@ -3,7 +3,8 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 export enum TipoEntidadSS {
     EPS = 'EPS',
     AFP = 'AFP',
-    CCF = 'CCF'
+    CCF = 'CCF',
+    ARL = 'ARL'
 }
 
 @Entity('entidades_seguridad_social')

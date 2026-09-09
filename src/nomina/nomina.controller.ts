@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -21,7 +21,7 @@ import { CreateEmpleadoDto } from './dto/create-empleado.dto';
 import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
 import { LiquidarNominaDto } from './dto/liquidar-nomina.dto';
-import { PagarNominaDto } from './dto/pagar-nomina.dto';
+import { PagarObligacionesDto } from './dto/pagar-obligaciones.dto';
 import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { CreateConceptoDto } from './dto/create-concepto.dto';
 import { CreateEmpleadoConceptoDto } from './dto/create-empleado-concepto.dto';
@@ -43,7 +43,7 @@ export class NominaController {
     private readonly nominaDianService: NominaDianService,
   ) { }
 
-  // ── Empleados ──────────────────────────────────────────────────────────
+  // â”€â”€ Empleados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Post('empleados')
   // @Permissions(Permission.NOMINA_EMPLOYEE_CREATE)
   createEmpleado(@Body() dto: CreateEmpleadoDto) {
@@ -105,7 +105,7 @@ export class NominaController {
     return this.nominaService.removeEmpleado(id);
   }
 
-  // ── Conceptos ──────────────────────────────────────────────────────────
+  // â”€â”€ Conceptos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('conceptos')
   getConceptos(@Query('empresaId') empresaId?: string) {
     return this.nominaService.getConceptos(empresaId);
@@ -126,7 +126,13 @@ export class NominaController {
     return this.nominaService.updateConcepto(id, dto);
   }
 
-  // ── Períodos ───────────────────────────────────────────────────────────
+  // â”€â”€ PerÃ­odos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  
+  @Get('obligaciones')
+  findAllObligaciones(@Query() query: any) {
+    return this.nominaService.findAllObligaciones(query);
+  }
+
   @Post('periodos')
   // @Permissions(Permission.NOMINA_PERIOD_CREATE)
   createPeriodo(@Body() dto: CreatePeriodoDto) {
@@ -194,7 +200,7 @@ export class NominaController {
     return this.nominaService.deletePeriodo(id);
   }
 
-  // ── Liquidación ────────────────────────────────────────────────────────
+  // â”€â”€ LiquidaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Post('periodos/:id/liquidar')
   @HttpCode(HttpStatus.ACCEPTED)
   // @Permissions(Permission.NOMINA_PERIOD_LIQUIDATE)
@@ -219,12 +225,12 @@ export class NominaController {
 
   @Post('periodos/:id/pagar')
   // @Permissions(Permission.NOMINA_PERIOD_PAY)
-  pagarNomina(
+  pagarObligaciones(
     @Param('id') id: string,
-    @Body() dto: PagarNominaDto,
+    @Body() dto: PagarObligacionesDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.nominaService.pagarNomina(id, dto, req.user.sub);
+    return this.nominaService.pagarObligaciones(id, dto, req.user.sub);
   }
 
   @Post('periodos/:id/anular')
@@ -238,7 +244,7 @@ export class NominaController {
     return this.nominaService.reversarLiquidacion(id, req.user.sub);
   }
 
-  // ── Pagos ──────────────────────────────────────────────────────────────
+  // â”€â”€ Pagos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('pagos')
   // @Permissions(Permission.NOMINA_PERIOD_READ)
   findAllPagos(@Query() pagination: PaginatioDto) {
@@ -251,7 +257,7 @@ export class NominaController {
     return this.nominaService.findPagosByPeriodo(periodoId);
   }
 
-  // ── DIAN / Nómina Electrónica ──────────────────────────────────────────
+  // â”€â”€ DIAN / NÃ³mina ElectrÃ³nica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Post('periodos/:id/enviar-dian')
   // @Permissions(Permission.NOMINA_DIAN_SEND)
   enviarDian(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
@@ -267,7 +273,7 @@ export class NominaController {
     res.send(xml);
   }
 
-  // ── Catálogos ──────────────────────────────────────────────────────────
+  // â”€â”€ CatÃ¡logos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('entidades-seguridad')
   findAllEntidadesSS(@Query('tipo') tipo?: string) {
     return this.nominaService.findAllEntidadesSS(tipo);
@@ -288,7 +294,7 @@ export class NominaController {
     return this.nominaService.findAllTiposContrato();
   }
 
-  // ── Parametrización Legal ──────────────────────────────────────────────
+  // â”€â”€ ParametrizaciÃ³n Legal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('parametros/vigentes')
   getParametrosVigentes(@Query('fecha') fecha?: string) {
     return this.nominaService.getParametrosVigentes(fecha ? new Date(fecha) : undefined);
@@ -299,7 +305,7 @@ export class NominaController {
     return this.nominaService.createParametroVersion(dto);
   }
 
-  // ── Reportes ───────────────────────────────────────────────────────────
+  // â”€â”€ Reportes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('reportes/costos-centro-costo')
   @Permissions(Permission.NOMINA_REPORT_READ)
   async costosPorCentroCosto(@Query('fechaInicio') fechaInicio: string, @Query('fechaFin') fechaFin: string) {
@@ -324,7 +330,7 @@ export class NominaController {
     return this.nominaService.reporteResumenAportes(periodoId);
   }
 
-  // ── Configuración Contable de Nómina ───────────────────────────────────
+  // â”€â”€ ConfiguraciÃ³n Contable de NÃ³mina â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   @Get('configuracion-contable')
   getConfiguracionesContables() {
     return this.nominaService.getConfiguracionesContables();
@@ -335,3 +341,4 @@ export class NominaController {
     return this.nominaService.saveConfiguracionContable(body.area, body.configuracion);
   }
 }
+

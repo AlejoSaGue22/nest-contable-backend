@@ -1,7 +1,7 @@
 export interface EntidadSSConfig {
     codigo: string;
     nombre: string;
-    tipo: 'EPS' | 'AFP' | 'CCF';
+    tipo: 'EPS' | 'AFP' | 'CCF' | 'ARL';
 }
 
 export const ENTIDADES_SEGURO_SOCIAL: Record<string, EntidadSSConfig> = {
@@ -18,4 +18,10 @@ export const ENTIDADES_SEGURO_SOCIAL: Record<string, EntidadSSConfig> = {
     'ccf-compensar': { codigo: 'CCF001', nombre: 'Compensar', tipo: 'CCF' },
     'ccf-colsubsidio': { codigo: 'CCF002', nombre: 'Colsubsidio', tipo: 'CCF' },
     'ccf-cafam': { codigo: 'CCF003', nombre: 'Cafam', tipo: 'CCF' },
+    'arl-sura': { codigo: 'ARL01', nombre: 'Seguros de Vida Suramericana S.A. (ARL SURA)', tipo: 'ARL' },
+    'arl-positiva': { codigo: 'ARL02', nombre: 'Positiva Compañía de Seguros S.A.', tipo: 'ARL' },
+    'arl-bolivar': { codigo: 'ARL03', nombre: 'Seguros Bolívar S.A.', tipo: 'ARL' },
+    'arl-colpatria': { codigo: 'ARL04', nombre: 'AXA Colpatria Seguros S.A.', tipo: 'ARL' },
+    'arl-mapfre': { codigo: 'ARL05', nombre: 'Mapfre Colombia Vida Seguros S.A.', tipo: 'ARL' },
+    'arl-aurora': { codigo: 'ARL06', nombre: 'Compañía de Seguros de Vida Aurora S.A.', tipo: 'ARL' },
 };

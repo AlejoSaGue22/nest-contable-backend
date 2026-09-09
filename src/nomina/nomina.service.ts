@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   Logger,
@@ -6,11 +6,13 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, MoreThan } from 'typeorm';
 import { Empleado } from './entities/empleado.entity';
 import { PeriodoNomina } from './entities/periodo-nomina.entity';
 import { Liquidacion } from './entities/liquidacion.entity';
 import { PagoNomina } from './entities/pago-nomina.entity';
+import { ObligacionNomina } from './entities/obligacion-nomina.entity';
+import { EstadoObligacionNomina } from './enums/estado-obligacion-nomina.enum';
 import { Banco } from 'src/bancos/entities/banco.entity';
 import {
   EntidadSeguridadSocial,
@@ -36,6 +38,8 @@ import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 import { CreatePeriodoDto } from './dto/create-periodo.dto';
 import { LiquidarNominaDto } from './dto/liquidar-nomina.dto';
 import { PagarNominaDto } from './dto/pagar-nomina.dto';
+import { PagarObligacionesDto } from './dto/pagar-obligaciones.dto';
+import { PagoNominaDetalle } from './entities/pago-nomina-detalle.entity';
 import { GetEmpleadosFilterDto } from './dto/get-empleados-filter.dto';
 import { CreatePeriodoEmpleadoConceptoDto } from './dto/create-periodo-empleado-concepto.dto';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
@@ -104,20 +108,20 @@ export class NominaService implements OnModuleInit {
     if (count > 0) return;
 
     const conceptos = [
-      { codigo: 'DEV-BONIF', nombre: 'Bonificación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DEV-BONIF', nombre: 'BonificaciÃ³n', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DEV-VIATICO', nombre: 'Viaticos Salariales', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
-      { codigo: 'DEV-COMISION', nombre: 'Comisión', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.SALARIAL, aplicaIbc: true, aplicaPrestaciones: true },
-      { codigo: 'DEV-DOTACION', nombre: 'Dotación', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'DEV-COMISION', nombre: 'ComisiÃ³n', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.SALARIAL, aplicaIbc: true, aplicaPrestaciones: true },
+      { codigo: 'DEV-DOTACION', nombre: 'DotaciÃ³n', tipo: TipoConceptoNomina.DEVENGADO, categoria: CategoriaConceptoNomina.NO_SALARIAL, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DED-LIBRANZA', nombre: 'Libranza', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DED-EMBARGO', nombre: 'Embargo', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DED-SINDICATO', nombre: 'Cuota Sindicato', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'DED-INTERNO', nombre: 'Descuento Interno', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_TERCERO, aplicaIbc: false, aplicaPrestaciones: false },
       { codigo: 'LEY-SALUD', nombre: 'Salud', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_LEY, aplicaIbc: false, aplicaPrestaciones: false },
-      { codigo: 'LEY-PENSION', nombre: 'Pensión', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_LEY, aplicaIbc: false, aplicaPrestaciones: false },
+      { codigo: 'LEY-PENSION', nombre: 'PensiÃ³n', tipo: TipoConceptoNomina.DEDUCCION, categoria: CategoriaConceptoNomina.DEDUCCION_LEY, aplicaIbc: false, aplicaPrestaciones: false },
     ];
 
     await this.conceptoRepo.save(conceptos);
-    this.logger.log('Conceptos máster de nómina sembrados con éxito');
+    this.logger.log('Conceptos mÃ¡ster de nÃ³mina sembrados con Ã©xito');
   }
 
   private async seedParametrosLegales() {
@@ -137,12 +141,12 @@ export class NominaService implements OnModuleInit {
       porcentajeSena: 2.0,
       porcentajeIcbf: 3.0,
     });
-    this.logger.log('Parámetros legales de nómina 2026 sembrados con éxito');
+    this.logger.log('ParÃ¡metros legales de nÃ³mina 2026 sembrados con Ã©xito');
   }
 
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  EMPLEADOS
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async createEmpleado(dto: CreateEmpleadoDto) {
     try {
@@ -159,7 +163,7 @@ export class NominaService implements OnModuleInit {
       });
       if (exists) {
         throw new BadRequestException(
-          `Ya existe un empleado con el número de documento ${cleanedDto.numeroDocumento}`,
+          `Ya existe un empleado con el nÃºmero de documento ${cleanedDto.numeroDocumento}`,
         );
       }
 
@@ -325,9 +329,9 @@ export class NominaService implements OnModuleInit {
     return this.empleadoRepo.softRemove(empleado);
   }
 
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  PERIODOS
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async createPeriodo(dto: CreatePeriodoDto) {
     const periodo = this.periodoRepo.create({
@@ -386,7 +390,7 @@ export class NominaService implements OnModuleInit {
 
   async findOnePeriodo(id: string) {
     const periodo = await this.periodoRepo.findOne({ where: { id } });
-    if (!periodo) throw new NotFoundException('Período no encontrado');
+    if (!periodo) throw new NotFoundException('PerÃ­odo no encontrado');
     return periodo;
   }
 
@@ -394,29 +398,25 @@ export class NominaService implements OnModuleInit {
     const periodo = await this.findOnePeriodo(id);
 
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException('Solo se pueden eliminar períodos en estado BORRADOR');
+      throw new BadRequestException('Solo se pueden eliminar perÃ­odos en estado BORRADOR');
     }
 
-    // Por restricciones de llave foránea con onDelete: CASCADE (si aplica) 
-    // o para limpiar explícitamente las asignaciones:
+    // Por restricciones de llave forÃ¡nea con onDelete: CASCADE (si aplica) 
+    // o para limpiar explÃ­citamente las asignaciones:
     await this.periodoEmpleadoRepo.delete({ periodoId: id });
     await this.periodoRepo.delete(id);
 
-    return { message: 'Período eliminado exitosamente' };
+    return { message: 'PerÃ­odo eliminado exitosamente' };
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  LIQUIDACIÓN
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  LIQUIDACIÃ“N
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-  async liquidarPeriodo(
-    periodoId: string,
-    dto: LiquidarNominaDto,
-    userId: string,
-  ) {
+  async liquidarPeriodo(periodoId: string, dto: LiquidarNominaDto, userId: string) {
     const periodo = await this.findOnePeriodo(periodoId);
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException('El período no está en estado BORRADOR');
+      throw new BadRequestException('El perÃ­odo no estÃ¡ en estado BORRADOR');
     }
 
     // Verificar si ya hay un job en curso
@@ -428,7 +428,7 @@ export class NominaService implements OnModuleInit {
     });
 
     if (existingJob) {
-      throw new BadRequestException('Ya existe un proceso de liquidación en curso para este período.');
+      throw new BadRequestException('Ya existe un proceso de liquidaciÃ³n en curso para este perÃ­odo.');
     }
 
     const job = this.nominaJobRepo.create({
@@ -441,7 +441,7 @@ export class NominaService implements OnModuleInit {
     await this.nominaJobRepo.save(job);
 
     return {
-      message: 'El proceso de liquidación ha sido encolado y se ejecutará en segundo plano.',
+      message: 'El proceso de liquidaciÃ³n ha sido encolado y se ejecutarÃ¡ en segundo plano.',
       jobId: job.id,
     };
   }
@@ -473,19 +473,19 @@ export class NominaService implements OnModuleInit {
     pctSaludEmp: number,
     pctPensionEmp: number,
   ) {
-    // Calcular días efectivamente trabajados según fecha de ingreso y retiro
+    // Calcular dÃ­as efectivamente trabajados segÃºn fecha de ingreso y retiro
     const fechaInicio = new Date(periodo.fechaInicio);
     const fechaFin = new Date(periodo.fechaFin);
     const fechaIngreso = new Date(empleado.fechaIngreso);
     const fechaRetiro = empleado.fechaRetiro ? new Date(empleado.fechaRetiro) : null;
 
-    // Fecha efectiva de inicio: la mayor entre fechaInicio del período y fechaIngreso
+    // Fecha efectiva de inicio: la mayor entre fechaInicio del perÃ­odo y fechaIngreso
     const fechaEfectivaInicio = fechaIngreso > fechaInicio ? fechaIngreso : fechaInicio;
 
-    // Fecha efectiva de fin: la menor entre fechaFin del período y fechaRetiro (si existe)
+    // Fecha efectiva de fin: la menor entre fechaFin del perÃ­odo y fechaRetiro (si existe)
     const fechaEfectivaFin = fechaRetiro && fechaRetiro <= fechaFin ? fechaRetiro : fechaFin;
 
-    // Calcular días efectivamente trabajados
+    // Calcular dÃ­as efectivamente trabajados
     const diasTrabajados = fechaEfectivaInicio <= fechaEfectivaFin
       ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
       : 0;
@@ -547,7 +547,7 @@ export class NominaService implements OnModuleInit {
       });
     }
 
-    // Cargar conceptos ocasionales específicos de esta nómina
+    // Cargar conceptos ocasionales especÃ­ficos de esta nÃ³mina
     const pe = await this.periodoEmpleadoRepo.findOne({
       where: { periodoId: periodo.id, empleadoId: empleado.id },
       relations: ['conceptosOcasionales', 'conceptosOcasionales.concepto'],
@@ -628,13 +628,13 @@ export class NominaService implements OnModuleInit {
     });
 
     detallesSnapshots.push({
-      conceptoNombreSnapshot: 'Pensión Empleado',
+      conceptoNombreSnapshot: 'PensiÃ³n Empleado',
       tipo: TipoConceptoNomina.DEDUCCION,
       valor: pensionEmpleado,
       esRecurrente: false,
     });
 
-    // Protección del salario (Límite deducciones recurrentes al 50% devengado neto)
+    // ProtecciÃ³n del salario (LÃ­mite deducciones recurrentes al 50% devengado neto)
     const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
     const maxDeduccionesPermitidas = (totalDevengado - subtotalLegales) * 0.50;
     if (deduccionesRecurrentes > maxDeduccionesPermitidas && maxDeduccionesPermitidas > 0) {
@@ -653,17 +653,17 @@ export class NominaService implements OnModuleInit {
 
     const aportes = [
       { concepto: 'Salud', valor: esExonerado ? 0 : Math.round(ibc * 0.085 * 100) / 100 },
-      { concepto: 'Pensión', valor: Math.round(ibc * 0.12 * 100) / 100 },
+      { concepto: 'PensiÃ³n', valor: Math.round(ibc * 0.12 * 100) / 100 },
       { concepto: 'ARL', valor: Math.round(ibc * tasaARL * 100) / 100 },
-      { concepto: 'Caja Compensación', valor: Math.round(ibc * 0.04 * 100) / 100 },
+      { concepto: 'Caja CompensaciÃ³n', valor: Math.round(ibc * 0.04 * 100) / 100 },
       { concepto: 'SENA', valor: esExonerado ? 0 : Math.round(ibc * 0.02 * 100) / 100 },
       { concepto: 'ICBF', valor: esExonerado ? 0 : Math.round(ibc * 0.03 * 100) / 100 },
     ];
     const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
 
     const provisiones = [
-      { concepto: 'Cesantías', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 100) / 100 },
-      { concepto: 'Intereses Cesantías', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 0.12 * 100) / 100 },
+      { concepto: 'CesantÃ­as', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 100) / 100 },
+      { concepto: 'Intereses CesantÃ­as', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 0.12 * 100) / 100 },
       { concepto: 'Prima de Servicios', valor: Math.round(((salarioDevengado * diasEfectivos) / 360) * 100) / 100 },
       { concepto: 'Vacaciones', valor: Math.round(((Number(empleado.salarioBase) * diasEfectivos) / 720) * 100) / 100 },
     ];
@@ -705,50 +705,163 @@ export class NominaService implements OnModuleInit {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  PAGO Y ANULACIÓN
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  PAGO Y ANULACIÃ“N
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-  async pagarNomina(periodoId: string, dto: PagarNominaDto, userId: string) {
-    const periodo = await this.findOnePeriodo(periodoId);
-    if (periodo.estado !== EstadoPeriodoNomina.LIQUIDADA) {
-      throw new BadRequestException(
-        'El período debe estar en estado LIQUIDADA para pagarlo',
-      );
+  
+  async findAllObligaciones(query: any) {
+    const qb = this.dataSource.getRepository(ObligacionNomina).createQueryBuilder('o')
+      .leftJoinAndSelect('o.periodo', 'periodo')
+      .leftJoinAndSelect('o.empleado', 'empleado')
+      .orderBy('periodo.fechaFin', 'DESC');
+
+    if (query.estado) {
+        qb.andWhere('o.estado = :estado', { estado: query.estado });
+    }
+    if (query.periodoId) {
+        qb.andWhere('o.periodoId = :periodoId', { periodoId: query.periodoId });
     }
 
-    const asiento =
-      await this.asientosContablesService.generarAsientoPagoNomina({
-        periodoNombre: periodo.nombre,
-        fecha: new Date(dto.fechaPago),
-        netoPagar: Number(periodo.totalNeto),
+    const obligaciones = await qb.getMany();
+    return obligaciones;
+  }
+
+  async pagarObligaciones(periodoId: string, dto: PagarObligacionesDto, userId: string) {
+    const periodo = await this.findOnePeriodo(periodoId);
+    if (periodo.estado !== EstadoPeriodoNomina.LIQUIDADA && periodo.estado !== EstadoPeriodoNomina.PARCIALMENTE_PAGADA) {
+      throw new BadRequestException('El perÃ­odo debe estar LIQUIDADA o PARCIALMENTE_PAGADA para pagar');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Obtener tipo de comprobante de egreso
+      const tipoComprobante = await queryRunner.manager.findOne(TipoComprobante, { where: { codigo: 'CE' } });
+      if (!tipoComprobante) throw new BadRequestException('No existe el tipo de comprobante CE (Comprobante de Egreso).');
+
+      // 2. Obtener la cuenta bancaria (cuentaCodigoContable viene en el dto)
+      // Asumiremos que el dto.cuentaCodigoContable es la cuenta banco 1110.
+      const bancoAccount = await queryRunner.manager.findOne(CuentaContable, { where: { codigo: dto.cuentaCodigoContable } });
+      if (!bancoAccount) throw new BadRequestException('La cuenta bancaria proporcionada no existe.');
+
+      const configContable = await this.configuracionContableRepo.findOne({ where: { area: AreaEmpleado.ADMINISTRATIVA } });
+      const cuentaPasivoId = configContable?.configuracion?.cajaBanco?.cuentaObligacionesLabId;
+      if (!cuentaPasivoId) throw new BadRequestException('Falta configurar cuenta de Obligaciones Laborales en la empresa.');
+
+      let totalAbonado = 0;
+      const detallesContables: any[] = [];
+
+      // Cabecera de PagoNomina
+      const pagoNomina = queryRunner.manager.create(PagoNomina, {
+        periodoId,
+        fechaPago: new Date(dto.fechaPago),
+        valor: 0, // se actualiza abajo
         cuentaCodigoContable: dto.cuentaCodigoContable,
-        userId,
+        bancoId: dto.bancoId ?? null,
+        numeroComprobante: dto.numeroComprobante ?? null,
+        observaciones: dto.observaciones ?? null,
+        createdById: userId,
+        asientoPagoId: 'temp', // serÃ¡ actualizado
+      });
+      await queryRunner.manager.save(PagoNomina, pagoNomina);
+
+      // 3. Procesar cada obligaciÃ³n
+      for (const det of dto.detalles) {
+        const obligacion = await queryRunner.manager.findOne(ObligacionNomina, { where: { id: det.obligacionId } });
+        if (!obligacion) throw new BadRequestException(`ObligaciÃ³n ${det.obligacionId} no encontrada`);
+        
+        if (Number(obligacion.saldo) < det.valorAbono) {
+            throw new BadRequestException(`El valor del abono (${det.valorAbono}) supera el saldo (${obligacion.saldo}) para la obligaciÃ³n ${det.obligacionId}`);
+        }
+
+        // Crear PagoNominaDetalle
+        const pagoDetalle = queryRunner.manager.create(PagoNominaDetalle, {
+            pagoId: pagoNomina.id,
+            obligacionId: obligacion.id,
+            valor: det.valorAbono
+        });
+        await queryRunner.manager.save(PagoNominaDetalle, pagoDetalle);
+
+        // Actualizar saldo y estado de Obligacion
+        obligacion.valorPagado = Number(obligacion.valorPagado) + Number(det.valorAbono);
+        obligacion.saldo = Number(obligacion.saldo) - Number(det.valorAbono);
+        
+        if (obligacion.saldo === 0) {
+            obligacion.estado = EstadoObligacionNomina.PAGADA;
+        } else {
+            obligacion.estado = EstadoObligacionNomina.PARCIALMENTE_PAGADA;
+        }
+        await queryRunner.manager.save(ObligacionNomina, obligacion);
+
+        totalAbonado += Number(det.valorAbono);
+
+        // DÃ©bito a Obligaciones Laborales por el empleado
+        detallesContables.push({
+            cuentaContableId: cuentaPasivoId,
+            debito: Number(det.valorAbono),
+            credito: 0,
+            descripcion: `Pago de NÃ³mina - ${periodo.nombre}`,
+            terceroId: obligacion.terceroId
+        });
+      }
+
+      // CrÃ©dito a Bancos (agrupado)
+      detallesContables.push({
+        cuentaContableId: bancoAccount.id,
+        debito: 0,
+        credito: totalAbonado,
+        descripcion: `Pago de NÃ³mina en Lote - ${periodo.nombre}`,
+        terceroId: null
       });
 
-    const pagoNomina = new PagoNomina();
-    pagoNomina.periodoId = periodoId;
-    pagoNomina.fechaPago = new Date(dto.fechaPago);
-    pagoNomina.valor = Number(periodo.totalNeto);
-    pagoNomina.cuentaCodigoContable = dto.cuentaCodigoContable;
-    pagoNomina.bancoId = dto.bancoId ?? null;
-    pagoNomina.numeroComprobante = dto.numeroComprobante ?? null;
-    pagoNomina.observaciones = dto.observaciones ?? null;
-    pagoNomina.asientoPagoId = asiento.id;
-    pagoNomina.createdById = userId;
-    await this.pagoNominaRepo.save(pagoNomina);
+      pagoNomina.valor = totalAbonado;
 
-    await this.periodoRepo.update(periodoId, {
-      estado: EstadoPeriodoNomina.PAGADA,
-      fechaPago: new Date(dto.fechaPago),
-      asientoPagoId: asiento.id,
-    });
+      // 4. Crear Comprobante Contable
+      const comprobanteDto = {
+        tipoComprobanteId: tipoComprobante.id,
+        fechaDocumento: new Date(dto.fechaPago),
+        observaciones: dto.observaciones || `Pago NÃ³mina Lote - ${periodo.nombre}`,
+        detalles: detallesContables
+      };
 
-    return {
-      message: 'Nómina pagada exitosamente',
-      pagoNomina,
-      asientoPago: asiento,
-    };
+      const comprobante = await this.comprobantesService.create(comprobanteDto as any, userId, queryRunner);
+      await this.comprobantesService.contabilizar(comprobante.id, userId, queryRunner);
+
+      // Actualizar pago con el comprobante real
+      pagoNomina.asientoPagoId = comprobante.id;
+      await queryRunner.manager.save(PagoNomina, pagoNomina);
+
+      // Actualizar estado del periodo
+      const remaining = await queryRunner.manager.count(ObligacionNomina, {
+          where: { periodoId, estado: EstadoObligacionNomina.PENDIENTE } // o PARCIALMENTE_PAGADA
+      });
+      const pending = await queryRunner.manager.count(ObligacionNomina, {
+          where: { periodoId, saldo: MoreThan(0) }
+      });
+
+      if (pending === 0) {
+        periodo.estado = EstadoPeriodoNomina.PAGADA;
+        periodo.fechaPago = new Date(dto.fechaPago);
+      } else {
+        periodo.estado = EstadoPeriodoNomina.PARCIALMENTE_PAGADA;
+      }
+      await queryRunner.manager.save(PeriodoNomina, periodo);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Pago registrado exitosamente',
+        pagoNomina
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAllPagos(paginationDto: PaginatioDto) {
@@ -783,14 +896,14 @@ export class NominaService implements OnModuleInit {
     const periodo = await this.findOnePeriodo(periodoId);
     if (periodo.estado === EstadoPeriodoNomina.BORRADOR) {
       throw new BadRequestException(
-        'No se puede anular un período en estado BORRADOR',
+        'No se puede anular un perÃ­odo en estado BORRADOR',
       );
     }
     if (periodo.estado === EstadoPeriodoNomina.ANULADA) {
-      throw new BadRequestException('El período ya está anulado');
+      throw new BadRequestException('El perÃ­odo ya estÃ¡ anulado');
     }
 
-    // 1. Reversar asiento de pago (si existe — período PAGADA)
+    // 1. Reversar asiento de pago (si existe â€” perÃ­odo PAGADA)
     if (periodo.asientoPagoId) {
       const asientoPago =
         await this.asientosContablesService.findOneAsientoConDetalles(
@@ -804,7 +917,7 @@ export class NominaService implements OnModuleInit {
       });
     }
 
-    // 2. Reversar asiento de provisión (si existe)
+    // 2. Reversar asiento de provisiÃ³n (si existe)
     if (periodo.asientoProvisionId) {
       const asientoProvision =
         await this.asientosContablesService.findOneAsientoConDetalles(
@@ -823,7 +936,7 @@ export class NominaService implements OnModuleInit {
     });
 
     return {
-      message: 'Nómina anulada exitosamente',
+      message: 'NÃ³mina anulada exitosamente',
     };
   }
 
@@ -832,12 +945,12 @@ export class NominaService implements OnModuleInit {
 
     if (periodo.estado !== EstadoPeriodoNomina.LIQUIDADA) {
       if (periodo.estado === EstadoPeriodoNomina.PAGADA) {
-        throw new BadRequestException('No se puede reversar un período pagado. Debe anular el pago en tesorería primero.');
+        throw new BadRequestException('No se puede reversar un perÃ­odo pagado. Debe anular el pago en tesorerÃ­a primero.');
       }
-      throw new BadRequestException('El período debe estar en estado LIQUIDADA para poder reversarlo.');
+      throw new BadRequestException('El perÃ­odo debe estar en estado LIQUIDADA para poder reversarlo.');
     }
 
-    // 1. Reversar asiento de provisión
+    // 1. Reversar asiento de provisiÃ³n
     if (periodo.asientoProvisionId) {
       const asientoProvision = await this.asientosContablesService.findOneAsientoConDetalles(periodo.asientoProvisionId);
       await this.asientosContablesService.anularAsientoNomina({
@@ -856,7 +969,7 @@ export class NominaService implements OnModuleInit {
       await this.liquidacionRepo.delete({ id: In(ids) });
     }
 
-    // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidación
+    // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidaciÃ³n
     await this.nominaJobRepo.delete({ periodoId });
 
     // 3. Volver a BORRADOR
@@ -870,13 +983,13 @@ export class NominaService implements OnModuleInit {
     });
 
     return {
-      message: 'Liquidación reversada exitosamente. El período vuelve a estado BORRADOR.',
+      message: 'LiquidaciÃ³n reversada exitosamente. El perÃ­odo vuelve a estado BORRADOR.',
     };
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  CATÁLOGOS
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  CATÃLOGOS
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async findAllEntidadesSS(tipo?: string) {
     const where = tipo
@@ -906,9 +1019,9 @@ export class NominaService implements OnModuleInit {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  CÁLCULOS PRIVADOS
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  CÃLCULOS PRIVADOS
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   private async calcularLiquidacion(
     empleado: Empleado,
@@ -918,7 +1031,7 @@ export class NominaService implements OnModuleInit {
     const dias = item.diasTrabajados;
     const salarioDiario = Number(empleado.salarioBase) / 30;
 
-    // ── Devengados ──
+    // â”€â”€ Devengados â”€â”€
     const salarioDevengado = Math.round(salarioDiario * dias * 100) / 100;
 
     const auxilioTransporte =
@@ -947,7 +1060,7 @@ export class NominaService implements OnModuleInit {
         100,
       ) / 100;
 
-    // ── IBC (Ingreso Base de Cotización) ──
+    // â”€â”€ IBC (Ingreso Base de CotizaciÃ³n) â”€â”€
     // Base: salario + auxilioTransporte (solo si salario <= 2 SMMLV) + extras + comisiones
     let ibcBase = salarioDevengado + totalHorasExtras + Number(comisiones);
     if (Number(empleado.salarioBase) <= 2 * SMMLV_2026) {
@@ -955,7 +1068,7 @@ export class NominaService implements OnModuleInit {
     }
     const ibc = Math.round(ibcBase * 100) / 100;
 
-    // ── Deducciones ──
+    // â”€â”€ Deducciones â”€â”€
     const saludEmpleado = Math.round(ibc * 0.04 * 100) / 100;
     const pensionEmpleado = Math.round(ibc * 0.04 * 100) / 100;
     const retencionFuente = this.calcularRetencionFuente(
@@ -983,20 +1096,20 @@ export class NominaService implements OnModuleInit {
     const netoPagar =
       Math.round((totalDevengado - totalDeducciones) * 100) / 100;
 
-    // ── Aportes empleador ──
+    // â”€â”€ Aportes empleador â”€â”€
     const tasasARL = [0, 0.00348, 0.01044, 0.02436, 0.0435, 0.087];
     const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00348;
 
-    // Determinamos SENA/ICBF según tamaño de empresa (simplificado: aplica si no es servicio doméstico)
+    // Determinamos SENA/ICBF segÃºn tamaÃ±o de empresa (simplificado: aplica si no es servicio domÃ©stico)
     const aplicaSENA = true;
     const aplicaICBF = true;
 
     const aportes = [
       { concepto: 'Salud', valor: Math.round(ibc * 0.085 * 100) / 100 },
-      { concepto: 'Pensión', valor: Math.round(ibc * 0.12 * 100) / 100 },
+      { concepto: 'PensiÃ³n', valor: Math.round(ibc * 0.12 * 100) / 100 },
       { concepto: 'ARL', valor: Math.round(ibc * tasaARL * 100) / 100 },
       {
-        concepto: 'Caja Compensación',
+        concepto: 'Caja CompensaciÃ³n',
         valor: Math.round(ibc * 0.04 * 100) / 100,
       },
       ...(aplicaSENA
@@ -1008,14 +1121,14 @@ export class NominaService implements OnModuleInit {
     ];
     const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
 
-    // ── Provisiones ──
+    // â”€â”€ Provisiones â”€â”€
     const provisiones = [
       {
-        concepto: 'Cesantías',
+        concepto: 'CesantÃ­as',
         valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100,
       },
       {
-        concepto: 'Intereses Cesantías',
+        concepto: 'Intereses CesantÃ­as',
         valor: Math.round(((salarioDevengado * dias) / 360) * 0.12 * 100) / 100,
       },
       {
@@ -1074,7 +1187,7 @@ export class NominaService implements OnModuleInit {
     const ingresosNoConstitutivos = saludEmpleado + pensionEmpleado;
     const subtotal = Math.max(0, totalDevengado - ingresosNoConstitutivos);
 
-    // 2. Deducción 25% Renta Exenta (Art. 206 E.T.), tope 790 UVT anuales -> 65.83 UVT mensuales
+    // 2. DeducciÃ³n 25% Renta Exenta (Art. 206 E.T.), tope 790 UVT anuales -> 65.83 UVT mensuales
     const deduccion = Math.min(subtotal * 0.25, (790 / 12) * UVT);
     const baseMensual = subtotal - deduccion;
 
@@ -1099,9 +1212,9 @@ export class NominaService implements OnModuleInit {
     return Math.round(impuestoUvt * UVT * 100) / 100;
   }
 
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  REPORTES
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async reporteCostosPorCentroCosto(fechaInicio?: string, fechaFin?: string) {
     const qb = this.liquidacionRepo
@@ -1158,7 +1271,7 @@ export class NominaService implements OnModuleInit {
         Number(l.totalProvisiones);
     }
 
-    // Contar empleados únicos por centro de costo
+    // Contar empleados Ãºnicos por centro de costo
     const empCountMap = new Map<string, Set<string>>();
     for (const l of liquidaciones) {
       const cc = (l as any).empleado?.centroCosto;
@@ -1277,8 +1390,8 @@ export class NominaService implements OnModuleInit {
       this.periodoRepo.findOne({ where: { id: periodo2Id } }),
     ]);
 
-    if (!p1) throw new NotFoundException(`Período ${periodo1Id} no encontrado`);
-    if (!p2) throw new NotFoundException(`Período ${periodo2Id} no encontrado`);
+    if (!p1) throw new NotFoundException(`PerÃ­odo ${periodo1Id} no encontrado`);
+    if (!p2) throw new NotFoundException(`PerÃ­odo ${periodo2Id} no encontrado`);
 
     const [liq1, liq2] = await Promise.all([
       this.liquidacionRepo.find({
@@ -1378,7 +1491,7 @@ export class NominaService implements OnModuleInit {
       where: { id: periodoId },
     });
     if (!periodo)
-      throw new NotFoundException(`Período ${periodoId} no encontrado`);
+      throw new NotFoundException(`PerÃ­odo ${periodoId} no encontrado`);
 
     const liquidaciones = await this.liquidacionRepo.find({
       where: { periodoId },
@@ -1447,9 +1560,9 @@ export class NominaService implements OnModuleInit {
     };
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  CATÁLOGO DE CONCEPTOS
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  CATÃLOGO DE CONCEPTOS
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async getConceptos(empresaId?: string) {
     const qb = this.conceptoRepo.createQueryBuilder('c');
@@ -1462,7 +1575,7 @@ export class NominaService implements OnModuleInit {
 
   async createConcepto(dto: any, empresaId?: string) {
     const exists = await this.conceptoRepo.findOne({ where: { codigo: dto.codigo } });
-    if (exists) throw new BadRequestException(`El código de concepto "${dto.codigo}" ya existe`);
+    if (exists) throw new BadRequestException(`El cÃ³digo de concepto "${dto.codigo}" ya existe`);
     const concepto = this.conceptoRepo.create({ ...dto, empresaId });
     return this.conceptoRepo.save(concepto);
   }
@@ -1481,9 +1594,9 @@ export class NominaService implements OnModuleInit {
     return this.conceptoRepo.save(concepto);
   }
 
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  CONCEPTOS RECURRENTES POR EMPLEADO
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async getConceptosRecurrentesByEmpleado(empleadoId: string) {
     return this.empleadoConceptoRepo.find({
@@ -1527,13 +1640,13 @@ export class NominaService implements OnModuleInit {
     return { success: true };
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  GESTIÓN DE EMPLEADOS EN EL PERÍODO
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  GESTIÃ“N DE EMPLEADOS EN EL PERÃODO
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async getEmpleadosOfPeriodo(periodoId: string) {
     const periodData = await this.periodoRepo.findOne({ where: { id: periodoId } });
-    if (!periodData) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+    if (!periodData) throw new NotFoundException(`PerÃ­odo ${periodoId} no encontrado`);
 
     const asignados = await this.periodoEmpleadoRepo.find({
       where: { periodoId },
@@ -1644,15 +1757,15 @@ export class NominaService implements OnModuleInit {
 
   async assignEmpleadosToPeriodo(periodoId: string, empleadoIds: string[], diasNovedad: number = 30) {
     const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
-    if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+    if (!periodo) throw new NotFoundException(`PerÃ­odo ${periodoId} no encontrado`);
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException('Solo se pueden modificar los empleados en un período en borrador');
+      throw new BadRequestException('Solo se pueden modificar los empleados en un perÃ­odo en borrador');
     }
 
     const duplicados: string[] = [];
 
     for (const empId of empleadoIds) {
-      // Verificar si ya pertenece a otro período activo con solapamiento de fechas
+      // Verificar si ya pertenece a otro perÃ­odo activo con solapamiento de fechas
       const solapado = await this.periodoEmpleadoRepo
         .createQueryBuilder('pe')
         .innerJoin('pe.periodo', 'p')
@@ -1666,7 +1779,7 @@ export class NominaService implements OnModuleInit {
 
       if (solapado) {
         const nombreEmp = `${solapado.e_primerNombre} ${solapado.e_primerApellido}`;
-        duplicados.push(`El empleado ${nombreEmp} ya está asignado al período "${solapado.p_nombre}" que se solapa.`);
+        duplicados.push(`El empleado ${nombreEmp} ya estÃ¡ asignado al perÃ­odo "${solapado.p_nombre}" que se solapa.`);
       }
     }
 
@@ -1678,7 +1791,7 @@ export class NominaService implements OnModuleInit {
     for (const empId of empleadoIds) {
       const exists = await this.periodoEmpleadoRepo.findOne({ where: { periodoId, empleadoId: empId } });
       if (!exists) {
-        // Calcular días proporcionales según fecha de ingreso
+        // Calcular dÃ­as proporcionales segÃºn fecha de ingreso
         const empleado = await this.empleadoRepo.findOne({ where: { id: empId } });
         const fechaInicio = new Date(periodo.fechaInicio);
         const fechaFin = new Date(periodo.fechaFin);
@@ -1713,18 +1826,18 @@ export class NominaService implements OnModuleInit {
 
   async removeEmpleadoFromPeriodo(periodoId: string, empleadoId: string) {
     const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
-    if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+    if (!periodo) throw new NotFoundException(`PerÃ­odo ${periodoId} no encontrado`);
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException('No se pueden remover empleados de un período que no esté en borrador');
+      throw new BadRequestException('No se pueden remover empleados de un perÃ­odo que no estÃ© en borrador');
     }
 
     await this.periodoEmpleadoRepo.delete({ periodoId, empleadoId });
     return { success: true };
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  PARAMETRIZACIÓN LEGAL VERSIONADA
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  PARAMETRIZACIÃ“N LEGAL VERSIONADA
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async getParametrosVigentes(fecha: Date = new Date()) {
     const parametro = await this.parametroRepo
@@ -1750,9 +1863,9 @@ export class NominaService implements OnModuleInit {
     return this.parametroRepo.save(version);
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  CONCEPTOS OCASIONALES POR PERÍODO (ESTA NÓMINA)
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  CONCEPTOS OCASIONALES POR PERÃODO (ESTA NÃ“MINA)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async addConceptoOcasionalPeriodo(
     periodoId: string,
@@ -1764,9 +1877,9 @@ export class NominaService implements OnModuleInit {
     });
     if (!pe) {
       const periodo = await this.periodoRepo.findOne({ where: { id: periodoId } });
-      if (!periodo) throw new NotFoundException(`Período ${periodoId} no encontrado`);
+      if (!periodo) throw new NotFoundException(`PerÃ­odo ${periodoId} no encontrado`);
       if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-        throw new BadRequestException('Solo se pueden agregar conceptos en un período en borrador');
+        throw new BadRequestException('Solo se pueden agregar conceptos en un perÃ­odo en borrador');
       }
       pe = await this.periodoEmpleadoRepo.save({
         periodoId,
@@ -1839,7 +1952,7 @@ export class NominaService implements OnModuleInit {
         tipoValor: o.tipoValor,
         observacion: o.observacion,
         origen: 'ESTA_NOMINA',
-        badge: 'Esta nómina',
+        badge: 'Esta nÃ³mina',
       })),
     };
   }
@@ -1896,7 +2009,7 @@ export class NominaService implements OnModuleInit {
   async procesarLiquidacionAsincrona(periodoId: string, userId: string = 'system') {
     const periodo = await this.findOnePeriodo(periodoId);
     if (periodo.estado !== EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException('El período no está en estado BORRADOR');
+      throw new BadRequestException('El perÃ­odo no estÃ¡ en estado BORRADOR');
     }
 
     let asignados = await this.periodoEmpleadoRepo.find({
@@ -1905,7 +2018,7 @@ export class NominaService implements OnModuleInit {
     });
 
     if (asignados.length === 0) {
-      throw new BadRequestException('Debe haber al menos un empleado asignado para poder liquidar la nómina.');
+      throw new BadRequestException('Debe haber al menos un empleado asignado para poder liquidar la nÃ³mina.');
     }
 
     const paramsLegal = await this.getParametrosVigentes(periodo.fechaFin);
@@ -1917,13 +2030,13 @@ export class NominaService implements OnModuleInit {
     const liquidaciones: Liquidacion[] = [];
     const detallesToSave: Partial<LiquidacionDetalle>[] = [];
 
-    // Empezamos la transacción
+    // Empezamos la transacciÃ³n
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // 1. Limpiar previas dentro de la transacción
+      // 1. Limpiar previas dentro de la transacciÃ³n
       const liquidacionesPrevias = await queryRunner.manager.find(Liquidacion, { where: { periodoId }, select: ['id'] });
       if (liquidacionesPrevias.length > 0) {
         const ids = liquidacionesPrevias.map(l => l.id);
@@ -1971,8 +2084,9 @@ export class NominaService implements OnModuleInit {
       const saludPension = liquidaciones.reduce((s, l) => s + Number(l.saludEmpleado) + Number(l.pensionEmpleado), 0);
       const totalRetefuente = liquidaciones.reduce((s, l) => s + Number(l.retencionFuente), 0);
 
-      // 3. Contabilización Estricta
+      // 3. ContabilizaciÃ³n Estricta
       const configNominaPorArea = await this.getConfiguracionesContables();
+      const empresaInfo = await queryRunner.manager.findOne('Empresa', { where: {} }) as any;
       const empleadoAreaMap = new Map<string, AreaEmpleado>();
       for (const pe of asignados) {
         empleadoAreaMap.set(pe.empleadoId, pe.empleado.area || AreaEmpleado.ADMINISTRATIVA);
@@ -1981,7 +2095,7 @@ export class NominaService implements OnModuleInit {
       const resolvedAccounts = new Map<string, any>();
       const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
         if (!cuentaId) {
-          throw new BadRequestException(`Validación Contable: Falta configurar cuenta contable para el concepto "${descripcionConcepto}".`);
+          throw new BadRequestException(`ValidaciÃ³n Contable: Falta configurar cuenta contable para el concepto "${descripcionConcepto}".`);
         }
         const cacheKey = `id:${cuentaId}`;
         if (resolvedAccounts.has(cacheKey)) {
@@ -1989,7 +2103,7 @@ export class NominaService implements OnModuleInit {
         }
         const account = await this.asientosContablesService.obtenerCuentaPorId(cuentaId);
         if (!account) {
-          throw new BadRequestException(`Validación Contable: La cuenta contable configurada para "${descripcionConcepto}" no existe o está inactiva.`);
+          throw new BadRequestException(`ValidaciÃ³n Contable: La cuenta contable configurada para "${descripcionConcepto}" no existe o estÃ¡ inactiva.`);
         }
         resolvedAccounts.set(cacheKey, account);
         return account;
@@ -2000,7 +2114,7 @@ export class NominaService implements OnModuleInit {
       if (!tipoComprobante) {
         tipoComprobante = queryRunner.manager.create(TipoComprobante, {
           codigo: 'NOM',
-          nombre: 'Nómina',
+          nombre: 'NÃ³mina',
           prefijo: 'NOM',
           numeracionAutomatica: true,
           consecutivoActual: 1,
@@ -2010,42 +2124,45 @@ export class NominaService implements OnModuleInit {
       }
 
       for (const l of liquidaciones) {
-        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string; centroCostoId: string | null }>();
-        const addEntry = (cuenta: any, debito: number, credito: number) => {
+        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string; centroCostoId: string | null; terceroId: string | null }>();
+        const addEntry = (cuenta: any, debito: number, credito: number, entidadSSId: string | null = null) => {
           if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
-          const existing = detailsMap.get(cuenta.id);
+          const key = entidadSSId ? `${cuenta.id}-${entidadSSId}` : cuenta.id;
+          const existing = detailsMap.get(key);
 
           if (existing) {
             existing.debito = Math.round((existing.debito + debito) * 100) / 100;
             existing.credito = Math.round((existing.credito + credito) * 100) / 100;
           } else {
-            detailsMap.set(cuenta.id, {
+            detailsMap.set(key, {
               cuentaId: cuenta.id,
               debito: Math.round(debito * 100) / 100,
               credito: Math.round(credito * 100) / 100,
               descripcion: `${cuenta.codigo} - ${cuenta.nombre}`,
-              centroCostoId: l.empleado?.centroCostoId || null
+              centroCostoId: l.empleado?.centroCostoId || null,
+              terceroId: entidadSSId
             });
           }
         };
 
         const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
         const config = configNominaPorArea[area];
+        (config as any).empresa = empresaInfo;
 
         const obligacionLabAccount = await getAccountStrict(config.cajaBanco?.cuentaObligacionesLabId, 'Obligaciones Laborales (Salarios por Pagar)');
 
         const salarioVal = Number(l.salarioDevengado);
         if (salarioVal > 0) {
-          const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Área ${area})`);
+          const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Ãrea ${area})`);
           addEntry(salarioAccount, salarioVal, 0);
-          addEntry(obligacionLabAccount, 0, salarioVal);
+          addEntry(obligacionLabAccount, 0, salarioVal, l.empleadoId);
         }
 
         const auxTransVal = Number(l.auxilioTransporte);
         if (auxTransVal > 0) {
-          const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Área ${area})`);
+          const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Ãrea ${area})`);
           addEntry(auxAccount, auxTransVal, 0);
-          addEntry(obligacionLabAccount, 0, auxTransVal);
+          addEntry(obligacionLabAccount, 0, auxTransVal, l.empleadoId);
         }
 
         const saludVal = Number(l.saludEmpleado);
@@ -2057,9 +2174,9 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoSalud.id]?.cuentaId || conceptoSalud.cuentaContableCredito;
             }
           }
-          const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deducción Empleado)');
-          addEntry(obligacionLabAccount, saludVal, 0);
-          addEntry(saludAccount, 0, saludVal);
+          const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (DeducciÃ³n Empleado)');
+          addEntry(obligacionLabAccount, saludVal, 0, l.empleadoId);
+          addEntry(saludAccount, 0, saludVal, l.empleado?.epsId);
         }
 
         const pensionVal = Number(l.pensionEmpleado);
@@ -2071,9 +2188,9 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoPension.id]?.cuentaId || conceptoPension.cuentaContableCredito;
             }
           }
-          const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pensión (Deducción Empleado)');
-          addEntry(obligacionLabAccount, pensionVal, 0);
-          addEntry(pensionAccount, 0, pensionVal);
+          const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo PensiÃ³n (DeducciÃ³n Empleado)');
+          addEntry(obligacionLabAccount, pensionVal, 0, l.empleadoId);
+          addEntry(pensionAccount, 0, pensionVal, l.empleado?.afpId);
         }
 
         const retefuenteVal = Number(l.retencionFuente);
@@ -2083,13 +2200,13 @@ export class NominaService implements OnModuleInit {
             retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
           } catch (e) { }
           if (!retefuenteAccount) {
-            throw new BadRequestException(`Validación Contable: No se encontró la cuenta 236505 para Retención en la fuente por Salarios.`);
+            throw new BadRequestException(`ValidaciÃ³n Contable: No se encontrÃ³ la cuenta 236505 para RetenciÃ³n en la fuente por Salarios.`);
           }
-          addEntry(obligacionLabAccount, retefuenteVal, 0);
+          addEntry(obligacionLabAccount, retefuenteVal, 0, l.empleadoId);
           addEntry(retefuenteAccount, 0, retefuenteVal);
         }
 
-        // Conceptos dinámicos
+        // Conceptos dinÃ¡micos
         const detallesEmp = detallesToSave.filter(d => d.liquidacionId === l.id && d.conceptoId);
         for (const d of detallesEmp) {
           const valorVal = Number(d.valor);
@@ -2102,10 +2219,10 @@ export class NominaService implements OnModuleInit {
           if (d.tipo === TipoConceptoNomina.DEVENGADO) {
             const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
             addEntry(devAccount, valorVal, 0);
-            addEntry(obligacionLabAccount, 0, valorVal);
+            addEntry(obligacionLabAccount, 0, valorVal, l.empleadoId);
           } else {
-            const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deducción: ${nombreConcepto}`);
-            addEntry(obligacionLabAccount, valorVal, 0);
+            const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto DeducciÃ³n: ${nombreConcepto}`);
+            addEntry(obligacionLabAccount, valorVal, 0, l.empleadoId);
             addEntry(dedAccount, 0, valorVal);
           }
         }
@@ -2113,34 +2230,41 @@ export class NominaService implements OnModuleInit {
         // Aportes Empleador
         const aportes = l.aportesEmpleador || [];
         const ssConfigMap: Record<string, string> = {
-          'Salud': 'saludPatronal', 'Pensión': 'pension', 'ARL': 'arl',
-          'Caja Compensación': 'ccf', 'SENA': 'sena', 'ICBF': 'icbf',
+          'Salud': 'saludPatronal', 'PensiÃ³n': 'pension', 'ARL': 'arl',
+          'Caja CompensaciÃ³n': 'ccf', 'SENA': 'sena', 'ICBF': 'icbf',
         };
 
         for (const ap of aportes) {
           const apVal = Number(ap.valor);
           if (apVal <= 0) continue;
-          
+
           let configKey = ssConfigMap[ap.concepto];
           if (configKey) {
             let ssItem = config.aportesEmpleador?.[configKey];
-            
+
             if (!ssItem) {
-                const oldKey = ap.concepto === 'Salud' ? 'salud' : configKey;
-                ssItem = config.seguridadSocial?.[oldKey];
+              const oldKey = ap.concepto === 'Salud' ? 'salud' : configKey;
+              ssItem = config.seguridadSocial?.[oldKey];
             }
 
             const ssGastoAcc = await getAccountStrict(ssItem?.cuentaGastoId, `Gasto Aporte Empleador: ${ap.concepto}`);
             const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
-            addEntry(ssGastoAcc, apVal, 0);
-            addEntry(ssPasivoAcc, 0, apVal);
+
+            let ssTerceroId: string | null = null;
+            if (ap.concepto === 'Salud') ssTerceroId = l.empleado?.epsId;
+            else if (ap.concepto === 'PensiÃ³n') ssTerceroId = l.empleado?.afpId;
+            else if (ap.concepto === 'ARL') ssTerceroId = config.empresa?.arlId;
+            else if (ap.concepto === 'Caja CompensaciÃ³n') ssTerceroId = l.empleado?.ccfId;
+
+            addEntry(ssGastoAcc, apVal, 0, ssTerceroId);
+            addEntry(ssPasivoAcc, 0, apVal, ssTerceroId);
           }
         }
 
         // Provisiones
         const provisiones = l.provisiones || [];
         const provConfigMap: Record<string, string> = {
-          'Cesantías': 'cesantias', 'Intereses Cesantías': 'interesesCesantias',
+          'CesantÃ­as': 'cesantias', 'Intereses CesantÃ­as': 'interesesCesantias',
           'Prima de Servicios': 'prima', 'Vacaciones': 'vacaciones',
         };
 
@@ -2150,46 +2274,59 @@ export class NominaService implements OnModuleInit {
           const configKey = provConfigMap[prov.concepto];
           if (configKey) {
             const provItem = config.provisiones?.[configKey as keyof typeof config.provisiones];
-            const provGastoAcc = await getAccountStrict(provItem?.cuentaGastoId, `Gasto Provisión: ${prov.concepto}`);
-            const provPasivoAcc = await getAccountStrict(provItem?.cuentaPasivoId, `Pasivo Provisión: ${prov.concepto}`);
+            const provGastoAcc = await getAccountStrict(provItem?.cuentaGastoId, `Gasto ProvisiÃ³n: ${prov.concepto}`);
+            const provPasivoAcc = await getAccountStrict(provItem?.cuentaPasivoId, `Pasivo ProvisiÃ³n: ${prov.concepto}`);
             addEntry(provGastoAcc, provVal, 0);
             addEntry(provPasivoAcc, 0, provVal);
           }
         }
 
-        // Verificación Partida Doble por Empleado
+        // VerificaciÃ³n Partida Doble por Empleado
         const detallesCustom = Array.from(detailsMap.values());
         const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
         const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
 
         if (Math.abs(sumaDebitos - sumaCreditos) > 0.01) {
-          throw new BadRequestException(`Validación Contable: Asiento descuadrado para empleado ${l.empleado?.numeroDocumento || l.empleadoId}. Débitos: ${sumaDebitos}, Créditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
+          throw new BadRequestException(`ValidaciÃ³n Contable: Asiento descuadrado para empleado ${l.empleado?.numeroDocumento || l.empleadoId}. DÃ©bitos: ${sumaDebitos}, CrÃ©ditos: ${sumaCreditos}. Diferencia: ${Math.abs(sumaDebitos - sumaCreditos)}`);
         }
 
         // Crear Comprobante por Empleado
         const comprobanteDto = {
           tipoComprobanteId: tipoComprobante.id,
           fechaDocumento: periodo.fechaFin,
-          observaciones: `Contabilización de nómina: ${periodo.nombre} - Empleado: ${l.empleado?.primerNombre} ${l.empleado?.primerApellido}`,
+          observaciones: `ContabilizaciÃ³n de nÃ³mina: ${periodo.nombre} - Empleado: ${l.empleado?.primerNombre} ${l.empleado?.primerApellido}`,
           detalles: detallesCustom.map(d => ({
             cuentaContableId: d.cuentaId,
             debito: d.debito,
             credito: d.credito,
             descripcion: d.descripcion,
             centroCostoId: d.centroCostoId,
+            terceroId: d.terceroId,
           })),
         };
 
         // Generar Comprobante
         const comprobante = await this.comprobantesService.create(comprobanteDto as any, userId, queryRunner);
-        
-        // Contabilizar Comprobante (genera AsientoContable automáticamente)
+
+        // Contabilizar Comprobante (genera AsientoContable automÃ¡ticamente)
         await this.comprobantesService.contabilizar(comprobante.id, userId, queryRunner);
 
         // Actualizar Liquidacion con comprobanteId
         await queryRunner.manager.update(Liquidacion, l.id, {
           comprobanteId: comprobante.id
         });
+
+        // Crear ObligaciÃƒÂ³n de NÃƒÂ³mina
+        const obligacion = queryRunner.manager.create(ObligacionNomina, {
+          periodoId: periodo.id,
+          empleadoId: l.empleadoId,
+          terceroId: l.empleado?.id || null, // empleadoId as tercero
+          valorOriginal: l.netoPagar,
+          valorPagado: 0,
+          saldo: l.netoPagar,
+          estado: EstadoObligacionNomina.PENDIENTE,
+        });
+        await queryRunner.manager.save(ObligacionNomina, obligacion);
       }
 
       await queryRunner.manager.update(PeriodoNomina, periodoId, {
@@ -2211,3 +2348,6 @@ export class NominaService implements OnModuleInit {
     }
   }
 }
+
+
+

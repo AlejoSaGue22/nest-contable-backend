@@ -1,6 +1,7 @@
-export enum EstadoPeriodoNomina {
+﻿export enum EstadoPeriodoNomina {
     BORRADOR = 'BORRADOR',
     LIQUIDADA = 'LIQUIDADA',
+    PARCIALMENTE_PAGADA = 'PARCIALMENTE_PAGADA',
     PAGADA = 'PAGADA',
     ANULADA = 'ANULADA'
 }

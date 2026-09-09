@@ -1,0 +1,6 @@
+﻿export enum EstadoObligacionNomina {
+  PENDIENTE = 'PENDIENTE',
+  PARCIALMENTE_PAGADA = 'PARCIALMENTE_PAGADA',
+  PAGADA = 'PAGADA',
+  ANULADA = 'ANULADA',
+}

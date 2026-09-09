@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NominaController } from './nomina.controller';
 import { NominaService } from './nomina.service';
@@ -7,6 +7,8 @@ import { Empleado } from './entities/empleado.entity';
 import { PeriodoNomina } from './entities/periodo-nomina.entity';
 import { Liquidacion } from './entities/liquidacion.entity';
 import { PagoNomina } from './entities/pago-nomina.entity';
+import { PagoNominaDetalle } from './entities/pago-nomina-detalle.entity';
+import { ObligacionNomina } from './entities/obligacion-nomina.entity';
 import { EntidadSeguridadSocial } from './entities/entidad-seguridad-social.entity';
 import { TipoContratoEntity } from './entities/tipo-contrato.entity';
 import { Cargo } from './entities/cargo.entity';
@@ -59,3 +61,5 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
   exports: [NominaService],
 })
 export class NominaModule { }
+
+

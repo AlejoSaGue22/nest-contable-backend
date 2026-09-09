@@ -1,5 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
+﻿import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { PeriodoNomina } from './periodo-nomina.entity';
+import { PagoNominaDetalle } from './pago-nomina-detalle.entity';
+import { OneToMany } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Banco } from 'src/bancos/entities/banco.entity';
 import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
@@ -60,4 +62,8 @@ export class PagoNomina {
 
     @UpdateDateColumn()
     updatedAt: Date;
+
+    @OneToMany(() => PagoNominaDetalle, detalle => detalle.pago, { cascade: true })
+    detalles: PagoNominaDetalle[];
 }
+
