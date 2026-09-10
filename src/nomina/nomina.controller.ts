@@ -127,7 +127,7 @@ export class NominaController {
   }
 
   // â”€â”€ PerÃ­odos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  
+
   @Get('obligaciones')
   findAllObligaciones(@Query() query: any) {
     return this.nominaService.findAllObligaciones(query);
@@ -233,12 +233,6 @@ export class NominaController {
     return this.nominaService.pagarObligaciones(id, dto, req.user.sub);
   }
 
-  @Post('periodos/:id/anular')
-  // @Permissions(Permission.NOMINA_PERIOD_ANUL)
-  anularNomina(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
-    return this.nominaService.anularNomina(id, req.user.sub);
-  }
-
   @Post('periodos/:id/reversar')
   reversarLiquidacion(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.nominaService.reversarLiquidacion(id, req.user.sub);
@@ -257,7 +251,7 @@ export class NominaController {
     return this.nominaService.findPagosByPeriodo(periodoId);
   }
 
-  // â”€â”€ DIAN / NÃ³mina ElectrÃ³nica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // DIAN / Nomina Electronica ----------------------------------------
   @Post('periodos/:id/enviar-dian')
   // @Permissions(Permission.NOMINA_DIAN_SEND)
   enviarDian(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
@@ -273,7 +267,7 @@ export class NominaController {
     res.send(xml);
   }
 
-  // â”€â”€ CatÃ¡logos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  //  Catalogos ---------------------------------------
   @Get('entidades-seguridad')
   findAllEntidadesSS(@Query('tipo') tipo?: string) {
     return this.nominaService.findAllEntidadesSS(tipo);

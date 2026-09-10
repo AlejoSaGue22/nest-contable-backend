@@ -39,9 +39,9 @@ export class ComprobantesService {
     private readonly dataSource: DataSource,
   ) { }
 
-  // ══════════════════════════════════════════════════════════════════════════ 
-  // A. ADMINISTRACIÓN DE TIPOS DE COMPROBANTES (CONFIGURACIÓN)
-  // ══════════════════════════════════════════════════════════════════════════
+  // -------------------------------------------------------------------
+  // A. ADMINISTRACION DE TIPOS DE COMPROBANTES (CONFIGURACION)
+  // -------------------------------------------------------------------
 
   async createTipo(dto: CreateTipoComprobanteDto): Promise<TipoComprobante> {
     const existe = await this.tipoRepository.findOne({
@@ -81,9 +81,9 @@ export class ComprobantesService {
     return this.tipoRepository.save(tipo);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // B. GESTIÓN DE COMPROBANTES CONTABLES
-  // ══════════════════════════════════════════════════════════════════════════
+  // -------------------------------------------------------------------
+  // B. GESTION DE COMPROBANTES CONTABLES
+  // -------------------------------------------------------------------
 
   async create(dto: CreateComprobanteContableDto, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
     const isExternalTransaction = !!providedQueryRunner;
@@ -115,8 +115,8 @@ export class ComprobantesService {
         tipo.consecutivoActual += 1;
         await queryRunner.manager.save(TipoComprobante, tipo);
       } else {
-        // En caso de numeración manual, se podría pasar en el DTO (ampliación futura)
-        throw new BadRequestException('La numeración manual no está soportada en esta fase.');
+        // En caso de numeraciÃ³n manual, se podrÃ­a pasar en el DTO (ampliaciÃ³n futura)
+        throw new BadRequestException('La numeracion manual no esta soportada en esta fase.');
       }
 
       // Calcular totales
@@ -268,17 +268,58 @@ export class ComprobantesService {
 
     return comprobante;
   }
+  async findAll(query: any = {}): Promise<{ items: ComprobanteContable[], meta: any }> {
+    const { page = 1, limit = 10, estado, busqueda, fechaInicio, fechaFin } = query;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
-  async findAll(): Promise<ComprobanteContable[]> {
-    return this.comprobanteRepository.find({
-      relations: ['tipoComprobante', 'creadoPor'],
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.comprobanteRepository.createQueryBuilder('comp')
+      .leftJoinAndSelect('comp.tipoComprobante', 'tipo')
+      .leftJoinAndSelect('comp.creadoPor', 'creador');
+
+    if (estado && estado !== 'undefined' && estado !== 'null' && String(estado).trim() !== '') {
+      qb.andWhere('comp.estado = :estado', { estado });
+    }
+
+    if (fechaInicio && fechaInicio !== 'undefined' && fechaInicio !== 'null' && String(fechaInicio).trim() !== '') {
+      qb.andWhere('comp.fechaDocumento >= :fechaInicio', { fechaInicio });
+    }
+
+    if (fechaFin && fechaFin !== 'undefined' && fechaFin !== 'null' && String(fechaFin).trim() !== '') {
+      qb.andWhere('comp.fechaDocumento <= :fechaFin', { fechaFin });
+    }
+
+    if (busqueda && busqueda !== 'undefined' && busqueda !== 'null' && String(busqueda).trim() !== '') {
+      qb.andWhere('(LOWER(comp.numero) LIKE :busqueda OR LOWER(comp.observaciones) LIKE :busqueda OR LOWER(tipo.nombre) LIKE :busqueda)', { 
+        busqueda: `%${String(busqueda).trim().toLowerCase()}%` 
+      });
+    }
+
+    qb.orderBy('comp.createdAt', 'DESC');
+
+    if (limitNum > 0) {
+      qb.skip(skip).take(limitNum);
+    }
+
+    const [items, total] = await qb.getManyAndCount();
+
+    const totalPages = limitNum > 0 ? Math.ceil(total / limitNum) : 1;
+
+    return {
+      items,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages
+      }
+    };
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // C. CONTABILIZACIÓN Y ANULACIÓN (ACCIONES)
-  // ══════════════════════════════════════════════════════════════════════════
+  // -------------------------------------------------------------------
+  // C. CONTABILIZACION Y ANULACION (ACCIONES)
+  // -------------------------------------------------------------------
 
   async contabilizar(id: string, userId: string, providedQueryRunner?: any): Promise<ComprobanteContable> {
     const comprobante = await this.findOne(id, providedQueryRunner);
@@ -351,7 +392,7 @@ export class ComprobantesService {
     }
 
     if (!motivo || motivo.trim() === '') {
-      throw new BadRequestException('Debe proporcionar un motivo de anulación válido.');
+      throw new BadRequestException('Debe proporcionar un motivo de anulaciÃ³n vÃ¡lido.');
     }
 
     const isExternalTransaction = !!providedQueryRunner;
@@ -389,3 +430,5 @@ export class ComprobantesService {
     }
   }
 }
+
+

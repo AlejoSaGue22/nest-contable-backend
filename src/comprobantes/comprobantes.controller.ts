@@ -1,4 +1,5 @@
-import {
+﻿import {
+  Query,
   Body,
   Controller,
   Get,
@@ -26,11 +27,11 @@ import {
 @Controller('comprobantes')
 @UseGuards(AuthGuard, RolesGuard)
 export class ComprobantesController {
-  constructor(private readonly service: ComprobantesService) {}
+  constructor(private readonly service: ComprobantesService) { }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1. ENDPOINTS DE TIPOS DE COMPROBANTES (CONFIGURACIÓN)
-  // ══════════════════════════════════════════════════════════════════════════
+  // --------------------------------------------------------------------------------------------------
+  // 1. ENDPOINTS DE TIPOS DE COMPROBANTES (CONFIGURACION)
+  // --------------------------------------------------------------------------------------------------
 
   @Post('tipos')
   createTipo(@Body() dto: CreateTipoComprobanteDto) {
@@ -55,9 +56,9 @@ export class ComprobantesController {
     return this.service.updateTipo(id, dto);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 2. ENDPOINTS DE GESTIÓN DE COMPROBANTES
-  // ══════════════════════════════════════════════════════════════════════════
+  // --------------------------------------------------------------------------------------------------
+  // 2. ENDPOINTS DE GESTION DE COMPROBANTES
+  // --------------------------------------------------------------------------------------------------
 
   @Post()
   create(
@@ -69,8 +70,8 @@ export class ComprobantesController {
   }
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query() query: any) {
+    return this.service.findAll(query);
   }
 
   @Get(':id')
@@ -107,3 +108,5 @@ export class ComprobantesController {
     return this.service.anular(id, dto.motivoAnulacion, userId);
   }
 }
+
+

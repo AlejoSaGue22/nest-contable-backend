@@ -21,7 +21,7 @@ export class ActivosFijosService {
     private readonly depreciacionRepository: Repository<DepreciacionActivoFijo>,
     private readonly asientosService: AsientosContablesService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   private async generateNextCode(): Promise<string> {
     const lastActivo = await this.activoRepository.findOne({
@@ -48,7 +48,7 @@ export class ActivosFijosService {
 
     const existing = await this.activoRepository.findOne({ where: { codigo: createDto.codigo } });
     if (existing) {
-      throw new BadRequestException(`El activo con código ${createDto.codigo} ya está registrado`);
+      throw new BadRequestException(`El activo con cÃ³digo ${createDto.codigo} ya estÃ¡ registrado`);
     }
 
     // Validar existencia de cuentas
@@ -67,9 +67,47 @@ export class ActivosFijosService {
 
     return this.activoRepository.save(activo);
   }
+  async findAll(query: any = {}): Promise<{ items: ActivoFijo[], meta: any }> {
+    const { page = 1, limit = 10, estado, tipo, busqueda } = query;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
-  async findAll(): Promise<ActivoFijo[]> {
-    return this.activoRepository.find({ order: { codigo: 'ASC' } });
+    const qb = this.activoRepository.createQueryBuilder('activo');
+
+    if (estado && estado !== 'undefined' && estado !== 'null' && String(estado).trim() !== '') {
+      qb.andWhere('activo.estado = :estado', { estado });
+    }
+
+    if (tipo && tipo !== 'undefined' && tipo !== 'null' && String(tipo).trim() !== '') {
+      qb.andWhere('activo.tipoActivo = :tipo', { tipo });
+    }
+
+    if (busqueda && busqueda !== 'undefined' && busqueda !== 'null' && String(busqueda).trim() !== '') {
+      qb.andWhere('(LOWER(activo.codigo) LIKE :busqueda OR LOWER(activo.nombre) LIKE :busqueda)', { 
+        busqueda: `%${String(busqueda).trim().toLowerCase()}%` 
+      });
+    }
+
+    qb.orderBy('activo.codigo', 'ASC');
+
+    if (limitNum > 0) {
+      qb.skip(skip).take(limitNum);
+    }
+
+    const [items, total] = await qb.getManyAndCount();
+
+    const totalPages = limitNum > 0 ? Math.ceil(total / limitNum) : 1;
+
+    return {
+      items,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages
+      }
+    };
   }
 
   async findOne(id: string): Promise<ActivoFijo> {
@@ -134,16 +172,16 @@ export class ActivosFijosService {
 
       let procesados = 0;
 
-      // Definir último día del mes para la fecha del asiento
-      const fechaAsiento = new Date(anio, mes, 0); // día 0 del mes siguiente es el último del mes deseado
+      // Definir Ãºltimo dÃ­a del mes para la fecha del asiento
+      const fechaAsiento = new Date(anio, mes, 0); // dÃ­a 0 del mes siguiente es el Ãºltimo del mes deseado
 
       for (const activo of activos) {
         // Validaciones por activo:
-        // A. No depreciar si la fecha de adquisición es posterior
+        // A. No depreciar si la fecha de adquisiciÃ³n es posterior
         const fechaAdq = new Date(activo.fechaAdquisicion);
         if (fechaAdq > fechaAsiento) continue;
 
-        // B. Validar si ya se depreció este periodo
+        // B. Validar si ya se depreciÃ³ este periodo
         const yaDepreciado = await queryRunner.manager.findOne(DepreciacionActivoFijo, {
           where: { activoFijoId: activo.id, anio, mes },
         });
@@ -178,7 +216,7 @@ export class ActivosFijosService {
             cuentaNombre: cuentaGasto.nombre,
             debito: montoDepreciacion,
             credito: 0,
-            concepto: `Depreciación mensual ${mes}/${anio} - Activo: ${activo.codigo} (${activo.nombre})`,
+            concepto: `DepreciaciÃ³n mensual ${mes}/${anio} - Activo: ${activo.codigo} (${activo.nombre})`,
             centroCostoId: activo.centroCostoId || undefined,
           },
           {
@@ -187,7 +225,7 @@ export class ActivosFijosService {
             cuentaNombre: cuentaDepAcumulada.nombre,
             debito: 0,
             credito: montoDepreciacion,
-            concepto: `Depreciación acumulada ${mes}/${anio} - Activo: ${activo.codigo} (${activo.nombre})`,
+            concepto: `DepreciaciÃ³n acumulada ${mes}/${anio} - Activo: ${activo.codigo} (${activo.nombre})`,
             centroCostoId: activo.centroCostoId || undefined,
           }
         ];
@@ -196,7 +234,7 @@ export class ActivosFijosService {
           tipo: TipoAsiento.COMPROBANTE_CONTABLE,
           fecha: fechaAsiento,
           referencia: `DEP-${activo.codigo}-${mes}-${anio}`,
-          descripcion: `Proceso automático de depreciación del activo ${activo.codigo} para el periodo ${mes}/${anio}`,
+          descripcion: `Proceso automÃ¡tico de depreciaciÃ³n del activo ${activo.codigo} para el periodo ${mes}/${anio}`,
           detalles,
           totalDebito: montoDepreciacion,
           totalCredito: montoDepreciacion,
@@ -206,7 +244,7 @@ export class ActivosFijosService {
 
         const asiento = await this.asientosService.crearAsientoDesdeDefinicion(definicionAsiento, userId, queryRunner);
 
-        // 3. Crear log de depreciación
+        // 3. Crear log de depreciaciÃ³n
         const log = queryRunner.manager.create(DepreciacionActivoFijo, {
           activoFijoId: activo.id,
           anio,
@@ -219,7 +257,7 @@ export class ActivosFijosService {
         // 4. Actualizar activo fijo
         activo.depreciacionAcumulada += montoDepreciacion;
         activo.valorLibros = activo.valorAdquisicion - activo.depreciacionAcumulada;
-        
+
         if (activo.valorLibros <= activo.valorSalvamento) {
           activo.estado = EstadoActivo.DEPRECIADO;
         }
@@ -255,7 +293,7 @@ export class ActivosFijosService {
 
       const detalles: DefinicionDetalleAsientoDto[] = [];
 
-      // A. Cancelar Depreciación Acumulada (Débito)
+      // A. Cancelar DepreciaciÃ³n Acumulada (DÃ©bito)
       if (activo.depreciacionAcumulada > 0) {
         detalles.push({
           cuentaId: activo.cuentaDepreciacionAcumuladaId,
@@ -263,21 +301,21 @@ export class ActivosFijosService {
           cuentaNombre: activo.cuentaDepreciacionAcumulada.nombre,
           debito: activo.depreciacionAcumulada,
           credito: 0,
-          concepto: `Cancelación dep. acumulada por retiro de activo: ${activo.codigo}`,
+          concepto: `CancelaciÃ³n dep. acumulada por retiro de activo: ${activo.codigo}`,
         });
       }
 
-      // B. Cancelar Cuenta del Activo (Crédito)
+      // B. Cancelar Cuenta del Activo (CrÃ©dito)
       detalles.push({
         cuentaId: activo.cuentaActivoId,
         cuentaCodigo: activo.cuentaActivo.codigo,
         cuentaNombre: activo.cuentaActivo.nombre,
         debito: 0,
         credito: activo.valorAdquisicion,
-        concepto: `Cancelación costo histórico por retiro de activo: ${activo.codigo}`,
+        concepto: `CancelaciÃ³n costo histÃ³rico por retiro de activo: ${activo.codigo}`,
       });
 
-      // C. Si hay valor de venta, registrar ingreso en Banco/Caja (Débito)
+      // C. Si hay valor de venta, registrar ingreso en Banco/Caja (DÃ©bito)
       if (valorVenta > 0) {
         if (!cuentaBancoCajaId) {
           throw new BadRequestException('Debe especificar la cuenta de Banco/Caja para registrar el ingreso de la venta');
@@ -296,7 +334,7 @@ export class ActivosFijosService {
         });
       }
 
-      // D. Registrar Ganancia o Pérdida
+      // D. Registrar Ganancia o PÃ©rdida
       if (gananciaOPerdida > 0) {
         const idCuentaIngreso = cuentaIngresoRetiroId || await this.obtenerCuentaPorDefecto('ingreso_retiro', '4210');
         const cuentaIngreso = await queryRunner.manager.findOne(CuentaContable, { where: { id: idCuentaIngreso } });
@@ -313,7 +351,7 @@ export class ActivosFijosService {
       } else if (gananciaOPerdida < 0) {
         const idCuentaGasto = cuentaPerdidaRetiroId || await this.obtenerCuentaPorDefecto('perdida_retiro', '5310');
         const cuentaGasto = await queryRunner.manager.findOne(CuentaContable, { where: { id: idCuentaGasto } });
-        if (!cuentaGasto) throw new BadRequestException('Cuenta de Pérdida/Gasto no encontrada');
+        if (!cuentaGasto) throw new BadRequestException('Cuenta de PÃ©rdida/Gasto no encontrada');
 
         detalles.push({
           cuentaId: cuentaGasto.id,
@@ -321,7 +359,7 @@ export class ActivosFijosService {
           cuentaNombre: cuentaGasto.nombre,
           debito: Math.abs(gananciaOPerdida),
           credito: 0,
-          concepto: `Pérdida por retiro/baja de activo fijo: ${activo.codigo}`,
+          concepto: `PÃ©rdida por retiro/baja de activo fijo: ${activo.codigo}`,
         });
       }
 
@@ -375,8 +413,11 @@ export class ActivosFijosService {
   private async obtenerCuentaPorDefecto(tipo: string, codigoBuscado: string): Promise<string> {
     const cuenta = await this.dataSource.getRepository(CuentaContable).findOne({ where: { codigo: codigoBuscado } });
     if (!cuenta) {
-      throw new BadRequestException(`No se pudo resolver la cuenta auxiliar por defecto: ${codigoBuscado}. Por favor configúrela manualmente.`);
+      throw new BadRequestException(`No se pudo resolver la cuenta auxiliar por defecto: ${codigoBuscado}. Por favor configÃºrela manualmente.`);
     }
     return cuenta.id;
   }
 }
+
+
+

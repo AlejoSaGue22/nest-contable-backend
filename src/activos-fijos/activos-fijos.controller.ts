@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Req, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, Post, Patch, Body, Param, Req, UseGuards, Query } from '@nestjs/common';
 import { ActivosFijosService } from './activos-fijos.service';
 import { CreateActivoFijoDto } from './dto/create-activo-fijo.dto';
 import { UpdateActivoFijoDto } from './dto/update-activo-fijo.dto';
@@ -10,7 +10,7 @@ import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface'
 @Controller('activos-fijos')
 @UseGuards(AuthGuard)
 export class ActivosFijosController {
-  constructor(private readonly activosService: ActivosFijosService) {}
+  constructor(private readonly activosService: ActivosFijosService) { }
 
   @Post()
   create(@Body() createDto: CreateActivoFijoDto) {
@@ -18,8 +18,8 @@ export class ActivosFijosController {
   }
 
   @Get()
-  findAll() {
-    return this.activosService.findAll();
+  findAll(@Query() query: any) {
+    return this.activosService.findAll(query);
   }
 
   @Get(':id')
@@ -47,3 +47,4 @@ export class ActivosFijosController {
     return this.activosService.retirarActivo(id, dto, req.user.sub);
   }
 }
+

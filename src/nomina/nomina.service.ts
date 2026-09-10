@@ -14,10 +14,7 @@ import { PagoNomina } from './entities/pago-nomina.entity';
 import { ObligacionNomina } from './entities/obligacion-nomina.entity';
 import { EstadoObligacionNomina } from './enums/estado-obligacion-nomina.enum';
 import { Banco } from 'src/bancos/entities/banco.entity';
-import {
-  EntidadSeguridadSocial,
-  TipoEntidadSS,
-} from './entities/entidad-seguridad-social.entity';
+import { EntidadSeguridadSocial, TipoEntidadSS } from './entities/entidad-seguridad-social.entity';
 import { TipoContratoEntity } from './entities/tipo-contrato.entity';
 import { TipoContrato } from './enums/tipo-contrato.enum';
 import { Cargo } from './entities/cargo.entity';
@@ -709,10 +706,10 @@ export class NominaService implements OnModuleInit {
       .leftJoinAndSelect('o.empleado', 'empleado')
       .orderBy('periodo.fechaFin', 'DESC');
 
-    if (query.estado) {
+    if (query.estado && query.estado !== 'undefined' && query.estado !== 'null' && String(query.estado).trim() !== '') {
       qb.andWhere('o.estado = :estado', { estado: query.estado });
     }
-    if (query.periodoId) {
+    if (query.periodoId && query.periodoId !== 'undefined' && query.periodoId !== 'null' && String(query.periodoId).trim() !== '') {
       qb.andWhere('o.periodoId = :periodoId', { periodoId: query.periodoId });
     }
 
@@ -759,11 +756,11 @@ export class NominaService implements OnModuleInit {
         numeroComprobante: dto.numeroComprobante ?? null,
         observaciones: dto.observaciones ?? null,
         createdById: userId,
-        asientoPagoId: 'temp', // serÃ¡ actualizado
+        asientoPagoId: 'temp', // sera actualizado
       });
       await queryRunner.manager.save(PagoNomina, pagoNomina);
 
-      // 3. Procesar cada obligaciÃ³n
+      // 3. Procesar cada obligacion
       for (const det of dto.detalles) {
         const obligacion = await queryRunner.manager.findOne(ObligacionNomina, { where: { id: det.obligacionId } });
         if (!obligacion) throw new BadRequestException(`Obligacion ${det.obligacionId} no encontrada`);
@@ -887,54 +884,6 @@ export class NominaService implements OnModuleInit {
       relations: ['banco'],
       order: { createdAt: 'ASC' },
     });
-  }
-
-  async anularNomina(periodoId: string, userId: string) {
-    const periodo = await this.findOnePeriodo(periodoId);
-    if (periodo.estado === EstadoPeriodoNomina.BORRADOR) {
-      throw new BadRequestException(
-        'No se puede anular un perÃ­odo en estado BORRADOR',
-      );
-    }
-    if (periodo.estado === EstadoPeriodoNomina.ANULADA) {
-      throw new BadRequestException('El perÃ­odo ya estÃ¡ anulado');
-    }
-
-    // 1. Reversar asiento de pago (si existe â€” perÃ­odo PAGADA)
-    if (periodo.asientoPagoId) {
-      const asientoPago =
-        await this.asientosContablesService.findOneAsientoConDetalles(
-          periodo.asientoPagoId,
-        );
-      await this.asientosContablesService.anularAsientoNomina({
-        periodoNombre: periodo.nombre,
-        fecha: new Date(),
-        asientoOriginal: asientoPago,
-        userId,
-      });
-    }
-
-    // 2. Reversar asiento de provisiÃ³n (si existe)
-    if (periodo.asientoProvisionId) {
-      const asientoProvision =
-        await this.asientosContablesService.findOneAsientoConDetalles(
-          periodo.asientoProvisionId,
-        );
-      await this.asientosContablesService.anularAsientoNomina({
-        periodoNombre: periodo.nombre,
-        fecha: new Date(),
-        asientoOriginal: asientoProvision,
-        userId,
-      });
-    }
-
-    await this.periodoRepo.update(periodoId, {
-      estado: EstadoPeriodoNomina.ANULADA,
-    });
-
-    return {
-      message: 'NÃ³mina anulada exitosamente',
-    };
   }
 
   async reversarLiquidacion(periodoId: string, userId: string) {
