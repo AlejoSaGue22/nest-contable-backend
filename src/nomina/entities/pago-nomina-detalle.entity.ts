@@ -23,4 +23,10 @@ export class PagoNominaDetalle {
 
     @Column('decimal', { precision: 15, scale: 2 })
     valor: number;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    empleadoId: string | null;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    terceroId: string | null;
 }

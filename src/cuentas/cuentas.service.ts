@@ -20,12 +20,12 @@ export class CuentasService {
 
   async findAll(filterDto?: FilterCuentaDto) {
     const { search, tipo, fechaInicio, fechaFin } = filterDto || {};
-    
+
 
     const query = this.cuentaRepository.createQueryBuilder('cuenta')
       .leftJoinAndSelect('cuenta.cuentaPadre', 'cuentaPadre')
-      .leftJoin(AsientoDetalle, 'detalle', 
-        'detalle.cuentaId = cuenta.id' + 
+      .leftJoin(AsientoDetalle, 'detalle',
+        'detalle.cuentaId = cuenta.id' +
         (fechaInicio && fechaFin ? ' AND detalle.createdAt BETWEEN :fechaInicio AND :fechaFin' : ''),
         { fechaInicio: fechaInicio, fechaFin: fechaFin }
       )
@@ -149,7 +149,7 @@ export class CuentasService {
 
     // Only allow updating non-structural fields
     const { nombre, descripcion, isActive, aceptaMovimiento } = updateCuentaDto;
-    
+
     Object.assign(cuenta, {
       nombre: nombre ?? cuenta.nombre,
       descripcion: descripcion ?? cuenta.descripcion,
@@ -208,7 +208,6 @@ export class CuentasService {
   async seedCuentasBasicas(dataSource: DataSource) {
     const repository = dataSource.getRepository(CuentaContable);
 
-    // Verificar si ya existen
     const count = await repository.count();
     if (count > 0) {
       console.log('⏭️  Cuentas ya existen, saltando seed');
@@ -216,12 +215,13 @@ export class CuentasService {
     }
 
     console.log('📊 Creando plan de cuentas básico...');
-
     const cuentasMap = new Map<string, CuentaContable>();
 
-    // 1️⃣ Crear primero las cuentas padre
     for (const data of PLAN_CUENTAS_MINIMO.filter(c => c.nivel === 1)) {
-      const cuenta = repository.create({ ...data, isSystemAccount: true });
+      const cuenta = repository.create({
+        ...data,
+        // isSystemAccount: true 
+      });
       await repository.save(cuenta);
       cuentasMap.set(data.codigo, cuenta);
     }
@@ -233,7 +233,7 @@ export class CuentasService {
       const cuenta = repository.create({
         ...rest,
         cuentaPadre: cuentasMap.get(cuentaPadreId!),
-        isSystemAccount: true
+        // isSystemAccount: true
       });
 
       await repository.save(cuenta);

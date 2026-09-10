@@ -144,10 +144,10 @@ export const DEFAULT_MENU_ITEMS = [
         metadata: { badge: null },
       },
       {
-        title: 'Configuracion',
+        title: 'Tesoreria',
         icon: 'settings',
-        route: '/panel/nomina/configuracion',
-        requiredPermission: Permission.NOMINA_CONFIG,
+        route: '/panel/nomina/tesoreria',
+        requiredPermission: Permission.NOMINA_PERIOD_PAY,
         order: 2,
         isActive: true,
         isVisible: true,

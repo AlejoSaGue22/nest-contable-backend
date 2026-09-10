@@ -28,11 +28,7 @@ export class PagarObligacionesDto {
 
     @IsString()
     @IsNotEmpty()
-    cuentaCodigoContable: string;
-
-    @IsOptional()
-    @IsString()
-    bancoId?: string;
+    cuentaBancariaId: string;
 
     @IsOptional()
     @IsString()

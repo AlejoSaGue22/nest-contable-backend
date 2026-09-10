@@ -13,7 +13,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '2',
@@ -22,7 +23,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '3',
@@ -31,7 +33,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '4',
@@ -40,7 +43,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '5',
@@ -49,7 +53,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '6',
@@ -58,7 +63,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '7',
@@ -67,7 +73,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '8',
@@ -76,7 +83,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.DEBITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
     {
         codigo: '9',
@@ -85,7 +93,8 @@ export const PLAN_CUENTAS_MINIMO = [
         naturaleza: NaturalezaCuenta.CREDITO,
         nivel: 1,
         aceptaMovimiento: false,
-        isActive: true
+        isActive: true,
+        isSystemAccount: true
     },
 
     // ========================================

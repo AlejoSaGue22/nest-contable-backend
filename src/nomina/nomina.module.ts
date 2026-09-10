@@ -29,6 +29,7 @@ import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.enti
 import { ComprobanteDetalle } from 'src/comprobantes/entities/comprobante-detalle.entity';
 import { ComprobantesValidatorService } from 'src/comprobantes/comprobantes-validator.service';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 
 @Module({
   imports: [
@@ -37,6 +38,9 @@ import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
       PeriodoNomina,
       Liquidacion,
       PagoNomina,
+      PagoNominaDetalle,
+      ObligacionNomina,
+      CuentasBancarias,
       EntidadSeguridadSocial,
       TipoContratoEntity,
       Cargo,
