@@ -43,7 +43,7 @@ export class NominaController {
     private readonly nominaDianService: NominaDianService,
   ) { }
 
-  // â”€â”€ Empleados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // --- Empleados -----
   @Post('empleados')
   // @Permissions(Permission.NOMINA_EMPLOYEE_CREATE)
   createEmpleado(@Body() dto: CreateEmpleadoDto) {
@@ -105,7 +105,7 @@ export class NominaController {
     return this.nominaService.removeEmpleado(id);
   }
 
-  // â”€â”€ Conceptos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // --- Conceptos ---
   @Get('conceptos')
   getConceptos(@Query('empresaId') empresaId?: string) {
     return this.nominaService.getConceptos(empresaId);
@@ -126,7 +126,7 @@ export class NominaController {
     return this.nominaService.updateConcepto(id, dto);
   }
 
-  // â”€â”€ PerÃ­odos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // --- Periodos -----
 
   @Get('obligaciones')
   findAllObligaciones(@Query() query: any) {
@@ -238,7 +238,7 @@ export class NominaController {
     return this.nominaService.reversarLiquidacion(id, req.user.sub);
   }
 
-  // â”€â”€ Pagos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Pagos -------
   @Get('pagos')
   // @Permissions(Permission.NOMINA_PERIOD_READ)
   findAllPagos(@Query() pagination: PaginatioDto) {

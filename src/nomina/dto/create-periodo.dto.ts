@@ -6,11 +6,11 @@ export class CreatePeriodoDto {
     @IsNotEmpty()
     nombre: string;
 
-    @IsDateString()
+    @IsString()
     @IsNotEmpty()
     fechaInicio: string;
 
-    @IsDateString()
+    @IsString()
     @IsNotEmpty()
     fechaFin: string;
 

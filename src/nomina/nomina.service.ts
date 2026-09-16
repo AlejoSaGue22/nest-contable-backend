@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   Logger,
@@ -50,6 +50,7 @@ import { NominaJob, EstadoNominaJob } from './entities/nomina-job.entity';
 import { ComprobantesService } from 'src/comprobantes/comprobantes.service';
 import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { DateUtil } from 'src/common/utils/date.util';
 
 const SMMLV_2026 = 1750905;
 const AUXILIO_TRANSPORTE_2026 = 249095;
@@ -332,11 +333,21 @@ export class NominaService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   async createPeriodo(dto: CreatePeriodoDto) {
+    const { fechaInicio, fechaFin, ...rest } = dto;
+
+    if (!fechaInicio || !fechaFin || !rest.tipo || !rest.nombre) {
+      throw new BadRequestException('Faltan datos obligatorios');
+    }
+
+    const inicio = DateUtil.parseLocalSafely(fechaInicio);
+    const fin = DateUtil.parseLocalSafely(fechaFin);
+    let fPago = dto.fechaPago ? DateUtil.parseLocalSafely(dto.fechaPago) : undefined;
+
     const periodo = this.periodoRepo.create({
-      ...dto,
-      fechaInicio: new Date(dto.fechaInicio),
-      fechaFin: new Date(dto.fechaFin),
-      fechaPago: dto.fechaPago ? new Date(dto.fechaPago) : undefined,
+      ...rest,
+      fechaInicio: inicio,
+      fechaFin: fin,
+      fechaPago: fPago,
     });
     return this.periodoRepo.save(periodo);
   }
@@ -639,8 +650,8 @@ export class NominaService implements OnModuleInit {
     const netoPagar = Math.max(0, Math.round((totalDevengado - totalDeducciones) * 100) / 100);
 
     // Aportes empleador y provisiones
-    const tasasARL = [0, 0.00348, 0.01044, 0.02436, 0.0435, 0.087];
-    const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00348;
+    const tasasARL = [0, 0.00522, 0.01044, 0.02436, 0.0435, 0.0696];
+    const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00522;
 
     const ibcMensualizado = diasEfectivos > 0 ? (ibc / diasEfectivos) * 30 : 0;
     const esExonerado = ibcMensualizado < (10 * smmlv);
@@ -2005,6 +2016,7 @@ export class NominaService implements OnModuleInit {
 
         // Save liquidacion
         const savedLiq = await queryRunner.manager.save(Liquidacion, queryRunner.manager.create(Liquidacion, liq));
+        savedLiq.empleado = empleado;
 
         for (const d of detalles) {
           d.liquidacionId = savedLiq.id;
@@ -2061,7 +2073,7 @@ export class NominaService implements OnModuleInit {
       if (!tipoComprobante) {
         tipoComprobante = queryRunner.manager.create(TipoComprobante, {
           codigo: 'NOM',
-          nombre: 'NÃ³mina',
+          nombre: 'Nomina',
           prefijo: 'NOM',
           numeracionAutomatica: true,
           consecutivoActual: 1,
