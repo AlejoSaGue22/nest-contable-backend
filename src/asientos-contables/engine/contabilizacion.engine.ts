@@ -98,6 +98,8 @@ export class ContabilizacionEngine implements OnModuleInit {
               terceroNombre = d.proveedor.razonSocial || `${d.proveedor.nombre || ''} ${d.proveedor.apellido || ''}`.trim();
             } else if (d.entidadSS) {
               terceroNombre = d.entidadSS.nombre;
+            } else if (d.empleado) {
+              terceroNombre = `${d.empleado.primerNombre} ${d.empleado.primerApellido}`.trim();
             }
             return {
               cuentaId: d.cuentaId,
@@ -109,7 +111,8 @@ export class ContabilizacionEngine implements OnModuleInit {
               clienteId: d.clienteId || undefined,
               proveedorId: d.proveedorId || undefined,
               entidadSSId: d.entidadSSId || undefined,
-              terceroId: d.clienteId || d.proveedorId || d.entidadSSId || undefined,
+              empleadoId: d.empleadoId || undefined,
+              terceroId: d.clienteId || d.proveedorId || d.entidadSSId || d.empleadoId || undefined,
               terceroNombre: terceroNombre || undefined,
               centroCostoId: d.centroCostoId || undefined,
               centroCostoNombre: d.centroCosto?.nombre || undefined,

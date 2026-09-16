@@ -10,6 +10,7 @@ export interface DefinicionDetalleAsientoDto {
   clienteId?: string;
   proveedorId?: string;
   entidadSSId?: string;
+  empleadoId?: string;
   terceroId?: string;
   terceroNombre?: string;
   centroCostoId?: string;

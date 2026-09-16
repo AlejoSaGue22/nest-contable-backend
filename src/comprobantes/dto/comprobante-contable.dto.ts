@@ -42,6 +42,10 @@ export class CreateComprobanteDetalleDto {
 
   @IsUUID()
   @IsOptional()
+  empleadoId?: string;
+
+  @IsUUID()
+  @IsOptional()
   centroCostoId?: string;
 
   @IsString()

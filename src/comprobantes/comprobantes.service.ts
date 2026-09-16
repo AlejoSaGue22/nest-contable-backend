@@ -145,9 +145,10 @@ export class ComprobantesService {
           debito: det.debito,
           credito: det.credito,
           clienteId: det.clienteId || undefined,
-          proveedorId: det.proveedorId || undefined,
-          entidadSSId: det.entidadSSId || undefined,
-          centroCostoId: det.centroCostoId || undefined,
+           proveedorId: det.proveedorId || undefined,
+           entidadSSId: det.entidadSSId || undefined,
+           empleadoId: det.empleadoId || undefined,
+           centroCostoId: det.centroCostoId || undefined,
           documentoReferencia: det.documentoReferencia || undefined,
         });
         await queryRunner.manager.save(ComprobanteDetalle, detalle);
@@ -216,9 +217,10 @@ export class ComprobantesService {
             debito: det.debito,
             credito: det.credito,
             clienteId: det.clienteId || undefined,
-            proveedorId: det.proveedorId || undefined,
-            entidadSSId: det.entidadSSId || undefined,
-            centroCostoId: det.centroCostoId || undefined,
+             proveedorId: det.proveedorId || undefined,
+             entidadSSId: det.entidadSSId || undefined,
+             empleadoId: det.empleadoId || undefined,
+             centroCostoId: det.centroCostoId || undefined,
             documentoReferencia: det.documentoReferencia || undefined,
           });
           await queryRunner.manager.save(ComprobanteDetalle, detalle);
@@ -252,9 +254,10 @@ export class ComprobantesService {
         'detalles',
         'detalles.cuentaContable',
         'detalles.cliente',
-        'detalles.proveedor',
-        'detalles.entidadSS',
-        'detalles.centroCosto',
+         'detalles.proveedor',
+         'detalles.entidadSS',
+         'detalles.empleado',
+         'detalles.centroCosto',
         'creadoPor',
         'modificadoPor',
         'contabilizadoPor',
@@ -334,8 +337,9 @@ export class ComprobantesService {
       debito: Number(d.debito),
       credito: Number(d.credito),
       clienteId: d.clienteId,
-      proveedorId: d.proveedorId,
-      centroCostoId: d.centroCostoId,
+       proveedorId: d.proveedorId,
+       empleadoId: d.empleadoId,
+       centroCostoId: d.centroCostoId,
       documentoReferencia: d.documentoReferencia,
     }));
 
@@ -430,5 +434,3 @@ export class ComprobantesService {
     }
   }
 }
-
-

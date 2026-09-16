@@ -2,6 +2,17 @@ import { NaturalezaCuenta, TipoCuenta } from "src/cuentas/entities/cuenta.entity
 
 
 
+const CUENTAS_REQUIEREN_TERCERO = [
+    '1305', '1355', '1365', '1380',
+    '2205', '2335', '2365', '2370', '2505',
+];
+
+const requiereTerceroPorDefecto = (codigo: string) =>
+    CUENTAS_REQUIEREN_TERCERO.some((prefijo) => codigo.startsWith(prefijo));
+
+const requiereCentroCostosPorDefecto = (codigo: string) =>
+    codigo.length >= 4 && ['5', '6', '7'].includes(codigo.charAt(0));
+
 export const PLAN_CUENTAS_MINIMO = [
     // ========================================
     // NIVEL 1: CLASES (Padre)
@@ -6156,4 +6167,11 @@ export const PLAN_CUENTAS_MINIMO = [
 
 
 
-];
+    ].map((cuenta) => {
+        const flags = cuenta as { requiereTercero?: boolean; requiereCentroCostos?: boolean };
+        return {
+            ...cuenta,
+            requiereTercero: flags.requiereTercero ?? requiereTerceroPorDefecto(cuenta.codigo),
+            requiereCentroCostos: flags.requiereCentroCostos ?? requiereCentroCostosPorDefecto(cuenta.codigo),
+        };
+    });

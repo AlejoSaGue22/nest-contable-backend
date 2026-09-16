@@ -51,9 +51,28 @@ import { ComprobantesService } from 'src/comprobantes/comprobantes.service';
 import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { DateUtil } from 'src/common/utils/date.util';
+import { limitVariableDeductions, netFinancialEntries } from './utils/nomina-financial.utils';
 
 const SMMLV_2026 = 1750905;
 const AUXILIO_TRANSPORTE_2026 = 249095;
+
+type TipoTerceroContable = 'EMPLEADO' | 'SEGURIDAD_SOCIAL' | 'NINGUNO';
+
+interface TerceroContableNomina {
+  tipo: TipoTerceroContable;
+  id: string | null;
+}
+
+interface DetalleContableNomina {
+  cuentaId: string;
+  debito: number;
+  credito: number;
+  descripcion: string;
+  centroCostoId: string | null;
+  empleadoId?: string;
+  entidadSSId?: string;
+  terceroClave: string;
+}
 
 @Injectable()
 export class NominaService implements OnModuleInit {
@@ -496,7 +515,12 @@ export class NominaService implements OnModuleInit {
       : 0;
 
     // Usar el menor entre diasNovedad asignado y diasTrabajados calculados
-    const diasEfectivos = diasTrabajados > 0 ? Math.min(dias, diasTrabajados) : dias;
+    const diasEfectivos = diasTrabajados > 0 ? Math.min(dias, diasTrabajados) : 0;
+    if (diasEfectivos <= 0) {
+      throw new BadRequestException(
+        `El empleado ${empleado.numeroDocumento} no tiene días laborables dentro del período ${periodo.nombre}.`,
+      );
+    }
 
     const salarioDiario = Number(empleado.salarioBase) / 30;
     const salarioDevengado = Math.round(salarioDiario * diasEfectivos * 100) / 100;
@@ -639,12 +663,18 @@ export class NominaService implements OnModuleInit {
       esRecurrente: false,
     });
 
-    // Proteccion del salario (LÃ­mite deducciones recurrentes al 50% devengado neto)
+    // Proteccion del salario (limite de deducciones variables al 50% del neto legal).
+    // El limite debe ajustar tambien los snapshots que luego se contabilizan.
     const subtotalLegales = saludEmpleado + pensionEmpleado + retencionFuente;
-    const maxDeduccionesPermitidas = (totalDevengado - subtotalLegales) * 0.50;
-    if (deduccionesRecurrentes > maxDeduccionesPermitidas && maxDeduccionesPermitidas > 0) {
-      deduccionesRecurrentes = Math.round(maxDeduccionesPermitidas * 100) / 100;
-    }
+    const maxDeduccionesPermitidas = Math.max(
+      0,
+      Math.round((totalDevengado - subtotalLegales) * 0.50 * 100) / 100,
+    );
+    const deduccionesVariables = detallesSnapshots.filter(
+      (detalle) => detalle.tipo === TipoConceptoNomina.DEDUCCION && !!detalle.conceptoId,
+    );
+
+    deduccionesRecurrentes = limitVariableDeductions(deduccionesVariables, maxDeduccionesPermitidas);
 
     const totalDeducciones = Math.round((subtotalLegales + deduccionesRecurrentes) * 100) / 100;
     const netoPagar = Math.max(0, Math.round((totalDevengado - totalDeducciones) * 100) / 100);
@@ -907,49 +937,63 @@ export class NominaService implements OnModuleInit {
       throw new BadRequestException('El perÃ­odo debe estar en estado LIQUIDADA para poder reversarlo.');
     }
 
-    // 1. Reversar asiento de provisiÃ³n
-    if (periodo.asientoProvisionId) {
-      const asientoProvision = await this.asientosContablesService.findOneAsientoConDetalles(periodo.asientoProvisionId);
-      await this.asientosContablesService.anularAsientoNomina({
-        periodoNombre: periodo.nombre,
-        fecha: new Date(), // O la fecha en la que se reversa
-        asientoOriginal: asientoProvision,
-        userId,
-      });
-    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 2. Limpiar liquidaciones y Anular Comprobantes Individuales
-    const prevLiqs = await this.liquidacionRepo.find({ where: { periodoId }, select: ['id', 'comprobanteId'] });
-    if (prevLiqs.length > 0) {
+    try {
+      // 1. Revertir el asiento de provisión dentro de la misma transacción.
+      if (periodo.asientoProvisionId) {
+        const asientoProvision = await this.asientosContablesService.findOneAsientoConDetalles(periodo.asientoProvisionId);
+        await this.asientosContablesService.anularAsientoNomina({
+          periodoNombre: periodo.nombre,
+          fecha: new Date(),
+          asientoOriginal: asientoProvision,
+          userId,
+          queryRunner,
+        });
+      }
+
+      // 2. Anular todos los comprobantes o abortar la reversión completa.
+      const prevLiqs = await queryRunner.manager.find(Liquidacion, {
+        where: { periodoId },
+        select: ['id', 'comprobanteId'],
+      });
       for (const liq of prevLiqs) {
         if (liq.comprobanteId) {
-          try {
-            await this.comprobantesService.anular(liq.comprobanteId, 'Reversión de Liquidación de Nómina', userId);
-          } catch (e) {
-            this.logger.warn(`No se pudo anular el comprobante ${liq.comprobanteId} al reversar: ${e.message}`);
-          }
+          await this.comprobantesService.anular(
+            liq.comprobanteId,
+            'Reversión de Liquidación de Nómina',
+            userId,
+            queryRunner,
+          );
         }
       }
-      const ids = prevLiqs.map(l => l.id);
-      await this.liquidacionDetalleRepo.delete({ liquidacionId: In(ids) });
-      await this.liquidacionRepo.delete({ id: In(ids) });
+
+      if (prevLiqs.length > 0) {
+        const ids = prevLiqs.map((liq) => liq.id);
+        await queryRunner.manager.delete(LiquidacionDetalle, { liquidacionId: In(ids) });
+        await queryRunner.manager.delete(Liquidacion, { id: In(ids) });
+      }
+
+      await queryRunner.manager.delete(NominaJob, { periodoId });
+      await queryRunner.manager.delete(ObligacionNomina, { periodoId });
+      await queryRunner.manager.update(PeriodoNomina, periodoId, {
+        estado: EstadoPeriodoNomina.BORRADOR,
+        totalDevengado: 0,
+        totalDeducciones: 0,
+        totalNeto: 0,
+        totalCostoEmpresa: 0,
+        asientoProvisionId: null,
+      });
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    // Limpiar el job si lo hubiera, para que no interfiera en la siguiente liquidaciÃ³n
-    await this.nominaJobRepo.delete({ periodoId });
-
-    // Limpiar las Obligaciones por Pagar generadas en la liquidaciÃ³n
-    await this.dataSource.getRepository(ObligacionNomina).delete({ periodoId });
-
-    // 3. Volver a BORRADOR
-    await this.periodoRepo.update(periodoId, {
-      estado: EstadoPeriodoNomina.BORRADOR,
-      totalDevengado: 0,
-      totalDeducciones: 0,
-      totalNeto: 0,
-      totalCostoEmpresa: 0,
-      asientoProvisionId: null,
-    });
 
     return {
       message: 'LiquidaciÃ³n reversada exitosamente. El perÃ­odo vuelve a estado BORRADOR.',
@@ -991,147 +1035,6 @@ export class NominaService implements OnModuleInit {
   // -------------------------------------------------------------------------
   //  CALCULOS PRIVADOS
   // -------------------------------------------------------------------------
-
-  private async calcularLiquidacion(
-    empleado: Empleado,
-    periodo: PeriodoNomina,
-    item: any,
-  ): Promise<Liquidacion> {
-    const dias = item.diasTrabajados;
-    const salarioDiario = Number(empleado.salarioBase) / 30;
-
-    const salarioDevengado = Math.round(salarioDiario * dias * 100) / 100;
-
-    const auxilioTransporte =
-      empleado.auxilioTransporte &&
-        Number(empleado.salarioBase) <= 2 * SMMLV_2026
-        ? Math.round((AUXILIO_TRANSPORTE_2026 / 30) * dias * 100) / 100
-        : 0;
-
-    const totalHorasExtras = (item.horasExtras || []).reduce(
-      (s, h) => s + Number(h.valor),
-      0,
-    );
-    const totalBonificaciones = (item.bonificaciones || []).reduce(
-      (s, b) => s + Number(b.valor),
-      0,
-    );
-    const comisiones = item.comisiones || 0;
-
-    const totalDevengado =
-      Math.round(
-        (salarioDevengado +
-          auxilioTransporte +
-          totalHorasExtras +
-          totalBonificaciones +
-          Number(comisiones)) *
-        100,
-      ) / 100;
-
-    let ibcBase = salarioDevengado + totalHorasExtras + Number(comisiones);
-    if (Number(empleado.salarioBase) <= 2 * SMMLV_2026) {
-      ibcBase += auxilioTransporte;
-    }
-    const ibc = Math.round(ibcBase * 100) / 100;
-
-    const saludEmpleado = Math.round(ibc * 0.04 * 100) / 100;
-    const pensionEmpleado = Math.round(ibc * 0.04 * 100) / 100;
-    const retencionFuente = this.calcularRetencionFuente(
-      totalDevengado,
-      saludEmpleado,
-      pensionEmpleado,
-      empleado.salarioIntegral,
-    );
-
-    const otrasDeducciones = item.otrasDeducciones || [];
-    const totalOtrasDeducciones = otrasDeducciones.reduce(
-      (s, d) => s + Number(d.valor),
-      0,
-    );
-
-    const totalDeducciones =
-      Math.round(
-        (saludEmpleado +
-          pensionEmpleado +
-          retencionFuente +
-          totalOtrasDeducciones) *
-        100,
-      ) / 100;
-
-    const netoPagar =
-      Math.round((totalDevengado - totalDeducciones) * 100) / 100;
-
-    const tasasARL = [0, 0.00348, 0.01044, 0.02436, 0.0435, 0.087];
-    const tasaARL = tasasARL[empleado.arlNivelRiesgo] || 0.00348;
-
-    const aplicaSENA = true;
-    const aplicaICBF = true;
-
-    const aportes = [
-      { concepto: 'Salud', valor: Math.round(ibc * 0.085 * 100) / 100 },
-      { concepto: 'Pensión', valor: Math.round(ibc * 0.12 * 100) / 100 },
-      { concepto: 'ARL', valor: Math.round(ibc * tasaARL * 100) / 100 },
-      {
-        concepto: 'Caja Compensación',
-        valor: Math.round(ibc * 0.04 * 100) / 100,
-      },
-      ...(aplicaSENA
-        ? [{ concepto: 'SENA', valor: Math.round(ibc * 0.02 * 100) / 100 }]
-        : []),
-      ...(aplicaICBF
-        ? [{ concepto: 'ICBF', valor: Math.round(ibc * 0.03 * 100) / 100 }]
-        : []),
-    ];
-    const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
-
-    const provisiones = [
-      {
-        concepto: 'Cesantías',
-        valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100,
-      },
-      {
-        concepto: 'Intereses Cesantías',
-        valor: Math.round(((salarioDevengado * dias) / 360) * 0.12 * 100) / 100,
-      },
-      {
-        concepto: 'Prima de Servicios',
-        valor: Math.round(((salarioDevengado * dias) / 360) * 100) / 100,
-      },
-      {
-        concepto: 'Vacaciones',
-        valor:
-          Math.round(((Number(empleado.salarioBase) * dias) / 720) * 100) / 100,
-      },
-    ];
-    const totalProvisiones = provisiones.reduce((s, p) => s + p.valor, 0);
-
-    const liq = this.liquidacionRepo.create({
-      periodoId: periodo.id,
-      empleadoId: empleado.id,
-      diasTrabajados: dias,
-      salarioDevengado,
-      auxilioTransporte,
-      horasExtras: item.horasExtras || [],
-      totalHorasExtras,
-      bonificaciones: item.bonificaciones || [],
-      totalBonificaciones,
-      comisiones: Number(comisiones),
-      totalDevengado,
-      saludEmpleado,
-      pensionEmpleado,
-      retencionFuente,
-      otrasDeducciones,
-      totalDeducciones,
-      netoPagar,
-      ibc,
-      aportesEmpleador: aportes,
-      totalAportes,
-      provisiones,
-      totalProvisiones,
-    });
-
-    return liq;
-  }
 
   private calcularRetencionFuente(
     totalDevengado: number,
@@ -1710,7 +1613,13 @@ export class NominaService implements OnModuleInit {
           liquidacionId: liquidacionesGuardadas.find(l => l.empleadoId === pe.empleadoId)?.id || null,
         });
       } catch (err) {
-        data.push(pe);
+        data.push({
+          ...pe,
+          liquidacionError: err instanceof Error ? err.message : 'No fue posible calcular la liquidación del empleado.',
+          totalDevengado: null,
+          totalDeducciones: null,
+          netoPagar: null,
+        });
       }
     }
 
@@ -1766,10 +1675,6 @@ export class NominaService implements OnModuleInit {
         let diasProporcionales = fechaEfectivaInicio <= fechaEfectivaFin
           ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
           : 0;
-
-        if (diasProporcionales === 0) {
-          diasProporcionales = diasNovedad;
-        }
 
         const maxDias = periodo.tipo === TipoPeriodoNomina.QUINCENAL ? 15 : 30;
         const finalDias = Math.min(diasProporcionales, maxDias);
@@ -2052,7 +1957,7 @@ export class NominaService implements OnModuleInit {
       }
 
       const resolvedAccounts = new Map<string, any>();
-      const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
+        const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
         if (!cuentaId) {
           throw new BadRequestException(`Validacion Contable: Falta configurar cuenta contable para el concepto "${descripcionConcepto}".`);
         }
@@ -2061,12 +1966,19 @@ export class NominaService implements OnModuleInit {
           return resolvedAccounts.get(cacheKey);
         }
         const account = await this.asientosContablesService.obtenerCuentaPorId(cuentaId);
-        if (!account) {
+        if (!account || !account.isActive || !account.aceptaMovimiento) {
           throw new BadRequestException(`Validacion Contable: La cuenta contable configurada para "${descripcionConcepto}" no existe o estÃ¡ inactiva.`);
         }
         resolvedAccounts.set(cacheKey, account);
-        return account;
-      };
+          return account;
+        };
+        const assertDistinctAccounts = (debitAccount: any, creditAccount: any, concepto: string) => {
+          if (debitAccount.id === creditAccount.id) {
+            throw new BadRequestException(
+              `Validacion Contable: La cuenta débito y crédito de "${concepto}" no pueden ser la misma cuenta (${debitAccount.codigo}).`,
+            );
+          }
+        };
 
       // Obtener o crear Tipo de Comprobante NOMINA
       let tipoComprobante = await queryRunner.manager.findOne(TipoComprobante, { where: { codigo: 'NOM' } });
@@ -2083,10 +1995,16 @@ export class NominaService implements OnModuleInit {
       }
 
       for (const l of liquidaciones) {
-        const detailsMap = new Map<string, { cuentaId: string; debito: number; credito: number; descripcion: string; centroCostoId: string | null; terceroId: string | null }>();
-        const addEntry = (cuenta: any, debito: number, credito: number, entidadSSId: string | null = null) => {
+        const detailsMap = new Map<string, DetalleContableNomina>();
+        const addEntry = (
+          cuenta: any,
+          debito: number,
+          credito: number,
+          tercero: TerceroContableNomina = { tipo: 'NINGUNO', id: null },
+        ) => {
           if (!cuenta || !cuenta.id || (debito === 0 && credito === 0)) return;
-          const key = entidadSSId ? `${cuenta.id}-${entidadSSId}` : cuenta.id;
+          const terceroClave = `${tercero.tipo}:${tercero.id || ''}`;
+          const key = `${cuenta.id}|${terceroClave}|${l.empleado?.centroCostoId || ''}`;
           const existing = detailsMap.get(key);
 
           if (existing) {
@@ -2099,10 +2017,20 @@ export class NominaService implements OnModuleInit {
               credito: Math.round(credito * 100) / 100,
               descripcion: `${cuenta.codigo} - ${cuenta.nombre}`,
               centroCostoId: l.empleado?.centroCostoId || null,
-              terceroId: entidadSSId
+              empleadoId: tercero.tipo === 'EMPLEADO' ? tercero.id || undefined : undefined,
+              entidadSSId: tercero.tipo === 'SEGURIDAD_SOCIAL' ? tercero.id || undefined : undefined,
+              terceroClave,
             });
           }
         };
+
+        const empleadoTercero: TerceroContableNomina = {
+          tipo: 'EMPLEADO',
+          id: l.empleadoId,
+        };
+        const seguridadSocialTercero = (id?: string | null): TerceroContableNomina => id
+          ? { tipo: 'SEGURIDAD_SOCIAL', id }
+          : { tipo: 'NINGUNO', id: null };
 
         const area = empleadoAreaMap.get(l.empleadoId) || AreaEmpleado.ADMINISTRATIVA;
         const config = configNominaPorArea[area];
@@ -2111,17 +2039,19 @@ export class NominaService implements OnModuleInit {
         const obligacionLabAccount = await getAccountStrict(config.cajaBanco?.cuentaObligacionesLabId, 'Obligaciones Laborales (Salarios por Pagar)');
 
         const salarioVal = Number(l.salarioDevengado);
-        if (salarioVal > 0) {
-          const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Area ${area})`);
-          addEntry(salarioAccount, salarioVal, 0);
-          addEntry(obligacionLabAccount, 0, salarioVal, l.empleadoId);
+           if (salarioVal > 0) {
+             const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Area ${area})`);
+             assertDistinctAccounts(salarioAccount, obligacionLabAccount, 'Salario');
+             addEntry(salarioAccount, salarioVal, 0, empleadoTercero);
+           addEntry(obligacionLabAccount, 0, salarioVal, empleadoTercero);
         }
 
         const auxTransVal = Number(l.auxilioTransporte);
-        if (auxTransVal > 0) {
-          const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Area ${area})`);
-          addEntry(auxAccount, auxTransVal, 0);
-          addEntry(obligacionLabAccount, 0, auxTransVal, l.empleadoId);
+           if (auxTransVal > 0) {
+             const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Area ${area})`);
+             assertDistinctAccounts(auxAccount, obligacionLabAccount, 'Auxilio de Transporte');
+             addEntry(auxAccount, auxTransVal, 0, empleadoTercero);
+           addEntry(obligacionLabAccount, 0, auxTransVal, empleadoTercero);
         }
 
         const saludVal = Number(l.saludEmpleado);
@@ -2133,9 +2063,10 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoSalud.id]?.cuentaId || conceptoSalud.cuentaContableCredito;
             }
           }
-          const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deduccion Empleado)');
-          addEntry(obligacionLabAccount, saludVal, 0, l.empleadoId);
-          addEntry(saludAccount, 0, saludVal, l.empleado?.epsId);
+           const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deduccion Empleado)');
+           assertDistinctAccounts(obligacionLabAccount, saludAccount, 'Deducción Salud');
+           addEntry(obligacionLabAccount, saludVal, 0, empleadoTercero);
+           addEntry(saludAccount, 0, saludVal, seguridadSocialTercero(l.empleado?.epsId));
         }
 
         const pensionVal = Number(l.pensionEmpleado);
@@ -2147,9 +2078,10 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoPension.id]?.cuentaId || conceptoPension.cuentaContableCredito;
             }
           }
-          const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pension (Deduccion Empleado)');
-          addEntry(obligacionLabAccount, pensionVal, 0, l.empleadoId);
-          addEntry(pensionAccount, 0, pensionVal, l.empleado?.afpId);
+           const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pension (Deduccion Empleado)');
+           assertDistinctAccounts(obligacionLabAccount, pensionAccount, 'Deducción Pensión');
+           addEntry(obligacionLabAccount, pensionVal, 0, empleadoTercero);
+           addEntry(pensionAccount, 0, pensionVal, seguridadSocialTercero(l.empleado?.afpId));
         }
 
         const retefuenteVal = Number(l.retencionFuente);
@@ -2158,11 +2090,12 @@ export class NominaService implements OnModuleInit {
           try {
             retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
           } catch (e) { }
-          if (!retefuenteAccount) {
+           if (!retefuenteAccount) {
             throw new BadRequestException(`Validacion Contable: No se encontro la cuenta 236505 para Retencion en la fuente por Salarios.`);
-          }
-          addEntry(obligacionLabAccount, retefuenteVal, 0, l.empleadoId);
-          addEntry(retefuenteAccount, 0, retefuenteVal);
+           }
+           assertDistinctAccounts(obligacionLabAccount, retefuenteAccount, 'Retención en la Fuente');
+           addEntry(obligacionLabAccount, retefuenteVal, 0, empleadoTercero);
+           addEntry(retefuenteAccount, 0, retefuenteVal, empleadoTercero);
         }
 
         // Conceptos dinamicos
@@ -2175,14 +2108,16 @@ export class NominaService implements OnModuleInit {
           const conceptoReal = await queryRunner.manager.findOne(ConceptoNomina, { where: { id: d.conceptoId! } });
           const nombreConcepto = conceptoReal?.nombre || d.conceptoId;
 
-          if (d.tipo === TipoConceptoNomina.DEVENGADO) {
-            const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
-            addEntry(devAccount, valorVal, 0);
-            addEntry(obligacionLabAccount, 0, valorVal, l.empleadoId);
-          } else {
-            const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deduccion: ${nombreConcepto}`);
-            addEntry(obligacionLabAccount, valorVal, 0, l.empleadoId);
-            addEntry(dedAccount, 0, valorVal);
+           if (d.tipo === TipoConceptoNomina.DEVENGADO) {
+             const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
+             assertDistinctAccounts(devAccount, obligacionLabAccount, `Concepto Devengado: ${nombreConcepto}`);
+             addEntry(devAccount, valorVal, 0, empleadoTercero);
+             addEntry(obligacionLabAccount, 0, valorVal, empleadoTercero);
+           } else {
+             const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deduccion: ${nombreConcepto}`);
+             assertDistinctAccounts(obligacionLabAccount, dedAccount, `Concepto Deducción: ${nombreConcepto}`);
+             addEntry(obligacionLabAccount, valorVal, 0, empleadoTercero);
+             addEntry(dedAccount, 0, valorVal, empleadoTercero);
           }
         }
 
@@ -2198,50 +2133,69 @@ export class NominaService implements OnModuleInit {
           if (apVal <= 0) continue;
 
           let configKey = ssConfigMap[ap.concepto];
-          if (configKey) {
-            let ssItem = config.aportesEmpleador?.[configKey];
+           if (!configKey) {
+             throw new BadRequestException(`Validacion Contable: No existe mapeo para el aporte patronal "${ap.concepto}".`);
+           }
+
+           {
+             let ssItem = config.aportesEmpleador?.[configKey];
 
             if (!ssItem) {
               const oldKey = ap.concepto === 'Salud' ? 'salud' : configKey;
               ssItem = config.seguridadSocial?.[oldKey];
-            }
+           }
 
             const ssGastoAcc = await getAccountStrict(ssItem?.cuentaGastoId, `Gasto Aporte Empleador: ${ap.concepto}`);
-            const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
+             const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
+             assertDistinctAccounts(ssGastoAcc, ssPasivoAcc, `Aporte Empleador: ${ap.concepto}`);
 
             let ssTerceroId: string | null = null;
-            if (ap.concepto === 'Salud') ssTerceroId = l.empleado?.epsId;
-            else if (ap.concepto === 'Pension') ssTerceroId = l.empleado?.afpId;
-            else if (ap.concepto === 'ARL') ssTerceroId = config.empresa?.arlId;
-            else if (ap.concepto === 'Caja Compensacion') ssTerceroId = l.empleado?.ccfId;
+             if (ap.concepto === 'Salud') ssTerceroId = l.empleado?.epsId;
+             else if (ap.concepto === 'Pensión') ssTerceroId = l.empleado?.afpId;
+             else if (ap.concepto === 'ARL') ssTerceroId = config.empresa?.arlId;
+             else if (ap.concepto === 'Caja Compensación') ssTerceroId = l.empleado?.ccfId;
 
-            addEntry(ssGastoAcc, apVal, 0, ssTerceroId);
-            addEntry(ssPasivoAcc, 0, apVal, ssTerceroId);
+             const ssTercero = seguridadSocialTercero(ssTerceroId);
+             addEntry(ssGastoAcc, apVal, 0, ssTercero);
+             addEntry(ssPasivoAcc, 0, apVal, ssTercero);
           }
         }
 
         // Provisiones
         const provisiones = l.provisiones || [];
+        const normalizarConcepto = (valor: string) => valor
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim()
+          .toLowerCase();
         const provConfigMap: Record<string, string> = {
-          'Cesantías': 'cesantias', 'Intereses Cesantías': 'interesesCesantias',
-          'Prima de Servicios': 'prima', 'Vacaciones': 'vacaciones',
+          cesantias: 'cesantias',
+          'intereses cesantias': 'interesesCesantias',
+          'prima de servicios': 'prima',
+          vacaciones: 'vacaciones',
         };
 
         for (const prov of provisiones) {
           const provVal = Number(prov.valor);
           if (provVal <= 0) continue;
-          const configKey = provConfigMap[prov.concepto];
-          if (configKey) {
-            const provItem = config.provisiones?.[configKey as keyof typeof config.provisiones];
-            const provGastoAcc = await getAccountStrict(provItem?.cuentaGastoId, `Gasto Provisión: ${prov.concepto}`);
-            const provPasivoAcc = await getAccountStrict(provItem?.cuentaPasivoId, `Pasivo Provisión: ${prov.concepto}`);
-            addEntry(provGastoAcc, provVal, 0);
-            addEntry(provPasivoAcc, 0, provVal);
+          const configKey = provConfigMap[normalizarConcepto(prov.concepto)];
+          if (!configKey) {
+            throw new BadRequestException(`Validacion Contable: No existe mapeo para la provisión "${prov.concepto}".`);
           }
+
+          const provItem = config.provisiones?.[configKey as keyof typeof config.provisiones];
+          const provGastoAcc = await getAccountStrict(provItem?.cuentaGastoId, `Gasto Provisión: ${prov.concepto}`);
+          const provPasivoAcc = await getAccountStrict(provItem?.cuentaPasivoId, `Pasivo Provisión: ${prov.concepto}`);
+          if (provGastoAcc.id === provPasivoAcc.id) {
+            throw new BadRequestException(`Validacion Contable: El gasto y el pasivo de la provisión "${prov.concepto}" no pueden usar la misma cuenta.`);
+          }
+           addEntry(provGastoAcc, provVal, 0, empleadoTercero);
+           addEntry(provPasivoAcc, 0, provVal, empleadoTercero);
         }
 
         // Verificacion Partida Doble por Empleado
-        const detallesCustom = Array.from(detailsMap.values());
+        const detallesCustom = netFinancialEntries(Array.from(detailsMap.values()));
+
         const sumaDebitos = Math.round(detallesCustom.reduce((s, c) => s + c.debito, 0) * 100) / 100;
         const sumaCreditos = Math.round(detallesCustom.reduce((s, c) => s + c.credito, 0) * 100) / 100;
 
@@ -2260,8 +2214,9 @@ export class NominaService implements OnModuleInit {
             credito: d.credito,
             descripcion: d.descripcion,
             centroCostoId: d.centroCostoId,
-            terceroId: d.terceroId,
-          })),
+             empleadoId: d.empleadoId,
+             entidadSSId: d.entidadSSId,
+           })),
         };
 
         // Generar Comprobante
@@ -2307,6 +2262,3 @@ export class NominaService implements OnModuleInit {
     }
   }
 }
-
-
-

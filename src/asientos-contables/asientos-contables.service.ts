@@ -36,6 +36,7 @@ interface DetalleAsiento {
   descripcion: string;
   clienteId?: string;
   proveedorId?: string;
+  empleadoId?: string;
   centroCostoId?: string;
   baseGravable?: number;
   impuestoId?: string;
@@ -68,7 +69,7 @@ export class AsientosContablesService {
   async findByReferencia(referencia: string) {
     const asientos = await this.asientoRepository.find({
       where: { referencia },
-      relations: ['detalles', 'detalles.cuenta'],
+      relations: ['detalles', 'detalles.cuenta', 'detalles.cliente', 'detalles.proveedor', 'detalles.entidadSS', 'detalles.empleado', 'detalles.centroCosto'],
       order: { createdAt: 'ASC' },
     });
 
@@ -1683,8 +1684,9 @@ export class AsientosContablesService {
         descripcion: detalle.concepto,
         clienteId,
         proveedorId,
-        entidadSSId: detalle.entidadSSId,
-        centroCostoId: detalle.centroCostoId,
+         entidadSSId: detalle.entidadSSId,
+         empleadoId: detalle.empleadoId,
+         centroCostoId: detalle.centroCostoId,
         baseGravable: detalle.baseGravable,
         impuestoId: detalle.impuestoId,
         porcentajeImpuesto: detalle.porcentajeImpuesto,
@@ -1743,8 +1745,9 @@ export class AsientosContablesService {
         credito: detalle.credito,
         descripcion: detalle.descripcion,
         clienteId: detalle.clienteId,
-        proveedorId: detalle.proveedorId,
-        centroCostoId: detalle.centroCostoId,
+         proveedorId: detalle.proveedorId,
+         empleadoId: detalle.empleadoId,
+         centroCostoId: detalle.centroCostoId,
         baseGravable: detalle.baseGravable,
         impuestoId: detalle.impuestoId,
         porcentajeImpuesto: detalle.porcentajeImpuesto,
@@ -2427,12 +2430,16 @@ export class AsientosContablesService {
     fecha: Date;
     asientoOriginal: AsientoContable;
     userId: string;
+    queryRunner?: QueryRunner;
   }): Promise<AsientoContable> {
-    const { periodoNombre, fecha, asientoOriginal, userId } = params;
+    const { periodoNombre, fecha, asientoOriginal, userId, queryRunner: providedQueryRunner } = params;
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const isExternalTransaction = !!providedQueryRunner;
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    if (!isExternalTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       const detalles: DetalleAsiento[] = asientoOriginal.detalles.map((d) => ({
@@ -2454,13 +2461,13 @@ export class AsientosContablesService {
         queryRunner,
       );
 
-      await queryRunner.commitTransaction();
+      if (!isExternalTransaction) await queryRunner.commitTransaction();
       this.logger.log(
         `Asiento ANULACION_NOMINA generado: ${asiento.numero} | ${periodoNombre}`,
       );
       return asiento;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!isExternalTransaction) await queryRunner.rollbackTransaction();
       this.logger.error(
         `Error anulación asiento nómina: ${error.message}`,
         error.stack,
@@ -2469,14 +2476,14 @@ export class AsientosContablesService {
         `Error al anular asiento de nómina: ${error.message}`,
       );
     } finally {
-      await queryRunner.release();
+      if (!isExternalTransaction) await queryRunner.release();
     }
   }
 
   async findOneAsientoConDetalles(id: string): Promise<AsientoContable> {
     const asiento = await this.asientoRepository.findOne({
       where: { id },
-      relations: ['detalles', 'detalles.cuenta'],
+      relations: ['detalles', 'detalles.cuenta', 'detalles.cliente', 'detalles.proveedor', 'detalles.entidadSS', 'detalles.empleado', 'detalles.centroCosto'],
     });
     if (!asiento) {
       throw new Error(`Asiento contable '${id}' no encontrado`);
@@ -2639,7 +2646,7 @@ export class AsientosContablesService {
   ): Promise<AsientoContable> {
     const asientoOriginal = await queryRunner.manager.findOne(AsientoContable, {
       where: { id: asientoId },
-      relations: ['detalles', 'detalles.cuenta'],
+      relations: ['detalles', 'detalles.cuenta', 'detalles.cliente', 'detalles.proveedor', 'detalles.entidadSS', 'detalles.empleado', 'detalles.centroCosto'],
     });
 
     if (!asientoOriginal) {

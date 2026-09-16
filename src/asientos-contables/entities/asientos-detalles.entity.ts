@@ -5,6 +5,7 @@ import { Cliente } from "src/clientes/entities/cliente.entity";
 import { Proveedor } from "src/proveedores/entities/proveedor.entity";
 import { CentroCosto } from "src/nomina/entities/centro-costo.entity";
 import { EntidadSeguridadSocial } from "src/nomina/entities/entidad-seguridad-social.entity";
+import { Empleado } from "src/nomina/entities/empleado.entity";
 import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 
@@ -55,6 +56,13 @@ export class AsientoDetalle {
 
     @Column({ nullable: true })
     entidadSSId: string;
+
+    @ManyToOne(() => Empleado, { nullable: true })
+    @JoinColumn({ name: 'empleadoId' })
+    empleado: Empleado;
+
+    @Column({ nullable: true })
+    empleadoId: string;
 
     @ManyToOne(() => CentroCosto, { nullable: true })
     @JoinColumn({ name: 'centroCostoId' })
