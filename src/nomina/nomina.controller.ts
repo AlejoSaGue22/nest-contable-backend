@@ -62,10 +62,7 @@ export class NominaController {
   }
 
   @Post('empleados/:id/conceptos-recurrentes')
-  createEmpleadoConcepto(
-    @Param('id') id: string,
-    @Body() dto: CreateEmpleadoConceptoDto,
-  ) {
+  createEmpleadoConcepto(@Param('id') id: string, @Body() dto: CreateEmpleadoConceptoDto) {
     return this.nominaService.createEmpleadoConcepto(id, dto);
   }
 
@@ -75,10 +72,7 @@ export class NominaController {
   }
 
   @Patch('empleados/conceptos-recurrentes/:id')
-  updateEmpleadoConcepto(
-    @Param('id') id: string,
-    @Body() dto: Partial<CreateEmpleadoConceptoDto>,
-  ) {
+  updateEmpleadoConcepto(@Param('id') id: string, @Body() dto: Partial<CreateEmpleadoConceptoDto>) {
     return this.nominaService.updateEmpleadoConcepto(id, dto);
   }
 

@@ -623,7 +623,7 @@ export class FacturasVentasService {
           cufe: respuesta.cufe,
           xmlUrl: respuesta.xmlUrl,
           pdfUrl: respuesta.pdfUrl,
-          qrCode: respuesta.qrImageBase64,
+          qrCode: respuesta.qrImageBase64 || respuesta.qrCode,
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: 'FE',
           comprobante: numberFactura,

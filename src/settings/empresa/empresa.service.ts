@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Empresa } from './entities/empresa.entity';
 import { UpdateEmpresaDto } from './dto/update-empresa.dto';
+import { Municipality } from 'src/core/municipalities/entities/municipality.entity';
 
 @Injectable()
 export class EmpresaService implements OnModuleInit {
@@ -11,6 +12,8 @@ export class EmpresaService implements OnModuleInit {
   constructor(
     @InjectRepository(Empresa)
     private readonly empresaRepository: Repository<Empresa>,
+    @InjectRepository(Municipality)
+    private readonly municipalityRepository: Repository<Municipality>,
   ) {}
 
   async onModuleInit() {
@@ -88,7 +91,10 @@ export class EmpresaService implements OnModuleInit {
 
   async getEmpresa() {
     try {
-      const empresa = await this.empresaRepository.findOne({ where: {} });
+      const empresa = await this.empresaRepository.findOne({
+        where: {},
+        relations: { ciudadRel: true },
+      });
       if (!empresa) {
         return this.ensureDefaultCompany();
       }
@@ -100,7 +106,10 @@ export class EmpresaService implements OnModuleInit {
   }
 
   async getEmpresaEntity(): Promise<Empresa> {
-    const empresa = await this.empresaRepository.findOne({ where: {} });
+    const empresa = await this.empresaRepository.findOne({
+      where: {},
+      relations: { ciudadRel: true },
+    });
     if (!empresa) {
       return this.ensureDefaultCompany();
     }
@@ -112,6 +121,14 @@ export class EmpresaService implements OnModuleInit {
       let empresa = await this.empresaRepository.findOne({ where: {} });
       if (!empresa) {
         empresa = await this.ensureDefaultCompany();
+      }
+      if (updateEmpresaDto.ciudad !== undefined && updateEmpresaDto.ciudad !== null && String(updateEmpresaDto.ciudad) !== '') {
+        const ciudadId = Number(updateEmpresaDto.ciudad);
+        const municipio = await this.municipalityRepository.findOne({ where: { id: ciudadId } });
+        if (!municipio) {
+          return { success: false, message: `Municipio con ID ${updateEmpresaDto.ciudad} no encontrado` };
+        }
+        updateEmpresaDto.ciudad = ciudadId;
       }
       this.empresaRepository.merge(empresa, updateEmpresaDto);
       const saved = await this.empresaRepository.save(empresa);

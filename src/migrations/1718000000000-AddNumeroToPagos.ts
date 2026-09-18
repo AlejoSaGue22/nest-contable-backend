@@ -4,9 +4,11 @@ export class AddNumeroToPagos1718000000000 implements MigrationInterface {
   name = 'AddNumeroToPagos1718000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "pagos" ADD "numero" character varying(20) NOT NULL DEFAULT ''`,
-    );
+    if (!(await queryRunner.hasColumn('pagos', 'numero'))) {
+      await queryRunner.query(
+        `ALTER TABLE "pagos" ADD "numero" character varying(20) NOT NULL DEFAULT ''`,
+      );
+    }
 
     // Backfill: assign sequential numbers to existing records
     // COB = cobros (facturaVentaId IS NOT NULL)

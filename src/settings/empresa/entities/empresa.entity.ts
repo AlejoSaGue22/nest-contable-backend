@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { EntidadSeguridadSocial } from '../../../nomina/entities/entidad-seguridad-social.entity';
+import { Municipality } from 'src/core/municipalities/entities/municipality.entity';
 
 @Entity('empresas')
 export class Empresa {
@@ -26,6 +27,17 @@ export class Empresa {
 
   @Column('json', { nullable: true })
   configuracionDian: any;
+
+  /**
+   * Municipio de la sede/establecimiento (relación con tabla local de municipios V2).
+   * Se usa como municipality_code del establishment en los payloads DIAN/Factus.
+   */
+  @ManyToOne(() => Municipality, { nullable: true })
+  @JoinColumn({ name: 'ciudad', referencedColumnName: 'id' })
+  ciudadRel: Municipality;
+
+  @Column({ type: 'int', nullable: true })
+  ciudad: number | null;
 
   @ManyToOne(() => EntidadSeguridadSocial, { nullable: true })
   @JoinColumn({ name: 'arlId' })

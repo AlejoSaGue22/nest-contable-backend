@@ -317,7 +317,7 @@ export class NotasAjusteService {
           cude: respuesta.cude,
           xmlUrl: respuesta.xmlUrl,
           pdfUrl: respuesta.pdfUrl,
-          qrCode: respuesta.qrImageBase64,
+          qrCode: respuesta.qrImageBase64 || respuesta.qrCode,
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND',
           numero: numeroNota,
@@ -424,14 +424,16 @@ export class NotasAjusteService {
       );
 
       if (respuesta.status === 'OK') {
-          const data = nota.tipo === TipoNota.CREDITO ? respuesta.data.credit_note : respuesta.data.debit_note;
+          const data = nota.tipo === TipoNota.CREDITO
+            ? (respuesta.data.credit_note || respuesta.data)
+            : (respuesta.data.debit_note || respuesta.data);
 
           nota.estado = EstadoNota.ACCEPTED;
           nota.estadoDIAN = EstadoDIANNota.ACEPTADA;
           nota.cufe = data.cufe;
           nota.cude = data.cude;
-          nota.xmlUrl = data.qr;
-          nota.pdfUrl = data.qr;
+          nota.xmlUrl = data.links?.public_url || data.qr;
+          nota.pdfUrl = data.links?.public_url || data.qr;
           nota.fechaAceptacionDIAN = data.created_at ? new Date(data.created_at) : new Date();
           
           // Intentar generar asiento si no existe
@@ -682,7 +684,10 @@ export class NotasAjusteService {
       throw new BadRequestException('Esta nota no tiene CUFE o número de documento');
     }
  
-    return await this.factusService.descargarPDFNota(nota.numeroCompleto);
+    return await this.factusService.descargarPDFNota(
+      nota.numeroCompleto,
+      nota.esNotaCredito() ? 'credito' : 'debito',
+    );
   }
  
   /**
@@ -695,7 +700,10 @@ export class NotasAjusteService {
       throw new BadRequestException('Esta nota no tiene CUFE o número de documento');
     }
  
-    return await this.factusService.descargarXMLNota(nota.numeroCompleto);
+    return await this.factusService.descargarXMLNota(
+      nota.numeroCompleto,
+      nota.esNotaCredito() ? 'credito' : 'debito',
+    );
   }
  
   /**

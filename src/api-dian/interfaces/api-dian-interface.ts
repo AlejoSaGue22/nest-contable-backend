@@ -1,13 +1,17 @@
 export interface FacturaDianResponse {
     cufe: string;
+    cude?: string;
     xmlUrl: string;
     pdfUrl: string;
     qrCode: string;
     qrImageBase64: string;
+    publicUrl?: string;
     numeroCompleto: string;
     estado: 'aceptada' | 'rechazada';
     mensaje?: string;
     respuestaCompleta: any;
+    warnings?: string[];
+    errors?: any;
 }
 
 export interface FacturaDianPdfResponse {
@@ -32,54 +36,107 @@ export interface FactusTokenResponse {
     refresh_token: string;
 }
 
-export interface FactusPayload {
-  document: string,
-  numbering_range_id: number,
-  reference_code: string,
-  observation: string,
-  payment_method_code: string,
-  establishment: {
-    name: string,
-    address: string,
-    phone_number: string,
-    email: string,
-    municipality_id: number
-  },
-  customer: {
-    identification: string,
-    dv: string | null,
-    company: string,
-    trade_name: string,
-    names: string,
-    address: string,
-    email: string,
-    phone: string,
-    legal_organization_id: number,
-    tribute_id: number,
-    identification_document_id: number | string,
-    municipality_id: number
-  },
-  items: ItemsFacturaVentaFactus[],
-  allowance_charges: AllowanceChargesFactus[]
+export interface FactusV2PaymentDetail {
+  payment_form: string;
+  payment_method_code: string;
+  reference_code?: string;
+  amount: string;
+  due_date?: string;
 }
 
-export interface ItemsFacturaVentaFactus {
-      code_reference: string,
-      name: string,
-      quantity: number,
-      discount_rate: number,
-      price: number,
-      tax_rate: string,
-      unit_measure_id: number,
-      standard_code_id: number,
-      is_excluded: number,
-      tribute_id: number,
-      withholding_taxes: [
-        {
-          code: string,
-          withholding_tax_rate: number
-        }
-      ]
+export interface FactusV2PrepaymentDetail {
+  reference_code: string;
+  received_date: string;
+  amount: string;
+  note?: string;
+}
+
+export interface FactusV2Tax {
+  code: string;
+  rate: string;
+  is_excluded?: boolean;
+}
+
+export interface FactusV2WithholdingTax {
+  code: string;
+  rate: string;
+}
+
+export interface FactusV2Customer {
+  identification_document_code: string;
+  identification: string;
+  dv?: string | null;
+  legal_organization_code: string;
+  tribute_code?: string;
+  responsibilities?: string[];
+  company?: string;
+  trade_name?: string;
+  names?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  country_code?: string;
+  municipality_code?: string;
+}
+
+export interface FactusV2Item {
+  code_reference: string;
+  name: string;
+  quantity: string;
+  discount_rate?: string;
+  discount_amount?: string;
+  price: string;
+  unit_measure_code: string;
+  standard_code: string;
+  note?: string;
+  taxes: FactusV2Tax[];
+  withholding_taxes?: FactusV2WithholdingTax[];
+}
+
+export interface FactusV2Establishment {
+  name: string;
+  address: string;
+  phone_number: string;
+  email: string;
+  municipality_code: string;
+}
+
+export interface FactusV2BillPayload {
+  reference_code: string;
+  document?: string;
+  numbering_range_id?: number | string;
+  operation_type?: string;
+  send_email?: boolean;
+  observation?: string;
+  created_time?: string;
+  cash_rounding_amount?: string;
+  payment_details: FactusV2PaymentDetail[];
+  prepayment_details?: FactusV2PrepaymentDetail[];
+  establishment?: FactusV2Establishment;
+  customer: FactusV2Customer;
+  items: FactusV2Item[];
+  allowance_charges?: AllowanceChargesFactus[];
+}
+
+export interface FactusV2DocumentResponse<T = Record<string, unknown>> {
+  status: string;
+  message: string;
+  data: T;
+}
+
+export interface FactusV2NotaAjustePayload {
+  reference_code: string;
+  correction_concept_code: string;
+  customization_id?: string;
+  bill_number?: string;
+  numbering_range_id?: number | string;
+  observation?: string;
+  cash_rounding_amount?: string;
+  payment_details: FactusV2PaymentDetail[];
+  establishment?: FactusV2Establishment;
+  customer: FactusV2Customer;
+  items: FactusV2Item[];
+  allowance_charges?: AllowanceChargesFactus[];
 }
 
 export interface AllowanceChargesFactus {

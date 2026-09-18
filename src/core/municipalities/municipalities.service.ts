@@ -2,7 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Municipality } from './entities/municipality.entity';
-import { FactusService } from 'src/api-dian/services/factus.service';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface MunicipalityJsonItem {
+    code: string;
+    name: string;
+    department: {
+        code: string;
+        name: string;
+    };
+}
 
 @Injectable()
 export class MunicipalitiesService {
@@ -11,7 +21,6 @@ export class MunicipalitiesService {
     constructor(
         @InjectRepository(Municipality)
         private readonly municipalityRepository: Repository<Municipality>,
-        private readonly factusService: FactusService,
     ) { }
 
     async findAll(): Promise<Municipality[]> {
@@ -20,29 +29,46 @@ export class MunicipalitiesService {
         });
     }
 
+    async hasIncompleteV2Data(): Promise<boolean> {
+        const incompleteCount = await this.municipalityRepository
+            .createQueryBuilder('municipality')
+            .where('municipality.departmentCode IS NULL')
+            .orWhere('municipality.departmentName IS NULL')
+            .getCount();
+
+        return incompleteCount > 0;
+    }
+
     async syncMunicipalities(): Promise<{ count: number }> {
-        this.logger.log('🔄 Iniciando sincronización de municipios con Factus...');
+        this.logger.log('🔄 Iniciando carga local de municipios V2...');
 
         try {
-            const externalMunicipalities = await this.factusService.obtenerMunicipios();
+            const filePath = path.join(process.cwd(), 'json-municipios.json');
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`Archivo de municipios no encontrado: ${filePath}`);
+            }
 
-            if (!externalMunicipalities || externalMunicipalities.length === 0) {
-                this.logger.warn('⚠️ No se recibieron municipios de la API externa');
+            const content = fs.readFileSync(filePath, 'utf8');
+            const parsed = JSON.parse(content) as { municipalities?: MunicipalityJsonItem[] };
+            const municipalities = parsed.municipalities || [];
+
+            if (municipalities.length === 0) {
+                this.logger.warn('⚠️ El archivo local no contiene municipios');
                 return { count: 0 };
             }
 
-            // Mapear y guardar (upsert)
-            const municipalitiesToSave = externalMunicipalities.map(m => ({
-                id: m.id,
+            const municipalitiesToSave = municipalities.map(m => ({
+                id: Number(m.code),
                 code: m.code,
                 name: m.name,
-                department: m.department
+                department: m.department.name,
+                departmentCode: m.department.code,
+                departmentName: m.department.name,
             }));
 
-            // Usar save para manejar upsert basado en el ID primario
-            await this.municipalityRepository.save(municipalitiesToSave);
+            await this.municipalityRepository.upsert(municipalitiesToSave, ['code']);
 
-            this.logger.log(`✅ Sincronización completada. ${municipalitiesToSave.length} municipios actualizados.`);
+            this.logger.log(`✅ Carga local completada. ${municipalitiesToSave.length} municipios actualizados.`);
             return { count: municipalitiesToSave.length };
 
         } catch (error) {

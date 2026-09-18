@@ -123,8 +123,9 @@ export class AppModule implements OnModuleInit {
 
     // Seed municipios si está vacío
     const municipiosCount = (await this.municipalitiesService.findAll()).length;
-    if (municipiosCount === 0) {
-      console.log('Sincronizando municipios por primera vez...');
+    const municipiosIncompletos = await this.municipalitiesService.hasIncompleteV2Data();
+    if (municipiosCount === 0 || municipiosIncompletos) {
+      console.log('Cargando municipios V2 desde el archivo local...');
       await this.municipalitiesService.syncMunicipalities();
     }
 

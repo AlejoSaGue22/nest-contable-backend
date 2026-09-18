@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   Logger,
@@ -497,19 +497,19 @@ export class NominaService implements OnModuleInit {
     pctSaludEmp: number,
     pctPensionEmp: number,
   ) {
-    // Calcular dÃ­as efectivamente trabajados segÃºn fecha de ingreso y retiro
+    // Calcular di­as efectivamente trabajados segun fecha de ingreso y retiro
     const fechaInicio = new Date(periodo.fechaInicio);
     const fechaFin = new Date(periodo.fechaFin);
     const fechaIngreso = new Date(empleado.fechaIngreso);
     const fechaRetiro = empleado.fechaRetiro ? new Date(empleado.fechaRetiro) : null;
 
-    // Fecha efectiva de inicio: la mayor entre fechaInicio del perÃ­odo y fechaIngreso
+    // Fecha efectiva de inicio: la mayor entre fechaInicio del periodo y fechaIngreso
     const fechaEfectivaInicio = fechaIngreso > fechaInicio ? fechaIngreso : fechaInicio;
 
-    // Fecha efectiva de fin: la menor entre fechaFin del perÃ­odo y fechaRetiro (si existe)
+    // Fecha efectiva de fin: la menor entre fechaFin del periodo y fechaRetiro (si existe)
     const fechaEfectivaFin = fechaRetiro && fechaRetiro <= fechaFin ? fechaRetiro : fechaFin;
 
-    // Calcular dÃ­as efectivamente trabajados
+    // Calcular dias efectivamente trabajados
     const diasTrabajados = fechaEfectivaInicio <= fechaEfectivaFin
       ? Math.ceil((fechaEfectivaFin.getTime() - fechaEfectivaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
       : 0;
@@ -1957,7 +1957,7 @@ export class NominaService implements OnModuleInit {
       }
 
       const resolvedAccounts = new Map<string, any>();
-        const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
+      const getAccountStrict = async (cuentaId: string | null | undefined, descripcionConcepto: string): Promise<any> => {
         if (!cuentaId) {
           throw new BadRequestException(`Validacion Contable: Falta configurar cuenta contable para el concepto "${descripcionConcepto}".`);
         }
@@ -1970,15 +1970,15 @@ export class NominaService implements OnModuleInit {
           throw new BadRequestException(`Validacion Contable: La cuenta contable configurada para "${descripcionConcepto}" no existe o estÃ¡ inactiva.`);
         }
         resolvedAccounts.set(cacheKey, account);
-          return account;
-        };
-        const assertDistinctAccounts = (debitAccount: any, creditAccount: any, concepto: string) => {
-          if (debitAccount.id === creditAccount.id) {
-            throw new BadRequestException(
-              `Validacion Contable: La cuenta débito y crédito de "${concepto}" no pueden ser la misma cuenta (${debitAccount.codigo}).`,
-            );
-          }
-        };
+        return account;
+      };
+      const assertDistinctAccounts = (debitAccount: any, creditAccount: any, concepto: string) => {
+        if (debitAccount.id === creditAccount.id) {
+          throw new BadRequestException(
+            `Validacion Contable: La cuenta débito y crédito de "${concepto}" no pueden ser la misma cuenta (${debitAccount.codigo}).`,
+          );
+        }
+      };
 
       // Obtener o crear Tipo de Comprobante NOMINA
       let tipoComprobante = await queryRunner.manager.findOne(TipoComprobante, { where: { codigo: 'NOM' } });
@@ -2039,19 +2039,19 @@ export class NominaService implements OnModuleInit {
         const obligacionLabAccount = await getAccountStrict(config.cajaBanco?.cuentaObligacionesLabId, 'Obligaciones Laborales (Salarios por Pagar)');
 
         const salarioVal = Number(l.salarioDevengado);
-           if (salarioVal > 0) {
-             const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Area ${area})`);
-             assertDistinctAccounts(salarioAccount, obligacionLabAccount, 'Salario');
-             addEntry(salarioAccount, salarioVal, 0, empleadoTercero);
-           addEntry(obligacionLabAccount, 0, salarioVal, empleadoTercero);
+        if (salarioVal > 0) {
+          const salarioAccount = await getAccountStrict(config.conceptos?.salario?.cuentaId, `Salario (Area ${area})`);
+          assertDistinctAccounts(salarioAccount, obligacionLabAccount, 'Salario');
+          addEntry(salarioAccount, salarioVal, 0, empleadoTercero);
+          addEntry(obligacionLabAccount, 0, salarioVal, empleadoTercero);
         }
 
         const auxTransVal = Number(l.auxilioTransporte);
-           if (auxTransVal > 0) {
-             const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Area ${area})`);
-             assertDistinctAccounts(auxAccount, obligacionLabAccount, 'Auxilio de Transporte');
-             addEntry(auxAccount, auxTransVal, 0, empleadoTercero);
-           addEntry(obligacionLabAccount, 0, auxTransVal, empleadoTercero);
+        if (auxTransVal > 0) {
+          const auxAccount = await getAccountStrict(config.conceptos?.auxilioTransporte?.cuentaId, `Auxilio de Transporte (Area ${area})`);
+          assertDistinctAccounts(auxAccount, obligacionLabAccount, 'Auxilio de Transporte');
+          addEntry(auxAccount, auxTransVal, 0, empleadoTercero);
+          addEntry(obligacionLabAccount, 0, auxTransVal, empleadoTercero);
         }
 
         const saludVal = Number(l.saludEmpleado);
@@ -2063,10 +2063,10 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoSalud.id]?.cuentaId || conceptoSalud.cuentaContableCredito;
             }
           }
-           const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deduccion Empleado)');
-           assertDistinctAccounts(obligacionLabAccount, saludAccount, 'Deducción Salud');
-           addEntry(obligacionLabAccount, saludVal, 0, empleadoTercero);
-           addEntry(saludAccount, 0, saludVal, seguridadSocialTercero(l.empleado?.epsId));
+          const saludAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Salud (Deduccion Empleado)');
+          assertDistinctAccounts(obligacionLabAccount, saludAccount, 'Deducción Salud');
+          addEntry(obligacionLabAccount, saludVal, 0, empleadoTercero);
+          addEntry(saludAccount, 0, saludVal, seguridadSocialTercero(l.empleado?.epsId));
         }
 
         const pensionVal = Number(l.pensionEmpleado);
@@ -2078,10 +2078,10 @@ export class NominaService implements OnModuleInit {
               cuentaPasivoId = config.conceptos?.[conceptoPension.id]?.cuentaId || conceptoPension.cuentaContableCredito;
             }
           }
-           const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pension (Deduccion Empleado)');
-           assertDistinctAccounts(obligacionLabAccount, pensionAccount, 'Deducción Pensión');
-           addEntry(obligacionLabAccount, pensionVal, 0, empleadoTercero);
-           addEntry(pensionAccount, 0, pensionVal, seguridadSocialTercero(l.empleado?.afpId));
+          const pensionAccount = await getAccountStrict(cuentaPasivoId, 'Pasivo Pension (Deduccion Empleado)');
+          assertDistinctAccounts(obligacionLabAccount, pensionAccount, 'Deducción Pensión');
+          addEntry(obligacionLabAccount, pensionVal, 0, empleadoTercero);
+          addEntry(pensionAccount, 0, pensionVal, seguridadSocialTercero(l.empleado?.afpId));
         }
 
         const retefuenteVal = Number(l.retencionFuente);
@@ -2090,12 +2090,12 @@ export class NominaService implements OnModuleInit {
           try {
             retefuenteAccount = await this.asientosContablesService.obtenerCuentaPorCodigo('236505');
           } catch (e) { }
-           if (!retefuenteAccount) {
+          if (!retefuenteAccount) {
             throw new BadRequestException(`Validacion Contable: No se encontro la cuenta 236505 para Retencion en la fuente por Salarios.`);
-           }
-           assertDistinctAccounts(obligacionLabAccount, retefuenteAccount, 'Retención en la Fuente');
-           addEntry(obligacionLabAccount, retefuenteVal, 0, empleadoTercero);
-           addEntry(retefuenteAccount, 0, retefuenteVal, empleadoTercero);
+          }
+          assertDistinctAccounts(obligacionLabAccount, retefuenteAccount, 'Retención en la Fuente');
+          addEntry(obligacionLabAccount, retefuenteVal, 0, empleadoTercero);
+          addEntry(retefuenteAccount, 0, retefuenteVal, empleadoTercero);
         }
 
         // Conceptos dinamicos
@@ -2108,16 +2108,16 @@ export class NominaService implements OnModuleInit {
           const conceptoReal = await queryRunner.manager.findOne(ConceptoNomina, { where: { id: d.conceptoId! } });
           const nombreConcepto = conceptoReal?.nombre || d.conceptoId;
 
-           if (d.tipo === TipoConceptoNomina.DEVENGADO) {
-             const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
-             assertDistinctAccounts(devAccount, obligacionLabAccount, `Concepto Devengado: ${nombreConcepto}`);
-             addEntry(devAccount, valorVal, 0, empleadoTercero);
-             addEntry(obligacionLabAccount, 0, valorVal, empleadoTercero);
-           } else {
-             const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deduccion: ${nombreConcepto}`);
-             assertDistinctAccounts(obligacionLabAccount, dedAccount, `Concepto Deducción: ${nombreConcepto}`);
-             addEntry(obligacionLabAccount, valorVal, 0, empleadoTercero);
-             addEntry(dedAccount, 0, valorVal, empleadoTercero);
+          if (d.tipo === TipoConceptoNomina.DEVENGADO) {
+            const devAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableDebito, `Concepto Devengado: ${nombreConcepto}`);
+            assertDistinctAccounts(devAccount, obligacionLabAccount, `Concepto Devengado: ${nombreConcepto}`);
+            addEntry(devAccount, valorVal, 0, empleadoTercero);
+            addEntry(obligacionLabAccount, 0, valorVal, empleadoTercero);
+          } else {
+            const dedAccount = await getAccountStrict(mappedCuentaId || conceptoReal?.cuentaContableCredito, `Concepto Deduccion: ${nombreConcepto}`);
+            assertDistinctAccounts(obligacionLabAccount, dedAccount, `Concepto Deducción: ${nombreConcepto}`);
+            addEntry(obligacionLabAccount, valorVal, 0, empleadoTercero);
+            addEntry(dedAccount, 0, valorVal, empleadoTercero);
           }
         }
 
@@ -2133,31 +2133,31 @@ export class NominaService implements OnModuleInit {
           if (apVal <= 0) continue;
 
           let configKey = ssConfigMap[ap.concepto];
-           if (!configKey) {
-             throw new BadRequestException(`Validacion Contable: No existe mapeo para el aporte patronal "${ap.concepto}".`);
-           }
+          if (!configKey) {
+            throw new BadRequestException(`Validacion Contable: No existe mapeo para el aporte patronal "${ap.concepto}".`);
+          }
 
-           {
-             let ssItem = config.aportesEmpleador?.[configKey];
+          {
+            let ssItem = config.aportesEmpleador?.[configKey];
 
             if (!ssItem) {
               const oldKey = ap.concepto === 'Salud' ? 'salud' : configKey;
               ssItem = config.seguridadSocial?.[oldKey];
-           }
+            }
 
             const ssGastoAcc = await getAccountStrict(ssItem?.cuentaGastoId, `Gasto Aporte Empleador: ${ap.concepto}`);
-             const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
-             assertDistinctAccounts(ssGastoAcc, ssPasivoAcc, `Aporte Empleador: ${ap.concepto}`);
+            const ssPasivoAcc = await getAccountStrict(ssItem?.cuentaPasivoId, `Pasivo Aporte Empleador: ${ap.concepto}`);
+            assertDistinctAccounts(ssGastoAcc, ssPasivoAcc, `Aporte Empleador: ${ap.concepto}`);
 
             let ssTerceroId: string | null = null;
-             if (ap.concepto === 'Salud') ssTerceroId = l.empleado?.epsId;
-             else if (ap.concepto === 'Pensión') ssTerceroId = l.empleado?.afpId;
-             else if (ap.concepto === 'ARL') ssTerceroId = config.empresa?.arlId;
-             else if (ap.concepto === 'Caja Compensación') ssTerceroId = l.empleado?.ccfId;
+            if (ap.concepto === 'Salud') ssTerceroId = l.empleado?.epsId;
+            else if (ap.concepto === 'Pensión') ssTerceroId = l.empleado?.afpId;
+            else if (ap.concepto === 'ARL') ssTerceroId = config.empresa?.arlId;
+            else if (ap.concepto === 'Caja Compensación') ssTerceroId = l.empleado?.ccfId;
 
-             const ssTercero = seguridadSocialTercero(ssTerceroId);
-             addEntry(ssGastoAcc, apVal, 0, ssTercero);
-             addEntry(ssPasivoAcc, 0, apVal, ssTercero);
+            const ssTercero = seguridadSocialTercero(ssTerceroId);
+            addEntry(ssGastoAcc, apVal, 0, ssTercero);
+            addEntry(ssPasivoAcc, 0, apVal, ssTercero);
           }
         }
 
@@ -2189,8 +2189,8 @@ export class NominaService implements OnModuleInit {
           if (provGastoAcc.id === provPasivoAcc.id) {
             throw new BadRequestException(`Validacion Contable: El gasto y el pasivo de la provisión "${prov.concepto}" no pueden usar la misma cuenta.`);
           }
-           addEntry(provGastoAcc, provVal, 0, empleadoTercero);
-           addEntry(provPasivoAcc, 0, provVal, empleadoTercero);
+          addEntry(provGastoAcc, provVal, 0, empleadoTercero);
+          addEntry(provPasivoAcc, 0, provVal, empleadoTercero);
         }
 
         // Verificacion Partida Doble por Empleado
@@ -2214,9 +2214,9 @@ export class NominaService implements OnModuleInit {
             credito: d.credito,
             descripcion: d.descripcion,
             centroCostoId: d.centroCostoId,
-             empleadoId: d.empleadoId,
-             entidadSSId: d.entidadSSId,
-           })),
+            empleadoId: d.empleadoId,
+            entidadSSId: d.entidadSSId,
+          })),
         };
 
         // Generar Comprobante
