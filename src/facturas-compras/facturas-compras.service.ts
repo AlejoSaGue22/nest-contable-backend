@@ -351,9 +351,9 @@ export class FacturasComprasService {
                                     tipo: 'compra',
                                     cuentaTerceroId,
                                     cuentaAnticipoId,
-                                    monto: app.montoAplicado,
-                                    fecha: gastoGuardado.fecha || new Date(),
-                                    referencia: gastoGuardado.numero || '',
+                                monto: app.montoAplicado,
+                                fecha: this.toDate(gastoGuardado.fecha),
+                                referencia: gastoGuardado.numero || '',
                                     descripcion: `Cruce automático de anticipo ${anticipo.numero} en Compra ${gastoGuardado.numero || ''}`,
                                     terceroId: gastoGuardado.proveedorId,
                                     userId,
@@ -584,10 +584,12 @@ export class FacturasComprasService {
             });
 
 
-            try {
+            // ── Contabilización + cruces + pago automático, TODO en la misma transacción.
+            // Cualquier fallo revierte TODO (rollback total): sin asiento, sin pago,
+            // factura de vuelta a BORRADOR y sin número asignado.
+            {
                 // 1. Contabilizar factura al 100%
                 await this.contabilizacionEngine.contabilizarDocumento('FACTURA_COMPRA', facturaActualizada!.id, userId, queryRunner);
-                this.logger.log(`Asiento contable generado para factura registrada ${numero}`);
 
                 // 2. Generar asientos de cruce para cada anticipo asociado (compras)
                 const aplicacionesActivas = await queryRunner.manager.find(AnticipoAplicacion, {
@@ -635,7 +637,7 @@ export class FacturasComprasService {
                                 cuentaTerceroId,
                                 cuentaAnticipoId,
                                 monto: app.montoAplicado,
-                                fecha: facturaActualizada!.fecha || new Date(),
+                                fecha: this.toDate(facturaActualizada!.fecha),
                                 referencia: facturaActualizada!.numero || '',
                                 descripcion: `Cruce automático de anticipo ${anticipo.numero} en Compra ${facturaActualizada!.numero || ''}`,
                                 terceroId: facturaActualizada!.proveedorId,
@@ -649,17 +651,6 @@ export class FacturasComprasService {
                         this.logger.log(`Asiento de cruce de anticipo (${anticipo.numero}) generado para compra ${facturaActualizada!.numero}`);
                     }
                 }
-            } catch (asientoError) {
-                await queryRunner.manager.update(
-                    FacturaCompra,
-                    { id: facturaActualizada!.id },
-                    {
-                        estado: GastoEstado.ERROR_ASIENTO,
-                        asientoError: asientoError.message,
-                        fechaAsientoError: new Date()
-                    }
-                );
-                this.logger.error(`Error generando asiento para factura registrada ${numero}: ${asientoError.message}`);
             }
 
             // Pago automático si es de contado (dentro de la misma transacción)
@@ -673,9 +664,9 @@ export class FacturasComprasService {
                     await this.pagosService.registrarPago(
                         factura.id,
                         {
-                            monto: pagoMonto,
-                            fecha: factura.fecha ? factura.fecha.toISOString() : new Date().toISOString(),
-                            medioPago,
+                                monto: pagoMonto,
+                                fecha: this.toISOString(factura.fecha),
+                                medioPago,
                             cuentaBancariaId: factura.cuentaBancariaId || undefined,
                             referencia: `Pago automático contado - Compra ${numero}`,
                             notas: 'Pago generado de forma automática al registrar compra de contado.',
@@ -687,15 +678,31 @@ export class FacturasComprasService {
             }
 
             await queryRunner.commitTransaction();
+            this.logger.log(`Factura de compra ${numero} registrada correctamente (asiento + pago)`);
             return await this.findOne(id);
 
         } catch (error) {
+            // Rollback total: sin asiento, sin pago, factura de vuelta a BORRADOR.
             await queryRunner.rollbackTransaction();
             this.logger.error(`Error registrando factura ${id}: ${error.message}`, error.stack);
             throw error;
         } finally {
             await queryRunner.release();
         }
+    }
+
+    /**
+     * Normaliza fechas que pueden llegar como `string` (columnas `date` de
+     * Postgres) o como `Date`. Evita `X.toISOString is not a function`.
+     */
+    private toDate(value: Date | string | null | undefined, fallback: Date = new Date()): Date {
+        if (!value) return fallback;
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? fallback : date;
+    }
+
+    private toISOString(value: Date | string | null | undefined): string {
+        return this.toDate(value).toISOString();
     }
 
     private async generarNumeroGasto(queryRunner: any): Promise<string> {

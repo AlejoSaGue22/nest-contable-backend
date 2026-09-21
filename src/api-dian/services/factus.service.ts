@@ -583,11 +583,11 @@ export class FactusService {
 
             return {
                 cufe: data.cufe,
-                xmlUrl: publicUrl || qr,
-                pdfUrl: publicUrl || qr,
+                xmlUrl: publicUrl,
+                pdfUrl: publicUrl,
                 qrCode: qr,
                 qrImageBase64: qrImage,
-                publicUrl: publicUrl || undefined,
+                publicUrl: publicUrl,
                 numeroCompleto: data.number,
                 estado: 'aceptada',
                 mensaje: warnings.length > 0
@@ -628,8 +628,7 @@ export class FactusService {
 
             const response = await firstValueFrom(
                 this.httpService.post(
-                    `${this.apiUrl}/v2/credit-notes/validate`,
-                    payload,
+                    `${this.apiUrl}/v2/credit-notes/validate`, payload,
                     {
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -643,6 +642,7 @@ export class FactusService {
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
+            console.log(response.data);
             return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito');
 
         } catch (error) {
@@ -786,29 +786,29 @@ export class FactusService {
         const status: string = responseData?.status || '';
         const data: any = responseData?.data || {};
         const nota: any = tipo === 'credito' ? data.credit_note : data.debit_note;
-        const warnings = this.extraerAdvertenciasDian(nota?.errors || data?.errors);
+        const warnings = this.extraerAdvertenciasDian(data?.errors || []);
 
-        if (status === 'Created' && nota?.is_validated !== false && nota?.number) {
-            const qr: string = nota?.links?.qr || nota?.qr || '';
-            const publicUrl: string = nota?.links?.public_url || '';
-            const qrImage: string = nota?.qr_image || '';
+        if (status === 'Created' && data?.is_validated !== false && data?.number) {
+            const qr: string = data?.links?.qr || data?.qr || '';
+            const publicUrl: string = data?.links?.public_url || '';
+            const qrImage: string = data?.qr || '';
 
             return {
-                cufe: nota.cufe || '',
-                cude: nota.cude || '',
-                xmlUrl: publicUrl || qr,
-                pdfUrl: publicUrl || qr,
+                cufe: data.bill.cufe || '',
+                cude: data.cude || '',
+                xmlUrl: publicUrl,
+                pdfUrl: publicUrl,
                 qrCode: qr,
                 qrImageBase64: qrImage,
                 publicUrl: publicUrl || undefined,
-                numeroCompleto: nota.number,
+                numeroCompleto: data.number,
                 estado: 'aceptada',
                 mensaje: warnings.length > 0
                     ? `${responseData.message} | Advertencias DIAN: ${warnings.join('; ')}`
                     : responseData.message,
                 respuestaCompleta: responseData,
                 warnings,
-                errors: nota?.errors || data?.errors || {},
+                errors: data?.errors || {},
             };
         }
 
@@ -824,7 +824,7 @@ export class FactusService {
             mensaje: responseData.message || 'Nota rechazada',
             respuestaCompleta: responseData,
             warnings,
-            errors: nota?.errors || data?.errors || responseData?.errors || {},
+            errors: data?.errors || {},
         };
     }
 

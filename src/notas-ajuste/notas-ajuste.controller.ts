@@ -78,9 +78,7 @@ export class NotasAjusteController {
     return toNotaAjusteResponse(nota, 'Nota Débito creada en borrador. Use /emitir para enviar a DIAN.');
   }
 
-  /**
-   * Listar solo Notas Débito
-   */
+
   @Get('debito')
   @Permissions(Permission.INVOICE_READ)
   async listarNotasDebito(@Query() filtros: NotasAjusteFilterDto) {
