@@ -86,7 +86,7 @@ export class FacturasVentasService {
 
       if (createFacturasVentaDto.metodoPago) {
         const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
-          where: { id: Number(createFacturasVentaDto.metodoPago) },
+          where: { codigo: createFacturasVentaDto.metodoPago },
         });
 
         if (!metodoPago) {
@@ -247,15 +247,15 @@ export class FacturasVentasService {
           });
 
           const config = await this.parametrizacionService.getConfiguracion();
-          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId ||
             (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
 
           for (const app of aplicacionesActivas) {
             const anticipo = app.anticipo;
-            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || 
-              clientConCuenta?.cuentaContableId || 
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id ||
+              clientConCuenta?.cuentaContableId ||
               cuentaTerceroDefaultId;
-            const cuentaAnticipoId = anticipo.cuentaContableId || 
+            const cuentaAnticipoId = anticipo.cuentaContableId ||
               (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
 
             const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
@@ -623,7 +623,7 @@ export class FacturasVentasService {
           cufe: respuesta.cufe,
           xmlUrl: respuesta.xmlUrl,
           pdfUrl: respuesta.pdfUrl,
-          qrCode: respuesta.qrImageBase64 || respuesta.qrCode,
+          qrCode: respuesta.qrCode,
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: 'FE',
           comprobante: numberFactura,
@@ -700,16 +700,12 @@ export class FacturasVentasService {
           });
 
           const config = await this.parametrizacionService.getConfiguracion();
-          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
-            (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
 
           for (const app of aplicacionesActivas) {
             const anticipo = app.anticipo;
-            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || 
-              clientConCuenta?.cuentaContableId || 
-              cuentaTerceroDefaultId;
-            const cuentaAnticipoId = anticipo.cuentaContableId || 
-              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || clientConCuenta?.cuentaContableId || cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId || (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
 
             const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
               {
@@ -731,9 +727,7 @@ export class FacturasVentasService {
           }
 
           await queryRunnerAsiento.commitTransaction();
-          this.logger.log(
-            `Asiento contable de factura y comprobante(s) de cruce generados para FE ${facturaParaAsiento.comprobante_completo}`,
-          );
+          this.logger.log(`Asiento contable de factura y comprobante(s) de cruce generados para FE ${facturaParaAsiento.comprobante_completo}`);
         } catch (asientoError) {
           await queryRunnerAsiento.rollbackTransaction();
           await this.facturaVentaRepository.update({ id }, {
@@ -757,21 +751,34 @@ export class FacturasVentasService {
                 ? MedioPago.BANCO
                 : MedioPago.CAJA;
 
-              await this.pagosService.registrarCobro(
-                factura.id,
-                {
-                  monto: cobroMonto,
-                  fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
-                  medioPago,
-                  cuentaBancariaId: factura.cuentaBancariaId || undefined,
-                  referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
-                  notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
-                },
-                userId,
-              );
+              const qrCobro = this.dataSource.createQueryRunner();
+              await qrCobro.connect();
+              await qrCobro.startTransaction();
+              try {
+                await this.pagosService.registrarCobro(
+                  factura.id,
+                  {
+                    monto: cobroMonto,
+                    fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+                    medioPago,
+                    cuentaBancariaId: factura.cuentaBancariaId || undefined,
+                    referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
+                    notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
+                  },
+                  userId,
+                  qrCobro,
+                );
+                await qrCobro.commitTransaction();
+              } catch (qrError) {
+                await qrCobro.rollbackTransaction();
+                throw qrError;
+              } finally {
+                await qrCobro.release();
+              }
               this.logger.log(`Cobro automático registrado para factura electrónica ${factura.comprobante_completo}`);
             }
           } catch (cobroError) {
+            console.log('cobroError', cobroError);
             this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
           }
         }
@@ -804,9 +811,7 @@ export class FacturasVentasService {
         },
       );
       this.logger.error(`Error emitiendo factura: ${error.message}`);
-      throw new InternalServerErrorException(
-        `Error al emitir factura electrónica: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Error al emitir factura electrónica: ${error.message}`);
     }
   }
 
@@ -925,7 +930,7 @@ export class FacturasVentasService {
         );
 
         const config = await this.parametrizacionService.getConfiguracion();
-        const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || 
+        const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId ||
           (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
 
         for (const app of aplicacionesBorrador) {
@@ -933,10 +938,10 @@ export class FacturasVentasService {
             where: { id: app.anticipoId },
           });
           if (anticipo) {
-            const cuentaTerceroId = updatedInvoice.client?.cuentaContable?.id || 
-              updatedInvoice.client?.cuentaContableId || 
+            const cuentaTerceroId = updatedInvoice.client?.cuentaContable?.id ||
+              updatedInvoice.client?.cuentaContableId ||
               cuentaTerceroDefaultId;
-            const cuentaAnticipoId = anticipo.cuentaContableId || 
+            const cuentaAnticipoId = anticipo.cuentaContableId ||
               (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
 
             const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
@@ -1095,7 +1100,7 @@ export class FacturasVentasService {
         if (anticipo) {
           const nuevoSaldo = MathUtil.sum(anticipo.saldoDisponible, app.montoAplicado);
           const nuevoEstado = nuevoSaldo === anticipo.montoOriginal ? AnticipoEstado.PENDIENTE : AnticipoEstado.PARCIAL;
-          
+
           await queryRunner.manager.update(Anticipo, { id: anticipo.id }, {
             saldoDisponible: nuevoSaldo,
             estado: nuevoEstado

@@ -17,10 +17,10 @@ import { Response } from 'express';
 export class NotasAjusteController {
   constructor(
     private readonly notasAjusteService: NotasAjusteService
-  ) {}
- 
+  ) { }
+
   // ========== NOTAS CRÉDITO ==========
- 
+
   /**
    * Crear Nota Crédito
    * 
@@ -34,15 +34,12 @@ export class NotasAjusteController {
    */
   @Post('credito')
   @Permissions(Permission.INVOICE_CREATE)
-  async crearNotaCredito(
-    @Body() createDto: CreateNotaCreditoDto,
-    @Req() req: AuthenticatedRequest
-  ) {
+  async crearNotaCredito(@Body() createDto: CreateNotaCreditoDto, @Req() req: AuthenticatedRequest) {
     const nota = await this.notasAjusteService.crearNotaCredito(createDto, req.user.sub);
- 
+
     return toNotaAjusteResponse(nota, 'Nota Crédito creada en borrador. Use /emitir para enviar a DIAN.');
   }
- 
+
   /**
    * Listar solo Notas Crédito
    */
@@ -51,7 +48,7 @@ export class NotasAjusteController {
   async listarNotasCredito(@Query() filtros: NotasAjusteFilterDto) {
     filtros.tipo = 'credito' as any;
     const result = await this.notasAjusteService.findAll(filtros);
-    
+
     return {
       success: true,
       message: 'Notas Crédito obtenidas',
@@ -59,9 +56,9 @@ export class NotasAjusteController {
       meta: result.meta
     };
   }
- 
+
   // ========== NOTAS DÉBITO ==========
- 
+
   /**
    * Crear Nota Débito
    * 
@@ -75,21 +72,12 @@ export class NotasAjusteController {
    */
   @Post('debito')
   @Permissions(Permission.INVOICE_CREATE)
-  async crearNotaDebito(
-    @Body() createDto: CreateNotaDebitoDto,
-    @Req() req: AuthenticatedRequest
-  ) {
-    const nota = await this.notasAjusteService.crearNotaDebito(
-      createDto,
-      req.user.sub
-    );
- 
-    return toNotaAjusteResponse(
-      nota,
-      'Nota Débito creada en borrador. Use /emitir para enviar a DIAN.'
-    );
+  async crearNotaDebito(@Body() createDto: CreateNotaDebitoDto, @Req() req: AuthenticatedRequest) {
+    const nota = await this.notasAjusteService.crearNotaDebito(createDto, req.user.sub);
+
+    return toNotaAjusteResponse(nota, 'Nota Débito creada en borrador. Use /emitir para enviar a DIAN.');
   }
- 
+
   /**
    * Listar solo Notas Débito
    */
@@ -98,7 +86,7 @@ export class NotasAjusteController {
   async listarNotasDebito(@Query() filtros: NotasAjusteFilterDto) {
     filtros.tipo = 'debito' as any;
     const result = await this.notasAjusteService.findAll(filtros);
-    
+
     return {
       success: true,
       message: 'Notas Débito obtenidas',
@@ -106,9 +94,9 @@ export class NotasAjusteController {
       meta: result.meta
     };
   }
- 
+
   // ========== OPERACIONES GENERALES ==========
- 
+
   /**
    * Listar todas las notas de ajuste
    * 
@@ -121,7 +109,7 @@ export class NotasAjusteController {
   @Permissions(Permission.INVOICE_READ)
   async findAll(@Query() filtros: NotasAjusteFilterDto) {
     const result = await this.notasAjusteService.findAll(filtros);
-    
+
     return {
       success: true,
       message: 'Notas de ajuste obtenidas',
@@ -129,7 +117,7 @@ export class NotasAjusteController {
       meta: result.meta
     };
   }
- 
+
   /**
    * Obtener nota de ajuste por ID
    */
@@ -139,7 +127,7 @@ export class NotasAjusteController {
     const nota = await this.notasAjusteService.findOne(id);
     return toNotaAjusteResponse(nota, 'Nota de ajuste obtenida');
   }
- 
+
   /**
    * Emitir nota de ajuste (enviar a DIAN)
    * 
@@ -157,7 +145,7 @@ export class NotasAjusteController {
   @HttpCode(HttpStatus.OK)
   async emitir(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const nota = await this.notasAjusteService.emitir(id, req.user.sub);
- 
+
     let mensaje: string;
     if (nota.estadoDIAN === 'aceptada') {
       mensaje = `✅ ${nota.tipo === 'credito' ? 'Nota Crédito' : 'Nota Débito'} aceptada por DIAN. CUFE: ${nota.cufe}`;
@@ -166,7 +154,7 @@ export class NotasAjusteController {
     } else {
       mensaje = '⏳ Nota enviada a DIAN, esperando validación...';
     }
- 
+
     return toNotaAjusteResponse(nota, mensaje);
   }
 
@@ -192,7 +180,7 @@ export class NotasAjusteController {
     return toNotaAjusteResponse(nota, 'Asiento contable generado exitosamente');
   }
 
- 
+
   /**
    * Actualizar nota (solo borrador)
    */
@@ -202,7 +190,7 @@ export class NotasAjusteController {
     const nota = await this.notasAjusteService.update(id, updateDto);
     return toNotaAjusteResponse(nota, 'Nota actualizada exitosamente');
   }
- 
+
   /**
    * Anular nota de ajuste
    * 
@@ -229,7 +217,7 @@ export class NotasAjusteController {
   }
 
   // ========== CONSULTAS ESPECIALES ==========
- 
+
   /**
    * Obtener notas de una factura específica
    * 
@@ -242,7 +230,7 @@ export class NotasAjusteController {
   async obtenerNotasPorFactura(@Param('facturaId') facturaId: string) {
     const notas = await this.notasAjusteService.obtenerNotasPorFactura(facturaId);
     const impacto = await this.notasAjusteService.calcularImpactoEnFactura(facturaId);
- 
+
     return {
       success: true,
       message: 'Notas de la factura obtenidas',
@@ -261,7 +249,7 @@ export class NotasAjusteController {
       }
     };
   }
- 
+
   /**
    * Calcular impacto de notas en una factura
    * 
@@ -271,16 +259,16 @@ export class NotasAjusteController {
   @Permissions(Permission.INVOICE_READ)
   async calcularImpacto(@Param('facturaId') facturaId: string) {
     const impacto = await this.notasAjusteService.calcularImpactoEnFactura(facturaId);
- 
+
     return {
       success: true,
       message: 'Impacto calculado',
       data: impacto
     };
   }
- 
+
   // ========== DESCARGAS ==========
- 
+
   /**
    * Descargar PDF de nota de ajuste
    */
@@ -288,11 +276,11 @@ export class NotasAjusteController {
   @Permissions(Permission.INVOICE_READ)
   async descargarPDF(@Param('id') id: string, @Res() res: Response) {
     const nota = await this.notasAjusteService.findOne(id);
-    
+
     if (!nota.pdfUrl) {
       throw new BadRequestException('Esta nota no tiene PDF generado');
     }
-    
+
     const { buffer, fileName } = await this.notasAjusteService.descargarPDF(id);
 
     res.set({
@@ -302,7 +290,7 @@ export class NotasAjusteController {
     });
     res.end(buffer);
   }
- 
+
   /**
    * Descargar XML de nota de ajuste
    */
@@ -310,13 +298,13 @@ export class NotasAjusteController {
   @Permissions(Permission.INVOICE_READ)
   async descargarXML(@Param('id') id: string, @Res() res: Response) {
     const nota = await this.notasAjusteService.findOne(id);
- 
+
     if (!nota.xmlUrl) {
       throw new BadRequestException('Esta nota no tiene XML generado');
     }
 
     const { buffer, fileName } = await this.notasAjusteService.descargarXML(id);
- 
+
     res.set({
       'Content-Type': 'application/xml',
       'Content-Disposition': `attachment; filename=${fileName}.xml`,
@@ -324,9 +312,9 @@ export class NotasAjusteController {
     });
     res.end(buffer);
   }
- 
+
   // ========== ESTADÍSTICAS ==========
- 
+
   /**
    * Estadísticas de notas de ajuste
    * 
@@ -344,13 +332,13 @@ export class NotasAjusteController {
       fechaFin,
       limit: 1000
     };
- 
+
     const result = await this.notasAjusteService.findAll(filtros);
     const notas = result.data;
- 
+
     const notasCredito = notas.filter(n => n.tipo === 'credito');
     const notasDebito = notas.filter(n => n.tipo === 'debito');
- 
+
     return {
       success: true,
       message: 'Estadísticas obtenidas',

@@ -1,17 +1,17 @@
 export interface FacturaDianResponse {
-    cufe: string;
-    cude?: string;
-    xmlUrl: string;
-    pdfUrl: string;
-    qrCode: string;
-    qrImageBase64: string;
-    publicUrl?: string;
-    numeroCompleto: string;
-    estado: 'aceptada' | 'rechazada';
-    mensaje?: string;
-    respuestaCompleta: any;
-    warnings?: string[];
-    errors?: any;
+  cufe: string;
+  cude?: string;
+  xmlUrl: string;
+  pdfUrl: string;
+  qrCode: string;
+  qrImageBase64: string;
+  publicUrl?: string;
+  numeroCompleto: string;
+  estado: 'aceptada' | 'rechazada';
+  mensaje?: string;
+  respuestaCompleta: any;
+  warnings?: string[];
+  errors?: any;
 }
 
 export interface FacturaDianPdfResponse {
@@ -25,15 +25,15 @@ export interface FacturaDianPdfResponse {
 }
 
 export interface filtroMunicipios {
-    departamento?: string;
-    nombre?: string;
+  departamento?: string;
+  nombre?: string;
 }
 
 export interface FactusTokenResponse {
-    token_type: string;
-    expires_in: number;
-    access_token: string;
-    refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  access_token: string;
+  refresh_token: string;
 }
 
 export interface FactusV2PaymentDetail {
@@ -146,4 +146,4 @@ export interface AllowanceChargesFactus {
   base_amount: string,
   amount: string
 }
-  
+

@@ -13,18 +13,18 @@ export class CxpService {
   constructor(
     @InjectRepository(FacturaCompra)
     private readonly facturaCompraRepository: Repository<FacturaCompra>,
-  ) {}
+  ) { }
 
-   /**
-    * Lista todas las cuentas por pagar activas (saldo > 0).
-    * Filtra solo facturas de compra a CRÉDITO con paymentStatus != PAID.
-   */
+  /**
+   * Lista todas las cuentas por pagar activas (saldo > 0).
+   * Filtra solo facturas de compra a CRÉDITO con paymentStatus != PAID.
+  */
   async findAll(filtros?: CxFiltros): Promise<{ items: CxpItem[]; resumen: CxpResumen, meta: { page: number, total: number, totalPages: number } }> {
     try {
       const queryBuilder = this.facturaCompraRepository
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.proveedor', 'proveedor')
-        .where('f.formaPago = :formaPago', { formaPago: 'CREDITO' })
+        // .where('f.formaPago = :formaPago', { formaPago: 'CREDITO' })
         .andWhere('f.paymentStatus IN (:...estados)', {
           estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE],
         })
@@ -62,18 +62,18 @@ export class CxpService {
       const items: CxpItem[] = facturas.map(f => {
         const diasVencida = this.calcularDiasVencida(f.fechaVencimiento, hoy);
         return {
-          facturaId:        f.id,
-          numeroFactura:    f.numero,
-          proveedorId:      f.proveedorId,
-          proveedorNombre:  f.proveedor.razonSocial || `${f.proveedor.nombre} ${f.proveedor.apellido}`,
-          fechaEmision:     f.fecha,
+          facturaId: f.id,
+          numeroFactura: f.numero,
+          proveedorId: f.proveedorId,
+          proveedorNombre: f.proveedor.razonSocial || `${f.proveedor.nombre} ${f.proveedor.apellido}`,
+          fechaEmision: f.fecha,
           fechaVencimiento: f.fechaVencimiento,
           diasVencida,
-          total:            f.total,
-          totalPagado:      f.totalPagado,
-          saldoPendiente:   f.saldoPendiente,
-          paymentStatus:    f.paymentStatus,
-          agingBucket:      this.calcularAgingBucket(diasVencida),
+          total: f.total,
+          totalPagado: f.totalPagado,
+          saldoPendiente: f.saldoPendiente,
+          paymentStatus: f.paymentStatus,
+          agingBucket: this.calcularAgingBucket(diasVencida),
         };
       });
 
@@ -98,19 +98,19 @@ export class CxpService {
     for (const item of items) {
       if (!mapaProveedores.has(item.proveedorId)) {
         mapaProveedores.set(item.proveedorId, {
-          proveedorId:     item.proveedorId,
+          proveedorId: item.proveedorId,
           proveedorNombre: item.proveedorNombre,
-          porVencer:       0,
-          de1a30:          0,
-          de31a60:         0,
-          de61a90:         0,
-          mas90:           0,
-          total:           0,
+          porVencer: 0,
+          de1a30: 0,
+          de31a60: 0,
+          de61a90: 0,
+          mas90: 0,
+          total: 0,
         });
       }
       const entry = mapaProveedores.get(item.proveedorId);
       entry[item.agingBucket] += item.saldoPendiente;
-      entry.total             += item.saldoPendiente;
+      entry.total += item.saldoPendiente;
     }
 
     const porProveedor = Array.from(mapaProveedores.values());
@@ -118,11 +118,11 @@ export class CxpService {
     const totales = porProveedor.reduce(
       (acc, p) => ({
         porVencer: acc.porVencer + p.porVencer,
-        de1a30:    acc.de1a30   + p.de1a30,
-        de31a60:   acc.de31a60  + p.de31a60,
-        de61a90:   acc.de61a90  + p.de61a90,
-        mas90:     acc.mas90    + p.mas90,
-        total:     acc.total    + p.total,
+        de1a30: acc.de1a30 + p.de1a30,
+        de31a60: acc.de31a60 + p.de31a60,
+        de61a90: acc.de61a90 + p.de61a90,
+        mas90: acc.mas90 + p.mas90,
+        total: acc.total + p.total,
       }),
       { porVencer: 0, de1a30: 0, de31a60: 0, de61a90: 0, mas90: 0, total: 0 },
     );
@@ -132,10 +132,10 @@ export class CxpService {
 
   /** Estado de cuenta de un proveedor específico */
   async estadoCuentaProveedor(proveedorId: string): Promise<{
-    proveedorId:  string;
-    totalDeuda:   number;
-    facturas:     CxpItem[];
-    aging:        AgingBucket;
+    proveedorId: string;
+    totalDeuda: number;
+    facturas: CxpItem[];
+    aging: AgingBucket;
   }> {
     const { items } = await this.findAll({ proveedorId });
 
@@ -144,7 +144,7 @@ export class CxpService {
 
     for (const item of items) {
       aging[item.agingBucket] += item.saldoPendiente;
-      totalDeuda              += item.saldoPendiente;
+      totalDeuda += item.saldoPendiente;
     }
 
     return { proveedorId, totalDeuda, facturas: items, aging };
@@ -158,7 +158,7 @@ export class CxpService {
   }
 
   private calcularDiasVencida(fechaVencimiento: Date | null, hoy: Date = new Date()): number {
-     if (!fechaVencimiento) return 0;
+    if (!fechaVencimiento) return 0;
 
     const venc = this.parseFechaLocal(fechaVencimiento.toString());
     const actual = new Date(hoy);
@@ -171,7 +171,7 @@ export class CxpService {
   }
 
   private calcularAgingBucket(diasVencida: number): keyof AgingBucket {
-    if (diasVencida <= 0)  return 'porVencer';
+    if (diasVencida <= 0) return 'porVencer';
     if (diasVencida <= 30) return 'de1a30';
     if (diasVencida <= 60) return 'de31a60';
     if (diasVencida <= 90) return 'de61a90';
@@ -181,11 +181,11 @@ export class CxpService {
   private calcularResumen(items: CxpItem[]): CxpResumen {
     return items.reduce(
       (acc, item) => ({
-        totalPorPagar:     acc.totalPorPagar     + item.saldoPendiente,
-        porVencer:         acc.porVencer         + (item.diasVencida <= 0 ? item.saldoPendiente : 0),
-        vencida:           acc.vencida           + (item.diasVencida >  0 ? item.saldoPendiente : 0),
+        totalPorPagar: acc.totalPorPagar + item.saldoPendiente,
+        porVencer: acc.porVencer + (item.diasVencida <= 0 ? item.saldoPendiente : 0),
+        vencida: acc.vencida + (item.diasVencida > 0 ? item.saldoPendiente : 0),
         cantidadPorVencer: acc.cantidadPorVencer + (item.diasVencida <= 0 ? 1 : 0),
-        cantidadVencida:   acc.cantidadVencida   + (item.diasVencida >  0 ? 1 : 0),
+        cantidadVencida: acc.cantidadVencida + (item.diasVencida > 0 ? 1 : 0),
       }),
       { totalPorPagar: 0, porVencer: 0, vencida: 0, cantidadPorVencer: 0, cantidadVencida: 0 },
     );

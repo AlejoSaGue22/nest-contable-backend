@@ -15,19 +15,19 @@ export class CxcService {
   constructor(
     @InjectRepository(FacturasVenta)
     private readonly facturaVentaRepository: Repository<FacturasVenta>,
-  ) {}
+  ) { }
 
   /**
    * Lista todas las cuentas por cobrar activas (saldo > 0).
    * Filtra solo facturas a CRÉDITO con paymentStatus != PAID.
    */
   async findAll(filtros?: CxFiltros)
-                : Promise<{ items: CxcItem[]; resumen: CxcResumen, meta: { page: number, total: number, totalPages: number } }> {
+    : Promise<{ items: CxcItem[]; resumen: CxcResumen, meta: { page: number, total: number, totalPages: number } }> {
     try {
       const queryBuilder = this.facturaVentaRepository
         .createQueryBuilder('f')
         .leftJoinAndSelect('f.client', 'client')
-        .where('f.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
+        //  .where('f.formaPago = :formaPago', { formaPago: FormaPago.CREDITO })
         .andWhere('f.paymentStatus IN (:...estados)', {
           estados: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE],
         })
@@ -66,18 +66,18 @@ export class CxcService {
         const diasVencida = this.calcularDiasVencida(f.fechaVencimiento, hoy);
 
         return {
-            facturaId:        f.id,
-            numeroFactura:    f.comprobante_completo,
-            clienteId:        f.clientId,
-            clienteNombre:    f.client.razonSocial || f.client?.nombre + ' ' + f.client?.apellido,
-            fechaEmision:     f.fecha,
-            fechaVencimiento: f.fechaVencimiento, 
-            diasVencida,
-            total:            f.total,
-            totalPagado:      f.totalPagado,
-            saldoPendiente:   f.saldoPendiente,
-            paymentStatus:    f.paymentStatus || PaymentStatus.PENDING,
-            agingBucket:      this.calcularAgingBucket(diasVencida),
+          facturaId: f.id,
+          numeroFactura: f.comprobante_completo,
+          clienteId: f.clientId,
+          clienteNombre: f.client.razonSocial || f.client?.nombre + ' ' + f.client?.apellido,
+          fechaEmision: f.fecha,
+          fechaVencimiento: f.fechaVencimiento,
+          diasVencida,
+          total: f.total,
+          totalPagado: f.totalPagado,
+          saldoPendiente: f.saldoPendiente,
+          paymentStatus: f.paymentStatus || PaymentStatus.PENDING,
+          agingBucket: this.calcularAgingBucket(diasVencida),
         };
       });
 
@@ -97,14 +97,14 @@ export class CxcService {
    */
   async aging(): Promise<{
     porCliente: Array<{
-      clienteId:    string;
+      clienteId: string;
       clienteNombre: string;
-      porVencer:    number;
-      de1a30:       number;
-      de31a60:      number;
-      de61a90:      number;
-      mas90:        number;
-      total:        number;
+      porVencer: number;
+      de1a30: number;
+      de31a60: number;
+      de61a90: number;
+      mas90: number;
+      total: number;
     }>;
     totales: AgingBucket & { total: number };
   }> {
@@ -118,19 +118,19 @@ export class CxcService {
     for (const item of items) {
       if (!mapaClientes.has(item.clienteId)) {
         mapaClientes.set(item.clienteId, {
-          clienteId:     item.clienteId,
+          clienteId: item.clienteId,
           clienteNombre: item.clienteNombre,
-          porVencer:     0,
-          de1a30:        0,
-          de31a60:       0,
-          de61a90:       0,
-          mas90:         0,
-          total:         0,
+          porVencer: 0,
+          de1a30: 0,
+          de31a60: 0,
+          de61a90: 0,
+          mas90: 0,
+          total: 0,
         });
       }
       const entry = mapaClientes.get(item.clienteId);
       entry[item.agingBucket] += item.saldoPendiente;
-      entry.total             += item.saldoPendiente;
+      entry.total += item.saldoPendiente;
     }
 
     const porCliente = Array.from(mapaClientes.values());
@@ -139,11 +139,11 @@ export class CxcService {
     const totales = porCliente.reduce(
       (acc, c) => ({
         porVencer: acc.porVencer + c.porVencer,
-        de1a30:    acc.de1a30   + c.de1a30,
-        de31a60:   acc.de31a60  + c.de31a60,
-        de61a90:   acc.de61a90  + c.de61a90,
-        mas90:     acc.mas90    + c.mas90,
-        total:     acc.total    + c.total,
+        de1a30: acc.de1a30 + c.de1a30,
+        de31a60: acc.de31a60 + c.de31a60,
+        de61a90: acc.de61a90 + c.de61a90,
+        mas90: acc.mas90 + c.mas90,
+        total: acc.total + c.total,
       }),
       { porVencer: 0, de1a30: 0, de31a60: 0, de61a90: 0, mas90: 0, total: 0 },
     );
@@ -153,10 +153,10 @@ export class CxcService {
 
   /** Estado de cuenta de un cliente específico */
   async estadoCuentaCliente(clienteId: string): Promise<{
-    clienteId:    string;
-    totalDeuda:   number;
-    facturas:     CxcItem[];
-    aging:        AgingBucket;
+    clienteId: string;
+    totalDeuda: number;
+    facturas: CxcItem[];
+    aging: AgingBucket;
   }> {
     const { items } = await this.findAll({ clienteId });
 
@@ -165,7 +165,7 @@ export class CxcService {
 
     for (const item of items) {
       aging[item.agingBucket] += item.saldoPendiente;
-      totalDeuda              += item.saldoPendiente;
+      totalDeuda += item.saldoPendiente;
     }
 
     return { clienteId, totalDeuda, facturas: items, aging };
@@ -179,20 +179,20 @@ export class CxcService {
   }
 
   private calcularDiasVencida(fechaVencimiento: Date | null, hoy: Date = new Date()): number {
-      if (!fechaVencimiento) return 0;
+    if (!fechaVencimiento) return 0;
 
-      const venc = this.parseFechaLocal(fechaVencimiento.toString());
-      const actual = new Date(hoy);
+    const venc = this.parseFechaLocal(fechaVencimiento.toString());
+    const actual = new Date(hoy);
 
-      venc.setHours(0, 0, 0, 0);
-      actual.setHours(0, 0, 0, 0);
+    venc.setHours(0, 0, 0, 0);
+    actual.setHours(0, 0, 0, 0);
 
-      const diffMs = venc.getTime() - actual.getTime();
-      return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const diffMs = venc.getTime() - actual.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   }
 
   private calcularAgingBucket(diasVencida: number): keyof AgingBucket {
-    if (diasVencida <= 0)  return 'porVencer';
+    if (diasVencida <= 0) return 'porVencer';
     if (diasVencida <= 30) return 'de1a30';
     if (diasVencida <= 60) return 'de31a60';
     if (diasVencida <= 90) return 'de61a90';
@@ -202,11 +202,11 @@ export class CxcService {
   private calcularResumen(items: CxcItem[]): CxcResumen {
     return items.reduce(
       (acc, item) => ({
-        totalCartera:      acc.totalCartera      + item.saldoPendiente,
-        porVencer:         acc.porVencer         + (item.diasVencida >= 0 ? item.saldoPendiente : 0),
-        vencida:           acc.vencida           + (item.diasVencida < 0 ? item.saldoPendiente : 0),
+        totalCartera: acc.totalCartera + item.saldoPendiente,
+        porVencer: acc.porVencer + (item.diasVencida >= 0 ? item.saldoPendiente : 0),
+        vencida: acc.vencida + (item.diasVencida < 0 ? item.saldoPendiente : 0),
         cantidadPorVencer: acc.cantidadPorVencer + (item.diasVencida >= 0 ? 1 : 0),
-        cantidadVencida:   acc.cantidadVencida   + (item.diasVencida < 0 ? 1 : 0),
+        cantidadVencida: acc.cantidadVencida + (item.diasVencida < 0 ? 1 : 0),
       }),
       { totalCartera: 0, porVencer: 0, vencida: 0, cantidadPorVencer: 0, cantidadVencida: 0 },
     );

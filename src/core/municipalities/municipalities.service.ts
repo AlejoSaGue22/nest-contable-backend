@@ -66,9 +66,18 @@ export class MunicipalitiesService {
                 departmentName: m.department.name,
             }));
 
-            await this.municipalityRepository.upsert(municipalitiesToSave, ['code']);
+            // Use createQueryBuilder to avoid updating 'id', which triggers FK violations if the record is referenced
+            await this.municipalityRepository.createQueryBuilder()
+                .insert()
+                .into(Municipality)
+                .values(municipalitiesToSave)
+                .orUpdate(
+                    ['name', 'department', 'departmentCode', 'departmentName'],
+                    ['code']
+                )
+                .execute();
 
-            this.logger.log(`✅ Carga local completada. ${municipalitiesToSave.length} municipios actualizados.`);
+            this.logger.log(`✅ Carga local completada. ${municipalitiesToSave.length} municipios procesados.`);
             return { count: municipalitiesToSave.length };
 
         } catch (error) {

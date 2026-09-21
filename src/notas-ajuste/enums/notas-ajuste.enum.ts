@@ -2,16 +2,7 @@
  * Tipo de nota de ajuste
  */
 export enum TipoNota {
-  /**
-   * Nota Crédito - Disminuye el valor de la factura
-   * Casos: Devoluciones, descuentos, anulaciones, correcciones
-   */
   CREDITO = 'credito',
-  
-  /**
-   * Nota Débito - Aumenta el valor de la factura
-   * Casos: Intereses de mora, ajustes de precio, cargos adicionales
-   */
   DEBITO = 'debito'
 }
 
@@ -52,7 +43,7 @@ export enum ConceptoNotaCredito {
   AJUSTE_PRECIO = '4',             // Ajuste de precio
   DESCUENTO_PRONTO_PAGO = '5',     // Descuento comercial por pronto pago
   DESCUENTO_VOLUMEN = '6'          // Descuento comercial por volumen de ventas
-} 
+}
 
 /**
  * Conceptos de notas débito según DIAN

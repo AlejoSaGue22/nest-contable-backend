@@ -332,22 +332,16 @@ export class FactusService {
             }
         }
 
-        if (!municipalityCode) {
-            municipalityCode =
-                this.configService.get<string>('FACTUS_ESTABLISHMENT_MUNICIPALITY_CODE') ||
-                this.configService.get<string>('FACTUS_ESTABLISHMENT_MUNICIPALITY_ID') ||
-                undefined;
-        }
 
         if (!municipalityCode) {
             return undefined;
         }
 
         return {
-            name: empresa.razonSocial || this.configService.get<string>('FACTUS_ESTABLISHMENT_NAME', 'Sucursal Principal'),
-            address: empresa.direccion || this.configService.get<string>('FACTUS_ESTABLISHMENT_ADDRESS') || 'Sin dirección',
-            phone_number: empresa.telefono || this.configService.get<string>('FACTUS_ESTABLISHMENT_PHONE') || '0000000',
-            email: empresa.email || this.configService.get<string>('FACTUS_ESTABLISHMENT_EMAIL') || 'sin-correo@empresa.co',
+            name: empresa.razonSocial,
+            address: empresa.direccion,
+            phone_number: empresa.telefono,
+            email: empresa.email,
             municipality_code: String(municipalityCode),
         };
     }
@@ -545,7 +539,7 @@ export class FactusService {
         const cargos: AllowanceChargesFactus[] = [];
 
         // Si hay descuento global
-        if (factura.descuento > 0 && 1 != 1) {
+        if (factura.descuento > 0) {
             cargos.push({
                 concept_type: "03", // 03 = Recargo condicionado
                 is_surcharge: false,
@@ -554,10 +548,6 @@ export class FactusService {
                 amount: this.toDecimalString(factura.descuento)
             });
         }
-
-
-
-        // Aquí podrías agregar otros cargos como propinas, etc.
 
         return cargos;
     }

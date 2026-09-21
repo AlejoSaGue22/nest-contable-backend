@@ -111,11 +111,9 @@ export class PagosService {
         throw new NotFoundException(`Factura de venta ${facturaVentaId} no encontrada`);
       }
 
-      if (factura.formaPago !== FormaPago.CREDITO && !isCustomRunner) {
-        throw new BadRequestException(
-          'Solo se pueden registrar cobros en facturas a crédito',
-        );
-      }
+      // if (factura.formaPago !== FormaPago.CREDITO && !isCustomRunner) {
+      //   throw new BadRequestException('Solo se pueden registrar cobros en facturas a crédito');
+      // }
 
       const estadosPermitidos: InvoiceStatus[] = [
         InvoiceStatus.ISSUED,
@@ -313,11 +311,11 @@ export class PagosService {
         throw new NotFoundException(`Factura de compra ${facturaCompraId} no encontrada`);
       }
 
-      if (factura.formaPago !== 'CREDITO' && !isCustomRunner) {
-        throw new BadRequestException(
-          'Solo se pueden registrar pagos en facturas de compra a crédito',
-        );
-      }
+      // if (factura.formaPago !== 'CREDITO' && !isCustomRunner) {
+      //   throw new BadRequestException(
+      //     'Solo se pueden registrar pagos en facturas de compra a crédito',
+      //   );
+      // }
 
       if (factura.estado !== GastoEstado.REGISTRADO) {
         throw new BadRequestException(

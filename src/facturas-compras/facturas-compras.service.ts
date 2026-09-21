@@ -111,7 +111,7 @@ export class FacturasComprasService {
 
                 if (createFacturaCompraDto.metodoPago) {
                     const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
-                        where: { id: Number(createFacturaCompraDto.metodoPago) }
+                        where: { codigo: createFacturaCompraDto.metodoPago }
                     });
 
                     if (!metodoPago) {
