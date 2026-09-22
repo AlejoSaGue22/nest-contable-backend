@@ -65,6 +65,18 @@ export class PeriodoNomina {
     @Column({ type: 'timestamp', nullable: true })
     dianFechaAceptacion: Date;
 
+    // ========== SNAPSHOT RANGO DIAN (auditoría/conciliación) ==========
+
+    /** ID del rango Factus (dominio payroll) usado en el envío. */
+    @Column({ type: 'int', nullable: true })
+    factusNumberingRangeId: number | null;
+
+    @Column({ name: 'factus_resolution_number', type: 'varchar', length: 80, nullable: true })
+    factusResolutionNumber: string | null;
+
+    @Column({ name: 'factus_range_prefix', type: 'varchar', length: 20, nullable: true })
+    factusRangePrefix: string | null;
+
     @Column('decimal', { precision: 15, scale: 2, default: 0 })
     totalDevengado: number;
 

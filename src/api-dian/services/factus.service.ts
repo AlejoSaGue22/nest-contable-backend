@@ -1,11 +1,14 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import * as qs from 'qs';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AllowanceChargesFactus, FacturaDianResponse, FactusTokenResponse, FactusV2BillPayload, FactusV2Customer, FactusV2Item, FactusV2NotaAjustePayload, FactusV2PaymentDetail, FactusV2PrepaymentDetail } from '../interfaces/api-dian-interface';
+import { AllowanceChargesFactus, FacturaDianResponse, FactusPayrollResult, FactusV2BillPayload, FactusV2Customer, FactusV2Item, FactusV2NotaAjustePayload, FactusV2PaymentDetail, FactusV2PayrollPayload, FactusV2PayrollPayment, FactusV2PayrollSettlement, FactusV2PayrollWorker, FactusV2PrepaymentDetail } from '../interfaces/api-dian-interface';
+import { PeriodoNomina } from 'src/nomina/entities/periodo-nomina.entity';
+import { Liquidacion } from 'src/nomina/entities/liquidacion.entity';
+import { Empleado } from 'src/nomina/entities/empleado.entity';
+import { FactusAuthService } from './factus-auth.service';
+import { FactusNumberingRangeService, NumberingRangeSnapshot } from 'src/numbering-ranges/factus-numbering-range.service';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { ItemNotaAjuste } from 'src/notas-ajuste/entities/items-notas-ajuste.entity';
 import { EmpresaService } from 'src/settings/empresa/empresa.service';
@@ -26,15 +29,12 @@ import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticip
 export class FactusService {
     private readonly logger = new Logger(FactusService.name);
     private readonly apiUrl: string;
-    private readonly oauthUrl: string;
     private readonly storageDir: string;
-    private accessToken: string | null = null;
-    private refreshToken: string | null = null;
-    private tokenExpiry: Date | null = null;
 
     constructor(
         private readonly httpService: HttpService,
-        private readonly configService: ConfigService,
+        private readonly authService: FactusAuthService,
+        private readonly numberingRangeService: FactusNumberingRangeService,
         private readonly empresaService: EmpresaService,
         @InjectRepository(Municipality)
         private readonly municipalityRepository: Repository<Municipality>,
@@ -43,18 +43,9 @@ export class FactusService {
         @InjectRepository(AnticipoAplicacion)
         private readonly anticipoAplicacionRepository: Repository<AnticipoAplicacion>,
     ) {
-        // Ambiente: sandbox para pruebas, producción para real
-        const environment = this.configService.get<string>('FACTUS_ENVIRONMENT', 'sandbox');
+        this.apiUrl = this.authService.getApiUrl();
 
-        if (environment === 'sandbox') {
-            this.apiUrl = 'https://api-sandbox.factus.com.co';
-            this.oauthUrl = 'https://api-sandbox.factus.com.co/oauth/token';
-        } else {
-            this.apiUrl = 'https://api.factus.com.co';
-            this.oauthUrl = 'https://api.factus.com.co/oauth/token';
-        }
-
-        this.logger.log(`🔌 Factus Service inicializado en modo: ${environment}`);
+        this.logger.log(`🔌 Factus Service inicializado en modo: ${this.authService.getEnvironment()}`);
 
         this.storageDir = path.join(process.cwd(), 'storage', 'facturas');
         this.ensureStorageDir();
@@ -68,105 +59,10 @@ export class FactusService {
     }
 
     /**
-     * Obtener token de acceso OAuth2
-     * El token de Factus expira normalmente en una hora.
+     * Obtener token de acceso OAuth2 (delegado a FactusAuthService con caché).
      */
     private async obtenerToken(): Promise<string> {
-        // Si tenemos token válido, retornarlo
-        if (this.accessToken && this.tokenExpiry && new Date() < this.tokenExpiry) {
-            return this.accessToken;
-        }
-
-        // Si tenemos refresh token, intentar renovar
-        if (this.refreshToken && this.tokenExpiry && new Date() >= this.tokenExpiry) {
-            try {
-                await this.renovarToken();
-                return this.accessToken!;
-            } catch (error) {
-                this.logger.warn('No se pudo renovar token, obteniendo uno nuevo...');
-            }
-        }
-
-        // Obtener nuevo token
-        try {
-            this.logger.log('🔐 Obteniendo nuevo token de Factus...');
-
-            const credentials = {
-                client_id: this.configService.get<string>('FACTUS_CLIENT_ID'),
-                client_secret: this.configService.get<string>('FACTUS_CLIENT_SECRET'),
-                username: this.configService.get<string>('FACTUS_USERNAME'),
-                password: this.configService.get<string>('FACTUS_PASSWORD'),
-            };
-
-            if (Object.values(credentials).some(value => !value)) {
-                throw new Error('Faltan credenciales FACTUS para autenticación');
-            }
-
-            const data = qs.stringify({ grant_type: 'password', ...credentials });
-
-            const response = await firstValueFrom(
-                this.httpService.post<FactusTokenResponse>(this.oauthUrl, data, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
-                })
-            );
-
-            this.accessToken = response.data.access_token;
-            this.refreshToken = response.data.refresh_token;
-
-            // Renovar antes de la expiración para evitar solicitudes con token vencido.
-            const expiresIn = response.data.expires_in || 3600;
-            const safetyWindow = Math.min(60, Math.max(1, expiresIn - 1));
-            this.tokenExpiry = new Date(Date.now() + ((expiresIn - safetyWindow) * 1000));
-
-            this.logger.log(`✅ Token obtenido exitosamente. Expira en ${expiresIn} segundos`);
-
-            return this.accessToken;
-
-        } catch (error) {
-            this.logger.error('❌ Error obteniendo token de Factus', error.response?.data || error.message);
-            throw new BadRequestException('Error de autenticación con Factus');
-        }
-    }
-
-    /**
-     * Renovar token usando refresh token
-     */
-    private async renovarToken(): Promise<void> {
-        try {
-            this.logger.log('🔄 Renovando token de Factus...');
-
-            const data = qs.stringify({
-                grant_type: 'refresh_token',
-                client_id: this.configService.get<string>('FACTUS_CLIENT_ID'),
-                client_secret: this.configService.get<string>('FACTUS_CLIENT_SECRET'),
-                refresh_token: this.refreshToken
-            });
-
-            const response = await firstValueFrom(
-                this.httpService.post(this.oauthUrl, data, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
-                })
-            );
-
-            this.accessToken = response.data.access_token;
-            this.refreshToken = response.data.refresh_token;
-
-            const expiresIn = response.data.expires_in || 3600;
-            const safetyWindow = Math.min(60, Math.max(1, expiresIn - 1));
-            this.tokenExpiry = new Date(Date.now() + ((expiresIn - safetyWindow) * 1000));
-
-            this.logger.log(`✅ Token renovado exitosamente. Expira en ${expiresIn} segundos`);
-
-        } catch (error) {
-            this.logger.error('❌ Error renovando token', error.response?.data);
-            throw error;
-        }
+        return this.authService.getToken();
     }
 
     private getCachedFilePath(numeroCompleto: string, type: 'pdf' | 'xml'): string | null {
@@ -271,7 +167,8 @@ export class FactusService {
             const token = await this.obtenerToken();
             this.validarDatosFactura(factura);
 
-            const payload = await this.construirPayloadFactus(factura, numero);
+            const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_NUMBERING_RANGE_ID', '01');
+            const payload = await this.construirPayloadFactus(factura, numero, rangeSnapshot?.id);
 
             this.logger.log(`📤 Enviando factura ${factura.comprobante_completo} a Factus...`);
 
@@ -293,7 +190,7 @@ export class FactusService {
             this.logger.log('✅ Respuesta recibida de Factus');
 
             // Procesar respuesta de Factus
-            return this.procesarRespuestaFactus(response.data);
+            return this.procesarRespuestaFactus(response.data, rangeSnapshot);
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -304,8 +201,12 @@ export class FactusService {
             }
 
             if (error.response?.status === 422) {
-                const errors = error.response.data?.errors || error.response.data?.data.errors || {};
+                const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
                 const mensajesError = Object.values(errors).flat();
+                // Invalidación reactiva SOLO si el error 422 está relacionado con el rango/resolución
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('billing').catch(() => undefined);
+                }
                 throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
             }
 
@@ -398,6 +299,40 @@ export class FactusService {
         return unidad?.codigo || '94';
     }
 
+    /**
+     * Mapear responsabilidades fiscales según el catálogo oficial de la API V2 de Factus:
+     * - O-13: Gran contribuyente
+     * - O-15: Autorretenedor
+     * - O-23: Agente de retención de IVA
+     * - O-47: Régimen simple de tributación
+     * - R-99-PN: No responsable (default)
+     */
+    private resolverResponsabilidadesFactus(client: any): string[] {
+        const codigosValidos = new Set(['O-13', 'O-15', 'O-23', 'O-47', 'R-99-PN']);
+
+        let respInput: string[] = [];
+        if (Array.isArray(client?.responsabilidades)) {
+            respInput = client.responsabilidades.map((r: any) => String(r).trim().toUpperCase());
+        } else if (typeof client?.responsabilidades === 'string' && client.responsabilidades.trim()) {
+            respInput = client.responsabilidades.split(',').map((r: string) => r.trim().toUpperCase());
+        } else if (typeof client?.responsabilidadFiscal === 'string' && client.responsabilidadFiscal.trim()) {
+            respInput = client.responsabilidadFiscal.split(',').map((r: string) => r.trim().toUpperCase());
+        } else if (typeof client?.responsabilidad === 'string' && client.responsabilidad.trim()) {
+            respInput = client.responsabilidad.split(',').map((r: string) => r.trim().toUpperCase());
+        }
+
+        // Mapear código no válido en V2 (como O-48) a R-99-PN si no se especifica otra responsabilidad especial
+        const filtrados = respInput
+            .map((code) => (code === 'O-48' ? 'R-99-PN' : code))
+            .filter((code) => codigosValidos.has(code));
+
+        if (filtrados.length > 0) {
+            return Array.from(new Set(filtrados));
+        }
+
+        return ['R-99-PN'];
+    }
+
     private async construirCustomerV2(factura: FacturasVenta): Promise<FactusV2Customer> {
         const nombreCliente = factura.client.razonSocial || `${factura.client.nombre} ${factura.client.apellido}`;
         const esPersonaNatural = factura.client.tipoPersona === 'PN';
@@ -409,7 +344,7 @@ export class FactusService {
             dv: factura.client.dv || null,
             legal_organization_code: esPersonaNatural ? '2' : '1',
             tribute_code: esResponsableIva ? '01' : 'ZZ',
-            responsibilities: esResponsableIva ? ['O-48'] : ['R-99-PN'],
+            responsibilities: this.resolverResponsabilidadesFactus(factura.client),
             address: factura.client.direccion,
             email: factura.client.email,
             phone: factura.client.telefono,
@@ -494,13 +429,11 @@ export class FactusService {
     /**
      * Construir payload V2 para Factus (/v2/bills/validate)
      */
-    private async construirPayloadFactus(factura: FacturasVenta, numero: string): Promise<FactusV2BillPayload> {
+    private async construirPayloadFactus(factura: FacturasVenta, numero: string, numberingRangeId?: number | string): Promise<FactusV2BillPayload> {
         const empresa = await this.empresaService.getEmpresaEntity();
         const establishment = await this.obtenerDatosEstablecimiento(empresa);
         const paymentDetails = this.construirPaymentDetailsV2(factura);
         const prepaymentDetails = await this.construirPrepaymentDetailsV2(factura.id);
-
-        const numberingRangeId = await this.resolverNumberingRangeId('FACTUS_NUMBERING_RANGE_ID', '01');
 
         const payload: FactusV2BillPayload = {
             reference_code: numero,
@@ -571,7 +504,7 @@ export class FactusService {
      * Procesar respuesta V2 de Factus.
      * La fuente de verdad es data.is_validated, no solo status === 'Created'.
      */
-    private procesarRespuestaFactus(responseData: any): FacturaDianResponse {
+    private procesarRespuestaFactus(responseData: any, rangeSnapshot?: NumberingRangeSnapshot | null): FacturaDianResponse {
         const status: string = responseData?.status || '';
         const data: any = responseData?.data || {};
         const warnings = this.extraerAdvertenciasDian(data?.errors);
@@ -596,6 +529,9 @@ export class FactusService {
                 respuestaCompleta: responseData,
                 warnings,
                 errors: data?.errors || {},
+                numberingRangeId: rangeSnapshot?.id ?? null,
+                resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+                rangePrefix: rangeSnapshot?.prefix ?? null,
             };
         }
 
@@ -612,6 +548,9 @@ export class FactusService {
             respuestaCompleta: responseData,
             warnings,
             errors: data?.errors || responseData?.errors || {},
+            numberingRangeId: rangeSnapshot?.id ?? null,
+            resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+            rangePrefix: rangeSnapshot?.prefix ?? null,
         };
     }
 
@@ -622,7 +561,8 @@ export class FactusService {
         try {
             const token = await this.obtenerToken();
 
-            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito');
+            const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_NC_NUMBERING_RANGE_ID', 'NC');
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito', rangeSnapshot?.id);
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -643,7 +583,7 @@ export class FactusService {
             this.logger.log('✅ Respuesta recibida de Factus');
 
             console.log(response.data);
-            return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito');
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito', rangeSnapshot);
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -655,6 +595,9 @@ export class FactusService {
             if (error.response?.status === 422) {
                 const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
                 const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('billing').catch(() => undefined);
+                }
                 throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
             }
 
@@ -669,7 +612,8 @@ export class FactusService {
         try {
             const token = await this.obtenerToken();
 
-            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito');
+            const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_ND_NUMBERING_RANGE_ID', 'ND');
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito', rangeSnapshot?.id);
 
             this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -690,7 +634,7 @@ export class FactusService {
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
-            return this.procesarRespuestaNotaAjusteFactus(response.data, 'debito');
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'debito', rangeSnapshot);
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -702,6 +646,9 @@ export class FactusService {
             if (error.response?.status === 422) {
                 const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
                 const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('billing').catch(() => undefined);
+                }
                 throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
             }
 
@@ -715,16 +662,14 @@ export class FactusService {
      * V2 referencia la factura por bill_number (número oficial DIAN) y usa
      * customer/items con códigos, payment_details[] y cash_rounding_amount.
      */
-    private async construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito'): Promise<FactusV2NotaAjustePayload> {
+    private async construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito', numberingRangeId?: number | string): Promise<FactusV2NotaAjustePayload> {
         const prefix = tipo === 'credito' ? 'NC' : 'ND';
         const referenceCodeNew = `${prefix}-${referenceCode}_${factura.comprobante_completo}`;
 
         const isNC = tipo === 'credito';
-        const configKey = isNC ? 'FACTUS_NC_NUMBERING_RANGE_ID' : 'FACTUS_ND_NUMBERING_RANGE_ID';
 
         const empresa = await this.empresaService.getEmpresaEntity();
         const establishment = await this.obtenerDatosEstablecimiento(empresa);
-        const numberingRangeId = await this.resolverNumberingRangeId(configKey);
 
         const totalNota = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
@@ -782,7 +727,7 @@ export class FactusService {
      * Procesar respuesta V2 de Factus para Notas de Ajuste.
      * La fuente de verdad es data.is_validated, no solo status === 'Created'.
      */
-    private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito'): any {
+    private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito', rangeSnapshot?: NumberingRangeSnapshot | null): any {
         const status: string = responseData?.status || '';
         const data: any = responseData?.data || {};
         const nota: any = tipo === 'credito' ? data.credit_note : data.debit_note;
@@ -809,6 +754,9 @@ export class FactusService {
                 respuestaCompleta: responseData,
                 warnings,
                 errors: data?.errors || {},
+                numberingRangeId: rangeSnapshot?.id ?? null,
+                resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+                rangePrefix: rangeSnapshot?.prefix ?? null,
             };
         }
 
@@ -825,6 +773,9 @@ export class FactusService {
             respuestaCompleta: responseData,
             warnings,
             errors: data?.errors || {},
+            numberingRangeId: rangeSnapshot?.id ?? null,
+            resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+            rangePrefix: rangeSnapshot?.prefix ?? null,
         };
     }
 
@@ -857,69 +808,500 @@ export class FactusService {
     }
 
 
-    // ========== ENDPOINTS DE REFERENCIA ==========
+    // ========== NÓMINA ELECTRÓNICA (V2 payroll, un documento por trabajador) ==========
 
     /**
-     * Obtener rangos de numeración disponibles (V2).
-     * Acepta filtros opcionales de documento y estado.
+     * Resolver el snapshot del rango de nómina (dominio payroll, caché local).
+     * Sin rango vigente → bloquea el envío con mensaje guiado.
      */
-    async obtenerRangosNumeracion(filtros?: { document?: string; isActive?: boolean }): Promise<any[]> {
+    async resolverSnapshotNomina(): Promise<NumberingRangeSnapshot> {
+        return this.numberingRangeService.resolveSnapshot(
+            'FACTUS_NOMINA_NUMBERING_RANGE_ID',
+            undefined,
+            { domain: 'payroll' },
+        );
+    }
+
+    /**
+     * Crear y validar la nómina de UN trabajador en Factus/DIAN.
+     * POST /v2/payroll/validate
+     */
+    async crearYValidarNomina(
+        periodo: PeriodoNomina,
+        liquidacion: Liquidacion,
+        empleado: Empleado,
+        referenceCode: string,
+        rangeSnapshot?: NumberingRangeSnapshot | null,
+    ): Promise<FactusPayrollResult> {
+        const snapshot = rangeSnapshot ?? await this.resolverSnapshotNomina();
+        const payload = await this.construirPayloadNomina(periodo, liquidacion, empleado, referenceCode, snapshot?.id);
+
         try {
             const token = await this.obtenerToken();
+            this.logger.log(`📤 Enviando nómina ${referenceCode} (trabajador ${empleado.numeroDocumento}) a Factus...`);
 
-            const params = new URLSearchParams();
-            if (filtros?.document) params.append('filter[document]', filtros.document);
-            if (filtros?.isActive !== undefined) params.append('filter[is_active]', filtros.isActive ? '1' : '0');
-
-            const query = params.toString() ? `?${params.toString()}` : '';
             const response = await firstValueFrom(
-                this.httpService.get(
-                    `${this.apiUrl}/v2/numbering-ranges${query}`,
+                this.httpService.post(
+                    `${this.apiUrl}/v2/payroll/validate`,
+                    payload,
                     {
                         headers: {
                             'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/json'
-                        }
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 60000
                     }
                 )
             );
 
-            const body = response.data?.data;
-            if (Array.isArray(body)) return body;
-            if (Array.isArray(body?.data)) return body.data;
-            return [];
+            this.logger.log('✅ Respuesta de nómina recibida de Factus');
+            return this.procesarRespuestaNomina(response.data, referenceCode, snapshot);
 
         } catch (error) {
-            this.logger.error('Error obteniendo rangos de numeración:', error.response?.data || error.message);
-            return [];
+            this.logger.error('❌ Error en Factus (nómina):', error.response?.data || error.message);
+
+            if (error.response?.status === 409) {
+                throw new BadRequestException(`Ya existe una nómina pendiente por enviar a DIAN con la referencia ${referenceCode}`);
+            }
+
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('payroll').catch(() => undefined);
+                }
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar nómina a Factus/DIAN');
         }
     }
 
     /**
-     * Resolver el rango de numeración a usar:
-     * 1. Variable de entorno (configKey) si está definida.
-     * 2. Selección automática del primer rango activo y vigente
-     *    (opcionalmente filtrado por código de documento).
-     * Retorna undefined para que Factus use el único rango activo por defecto.
+     * Construir payload V2 de nómina para UN trabajador.
+     * Mapea el modelo local (Empleado/Liquidacion) a los códigos DIAN/Factus.
      */
-    private async resolverNumberingRangeId(configKey: string, documentCode?: string): Promise<number | string | undefined> {
-        const rawRangeId = this.configService.get<string | number>(configKey);
-        if (rawRangeId !== undefined && rawRangeId !== null && String(rawRangeId).trim() !== '') {
-            return Number.isNaN(Number(rawRangeId)) ? rawRangeId : Number(rawRangeId);
+    private async construirPayloadNomina(
+        periodo: PeriodoNomina,
+        liquidacion: Liquidacion,
+        empleado: Empleado,
+        referenceCode: string,
+        numberingRangeId?: number | string,
+    ): Promise<FactusV2PayrollPayload> {
+        const fin = periodo.fechaFin instanceof Date ? periodo.fechaFin : new Date(periodo.fechaFin);
+        const settlement: FactusV2PayrollSettlement = {
+            month: fin.getMonth() + 1,
+            year: fin.getFullYear(),
+            payroll_period_code: periodo.tipo === 'QUINCENAL' ? '4' : '5',
+        };
+        if (settlement.payroll_period_code === '4') {
+            settlement.pay_period_half = fin.getDate() <= 15 ? '1' : '2';
         }
 
-        try {
-            const rangos = await this.obtenerRangosNumeracion({ document: documentCode, isActive: true });
-            const vigentes = rangos.filter((r) => Number(r.is_active) === 1 && Number(r.is_expired) !== 1);
-            const candidatos = vigentes.length > 0 ? vigentes : rangos.filter((r) => Number(r.is_active) === 1);
-            if (candidatos.length === 0) return undefined;
-            if (candidatos.length > 1) {
-                this.logger.log(`ℹ️ ${candidatos.length} rangos activos para ${documentCode || 'documento'}; usando ${candidatos[0].id}`);
-            }
-            return candidatos[0].id;
-        } catch {
-            return undefined;
+        const payload: FactusV2PayrollPayload = {
+            reference_code: referenceCode,
+            observation: `Nómina ${periodo.nombre} - ${empleado.primerNombre} ${empleado.primerApellido}`.slice(0, 250),
+            settlement_period: settlement,
+            payment: this.construirPagoNomina(periodo, empleado),
+            worker: await this.construirWorkerNomina(liquidacion, empleado),
+            accruals: this.construirDevengadosNomina(liquidacion),
+            deductions: this.construirDeduccionesNomina(liquidacion),
+        };
+
+        if (numberingRangeId !== undefined && numberingRangeId !== null) {
+            payload.numbering_range_id = numberingRangeId;
         }
+
+        return payload;
+    }
+
+    private construirPagoNomina(periodo: PeriodoNomina, empleado: Empleado): FactusV2PayrollPayment {
+        const payment: FactusV2PayrollPayment = {
+            payment_method_code: this.mapearMetodoPagoNomina(empleado.metodoPago),
+            payment_date: this.toDateOnly(periodo.fechaPago) || this.toDateOnly(periodo.fechaFin) || new Date().toISOString().slice(0, 10),
+        };
+
+        if (['42', '47', '98'].includes(payment.payment_method_code)) {
+            if (empleado.banco?.nombre) payment.bank_name = empleado.banco.nombre;
+            if (empleado.tipoCuentaBancaria) payment.account_type = this.mapearTipoCuentaNomina(empleado.tipoCuentaBancaria);
+            if (empleado.numeroCuentaBancaria) payment.account_number = empleado.numeroCuentaBancaria;
+        }
+
+        return payment;
+    }
+
+    private mapearMetodoPagoNomina(metodoPago: string | null | undefined): string {
+        if (!metodoPago) return '10';
+        const raw = String(metodoPago).trim();
+        if (/^\d{2}$/.test(raw)) return raw;
+        const norm = raw.toLowerCase();
+        if (norm.includes('transfer')) return '47';
+        if (norm.includes('consign')) return '42';
+        if (norm.includes('cheque')) return '20';
+        if (norm.includes('nequi') || norm.includes('daviplata') || norm.includes('cats')) return '98';
+        if (norm.includes('efectivo') || norm.includes('contado')) return '10';
+        this.logger.warn(`⚠️ Método de pago de nómina no reconocido ("${metodoPago}"); usando 10 (efectivo)`);
+        return '10';
+    }
+
+    private mapearTipoCuentaNomina(tipo: string): string {
+        const norm = String(tipo).toLowerCase();
+        if (norm.includes('corriente')) return '3';
+        if (norm.includes('ahorro')) return '2';
+        if (norm.includes('nomina')) return '1';
+        return String(tipo);
+    }
+
+    private async construirWorkerNomina(liquidacion: Liquidacion, empleado: Empleado): Promise<FactusV2PayrollWorker> {
+        if (!empleado.direccion) {
+            throw new BadRequestException(
+                `El trabajador ${empleado.numeroDocumento} no tiene dirección registrada (requerida por DIAN para nómina)`,
+            );
+        }
+
+        const worker: FactusV2PayrollWorker = {
+            identification_document_code: this.mapearTipoDocumentoNomina(empleado.tipoDocumento),
+            identification_number: String(empleado.numeroDocumento),
+            first_name: empleado.primerNombre,
+            first_surname: empleado.primerApellido,
+            second_surname: empleado.segundoApellido || '',
+            address: empleado.direccion,
+            country_code: 'CO',
+            municipality_code: await this.resolverWorkerMunicipalityCode(),
+            has_integral_salary: Boolean(empleado.salarioIntegral),
+            // D. 2090/2003: clases de riesgo IV y V son alto riesgo.
+            has_high_risk: Number(empleado.arlNivelRiesgo || 0) >= 4,
+            worker_type_code: '01',
+            worker_subtype: '00',
+            contract_type: this.mapearTipoContratoNomina(empleado),
+            employee_code: empleado.id,
+            salary: this.toDecimalString(empleado.salarioBase),
+            entry_date: this.toDateOnly(empleado.fechaIngreso) || new Date().toISOString().slice(0, 10),
+            days_worked: String(liquidacion.diasTrabajados ?? 30),
+        };
+
+        if (empleado.segundoNombre) worker.other_names = empleado.segundoNombre;
+        if (empleado.fechaRetiro) {
+            const retiro = this.toDateOnly(empleado.fechaRetiro);
+            if (retiro) worker.retirement_date = retiro;
+        }
+
+        return worker;
+    }
+
+    private mapearTipoDocumentoNomina(tipo: string): string {
+        const mapa: Record<string, string> = { CC: '13', CE: '22', NIT: '31', TI: '12', PP: '41' };
+        const code = mapa[String(tipo)?.toUpperCase()];
+        if (!code) {
+            throw new BadRequestException(`Tipo de documento "${tipo}" sin equivalencia DIAN para nómina (CC/CE/NIT/TI/PP)`);
+        }
+        return code;
+    }
+
+    private mapearTipoContratoNomina(empleado: Empleado): string {
+        const mapa: Record<string, string> = { FIJO: '1', INDEFINIDO: '2', OBRA_LABOR: '3', APRENDIZAJE: '4' };
+        const code = mapa[String(empleado.tipoContrato)?.toUpperCase()];
+        if (!code) {
+            throw new BadRequestException(
+                `El trabajador ${empleado.numeroDocumento} tiene contrato "${empleado.tipoContrato}" sin equivalencia en nómina DIAN (fijo/indefinido/obra/aprendizaje)`,
+            );
+        }
+        return code;
+    }
+
+    /**
+     * Municipio del trabajador. El modelo local no guarda ciudad por empleado,
+     * así que se usa la sede de la empresa como valor por defecto (documentado),
+     * con override por variable para casos especiales.
+     */
+    private async resolverWorkerMunicipalityCode(): Promise<string> {
+        const override = this.authService.get('FACTUS_WORKER_MUNICIPALITY_CODE');
+        if (override) return String(override);
+
+        const empresa = await this.empresaService.getEmpresaEntity();
+        if (empresa.ciudadRel?.code) return String(empresa.ciudadRel.code);
+        if (empresa.ciudad !== undefined && empresa.ciudad !== null) {
+            const municipio = await this.municipalityRepository.findOne({ where: { id: Number(empresa.ciudad) } });
+            if (municipio?.code) return String(municipio.code);
+        }
+        throw new BadRequestException(
+            'No hay municipio para nómina DIAN: configure Empresa.ciudad o FACTUS_WORKER_MUNICIPALITY_CODE',
+        );
+    }
+
+    private construirDevengadosNomina(liq: Liquidacion): Record<string, unknown> {
+        const accruals: Record<string, unknown> = {
+            suel: { amount: this.toDecimalString(liq.salarioDevengado) },
+        };
+
+        if (Number(liq.auxilioTransporte) > 0) {
+            accruals.tra = [{ amount: this.toDecimalString(liq.auxilioTransporte), accrual_type_code: '1' }];
+        }
+        if (liq.horasExtras?.length) {
+            accruals.hora = liq.horasExtras.map((h) => {
+                const code = this.mapearTipoHoraExtra(h.tipo);
+                return {
+                    quantity: Number(h.cantidad) || 0,
+                    // Recargos legales estándar por código (Ley 50/1990, CST).
+                    percentage: this.porcentajeHoraExtra(code),
+                    amount: this.toDecimalString(h.valor),
+                    accrual_type_code: code,
+                };
+            });
+        }
+        if (liq.bonificaciones?.length) {
+            accruals.boni = liq.bonificaciones.map((b) => ({
+                amount: this.toDecimalString(b.valor),
+                accrual_type_code: b.salarial ? '1' : '2',
+            }));
+        }
+        if (Number(liq.comisiones) > 0) {
+            accruals.comi = [{ amount: this.toDecimalString(liq.comisiones), accrual_type_code: '1' }];
+        }
+
+        return accruals;
+    }
+
+    /** Mapeo tolerante del tipo de hora extra local a código DIAN 1-7. */
+    private mapearTipoHoraExtra(tipo: string): string {
+        const norm = String(tipo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const domFest = norm.includes('dominical') || norm.includes('festiv');
+        const noct = norm.includes('nocturn');
+        const recargo = norm.includes('recargo');
+        if (domFest && noct && !recargo) return '6';
+        if (domFest && noct) return '7';
+        if (domFest && !recargo) return '4';
+        if (domFest) return '5';
+        if (noct && !recargo) return '2';
+        if (noct) return '3';
+        return '1';
+    }
+
+    /** Recargo legal estándar por código de hora extra (documentado en el payload). */
+    private porcentajeHoraExtra(code: string): string {
+        const mapa: Record<string, string> = { '1': '25.00', '2': '75.00', '3': '35.00', '4': '100.00', '5': '80.00', '6': '150.00', '7': '110.00' };
+        return mapa[code] || '25.00';
+    }
+
+    private construirDeduccionesNomina(liq: Liquidacion): Record<string, unknown> {
+        // salu/pens son requeridos por el esquema: se envían siempre (aunque sea 0.00).
+        const deductions: Record<string, unknown> = {
+            salu: { percentage: '4.00', amount: this.toDecimalString(liq.saludEmpleado) },
+            pens: { percentage: '4.00', amount: this.toDecimalString(liq.pensionEmpleado) },
+        };
+
+        if (Number(liq.retencionFuente) > 0) {
+            deductions.rete = { amount: this.toDecimalString(liq.retencionFuente) };
+        }
+        if (liq.otrasDeducciones?.length) {
+            deductions.otra = liq.otrasDeducciones.map((d) => ({
+                amount: this.toDecimalString(d.valor),
+                description: String(d.concepto || 'Otra deducción').slice(0, 200),
+            }));
+        }
+
+        return deductions;
+    }
+
+    /**
+     * Procesar respuesta V2 de Factus para nómina (tolerante al shape).
+     */
+    private procesarRespuestaNomina(responseData: any, referenceCode: string, snapshot?: NumberingRangeSnapshot | null): FactusPayrollResult {
+        const status: string = responseData?.status || '';
+        const data: any = responseData?.data || {};
+        const payroll: any = data?.payroll || data;
+        const warnings = this.extraerAdvertenciasDian(data?.errors);
+        const cune: string = payroll?.cune || data?.cune || '';
+        const numero: string = payroll?.number || data?.number || '';
+
+        if (status === 'Created' && data?.is_validated !== false && (cune || numero)) {
+            return {
+                estado: 'aceptada',
+                referenceCode,
+                cune,
+                numero,
+                mensaje: warnings.length > 0
+                    ? `${responseData.message} | Advertencias DIAN: ${warnings.join('; ')}`
+                    : responseData.message,
+                respuestaCompleta: responseData,
+                warnings,
+                errors: data?.errors || {},
+                numberingRangeId: snapshot?.id ?? null,
+                resolutionNumber: snapshot?.resolutionNumber ?? null,
+                rangePrefix: snapshot?.prefix ?? null,
+            };
+        }
+
+        return {
+            estado: 'rechazada',
+            referenceCode,
+            cune: '',
+            numero: '',
+            mensaje: responseData.message || 'Nómina rechazada',
+            respuestaCompleta: responseData,
+            warnings,
+            errors: data?.errors || responseData?.errors || {},
+            numberingRangeId: snapshot?.id ?? null,
+            resolutionNumber: snapshot?.resolutionNumber ?? null,
+            rangePrefix: snapshot?.prefix ?? null,
+        };
+    }
+
+    /** Ver nómina por reference_code. GET /v2/payrolls/reference/:reference_code */
+    async verNominaByReference(referenceCode: string): Promise<any> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v2/payrolls/reference/${referenceCode}`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+                ),
+            );
+            return response.data;
+        } catch (error) {
+            this.logger.error('Error consultando nómina:', error.response?.data || error.message);
+            throw new BadRequestException('Error al consultar nómina en Factus/DIAN');
+        }
+    }
+
+    /** Descargar XML de nómina por número. GET /v2/payrolls/:number/download-xml */
+    async descargarXMLNomina(numero: string): Promise<{ buffer: Buffer, fileName: string }> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v2/payrolls/${numero}/download-xml`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+                ),
+            );
+            const xmlBase64 = response.data.data.xml_base_64_encoded || response.data.data.xml_base64_encoded;
+            return {
+                buffer: Buffer.from(xmlBase64, 'base64'),
+                fileName: response.data.data.file_name,
+            };
+        } catch (error) {
+            this.logger.error('Error descargando XML de nómina:', error.response?.data || error.message);
+            throw new BadRequestException('Error al descargar XML de nómina');
+        }
+    }
+
+    /** Eliminar nómina NO validada por reference_code (permite reenvío). */
+    async eliminarNominaNoValidada(referenceCode: string): Promise<void> {
+        const token = await this.obtenerToken();
+        await firstValueFrom(
+            this.httpService.delete(
+                `${this.apiUrl}/v2/payrolls/reference/${referenceCode}`,
+                { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+            ),
+        );
+        this.logger.log(`🗑️ Nómina no validada ${referenceCode} eliminada en Factus`);
+    }
+
+    /**
+     * Nota de ajuste a nómina (eliminación ante DIAN de una nómina validada).
+     * POST /v2/adjustment-payrolls
+     */
+    async crearNotaAjusteNomina(payrollNumber: string, referenceCode: string, numberingRangeId?: number | string): Promise<any> {
+        try {
+            const token = await this.obtenerToken();
+            const body: Record<string, unknown> = { payroll_number: payrollNumber, reference_code: referenceCode };
+            if (numberingRangeId !== undefined && numberingRangeId !== null) {
+                body.numbering_range_id = numberingRangeId;
+            }
+            const response = await firstValueFrom(
+                this.httpService.post(`${this.apiUrl}/v2/adjustment-payrolls`, body, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 60000,
+                }),
+            );
+            return response.data;
+        } catch (error) {
+            this.logger.error('❌ Error en nota de ajuste de nómina:', error.response?.data || error.message);
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('payroll').catch(() => undefined);
+                }
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+            throw new BadRequestException(error.response?.data?.message || 'Error al crear nota de ajuste de nómina');
+        }
+    }
+
+    /**
+     * Verificar si un error HTTP 422 está relacionado específicamente con el rango de numeración
+     * (numbering_range_id, resolución, consecutivo, etc.) para evitar invalidar el caché
+     * cuando el error es por otros datos del payload (cliente, items, responsabilidades, etc.).
+     */
+    private esErrorDeRangoNumeracion(errorsObj: any, mensajesErrorList: any[]): boolean {
+        if (!errorsObj && (!mensajesErrorList || mensajesErrorList.length === 0)) return false;
+
+        const keys = Object.keys(errorsObj || {}).map((k) => k.toLowerCase());
+        const tieneKeyRango = keys.some(
+            (k) => k.includes('numbering_range') || k.includes('resolution') || k.includes('numbering')
+        );
+
+        if (tieneKeyRango) return true;
+
+        const textoError = (mensajesErrorList || []).map((m) => String(m).toLowerCase()).join(' ');
+        const palabrasClave = [
+            'numbering_range',
+            'rango de numeración',
+            'rango de numeracion',
+            'resolución',
+            'resolucion',
+            'consecutivo',
+            'número de factura',
+            'numero de factura',
+            'rango vencido',
+            'rango agotado',
+            'rango inactivo',
+            'expired',
+            'exhausted',
+        ];
+
+        return palabrasClave.some((pc) => textoError.includes(pc));
+    }
+
+    // ========== ENDPOINTS DE REFERENCIA ==========
+
+    /**
+     * Obtener rangos de numeración desde el caché local (0 llamadas a Factus).
+     * Con `forceRefresh=true` sincroniza primero contra la API.
+     */
+    async obtenerRangosNumeracion(
+        filtros?: { document?: string; isActive?: boolean },
+        forceRefresh = false,
+    ): Promise<any[]> {
+        if (forceRefresh) {
+            await this.numberingRangeService.syncFromApi('billing');
+        }
+        return this.numberingRangeService.listCached({
+            domain: 'billing',
+            document: filtros?.document,
+            isActive: filtros?.isActive,
+        });
+    }
+
+    /**
+     * Resolver el rango de numeración a usar (caché local, sin HTTP):
+     * 1. Variable de entorno (configKey) si está definida.
+     * 2. Primer rango activo y vigente del caché, determinístico.
+     * 3. Sin rango vigente → lanza BadRequestException (bloquea la emisión
+     *    con mensaje guiado; nunca se emite sin resolución DIAN válida).
+     */
+    private async resolverNumberingRangeId(configKey: string, documentCode?: string): Promise<number | string | undefined> {
+        return this.numberingRangeService.resolveId(configKey, documentCode, { domain: 'billing' });
+    }
+
+    private async resolverNumberingRangeSnapshot(configKey: string, documentCode?: string): Promise<NumberingRangeSnapshot> {
+        return this.numberingRangeService.resolveSnapshot(configKey, documentCode, { domain: 'billing' });
     }
 
     /**
@@ -1122,9 +1504,6 @@ export class FactusService {
      * Limpiar tokens (útil para testing o logout)
      */
     clearTokens(): void {
-        this.accessToken = null;
-        this.refreshToken = null;
-        this.tokenExpiry = null;
-        this.logger.log('🔓 Tokens limpiados');
+        this.authService.clearTokens();
     }
 }

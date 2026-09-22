@@ -30,6 +30,7 @@ import { ComprobanteDetalle } from 'src/comprobantes/entities/comprobante-detall
 import { ComprobantesValidatorService } from 'src/comprobantes/comprobantes-validator.service';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
+import { ApiDianModule } from 'src/api-dian/api-dian.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
       CuentaContable
     ]),
     AsientosContablesModule,
+    ApiDianModule,
   ],
   controllers: [NominaController],
   providers: [NominaService, NominaDianService, NominaJobsService, ComprobantesService, ComprobantesValidatorService],

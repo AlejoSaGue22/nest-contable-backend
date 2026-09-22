@@ -3,6 +3,7 @@ import { PeriodoNomina } from './periodo-nomina.entity';
 import { Empleado } from './empleado.entity';
 import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 import { ComprobanteContable } from 'src/comprobantes/entities/comprobante-contable.entity';
+import { EstadoDianNomina } from '../enums/estado-dian-nomina.enum';
 
 @Entity('liquidaciones_nomina')
 export class Liquidacion {
@@ -96,6 +97,27 @@ export class Liquidacion {
 
     @Column({ nullable: true })
     comprobanteId: string;
+
+    // ========== NÓMINA ELECTRÓNICA DIAN (un documento Factus por trabajador) ==========
+
+    /** reference_code enviado a Factus (único por trabajador y período). */
+    @Column({ name: 'dian_reference_code', type: 'varchar', length: 120, nullable: true })
+    dianReferenceCode: string | null;
+
+    @Column({ name: 'dian_cune', type: 'varchar', length: 500, nullable: true })
+    dianCune: string | null;
+
+    @Column({ name: 'dian_numero', type: 'varchar', nullable: true })
+    dianNumero: string | null;
+
+    @Column({ name: 'dian_estado', type: 'enum', enum: EstadoDianNomina, nullable: true })
+    dianEstado: EstadoDianNomina | null;
+
+    @Column({ name: 'dian_mensaje_error', type: 'text', nullable: true })
+    dianMensajeError: string | null;
+
+    @Column({ name: 'dian_response', type: 'json', nullable: true })
+    dianResponse: any;
 
     @CreateDateColumn()
     createdAt: Date;

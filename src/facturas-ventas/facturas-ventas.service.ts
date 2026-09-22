@@ -627,6 +627,9 @@ export class FacturasVentasService {
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: 'FE',
           comprobante: numberFactura,
+          factusNumberingRangeId: respuesta.numberingRangeId ?? null,
+          factusResolutionNumber: respuesta.resolutionNumber ?? null,
+          factusRangePrefix: respuesta.rangePrefix ?? null,
         };
 
         if (respuesta.numeroCompleto) {

@@ -317,6 +317,9 @@ export class NotasAjusteService {
           proveedorResponse: respuesta.respuestaCompleta,
           prefijo: nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND',
           numero: numeroNota,
+          factusNumberingRangeId: respuesta.numberingRangeId ?? null,
+          factusResolutionNumber: respuesta.resolutionNumber ?? null,
+          factusRangePrefix: respuesta.rangePrefix ?? null,
         };
 
         if (respuesta.numeroCompleto) {

@@ -261,6 +261,15 @@ export class NominaController {
     res.send(xml);
   }
 
+  @Get('liquidaciones/:id/dian-xml')
+  // @Permissions(Permission.NOMINA_DIAN_SEND)
+  async descargarXmlLiquidacion(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, fileName } = await this.nominaDianService.descargarXmlNominaLiquidacion(id);
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  }
+
   //  Catalogos ---------------------------------------
   @Get('entidades-seguridad')
   findAllEntidadesSS(@Query('tipo') tipo?: string) {

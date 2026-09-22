@@ -12,6 +12,10 @@ export interface FacturaDianResponse {
   respuestaCompleta: any;
   warnings?: string[];
   errors?: any;
+  /** Snapshot del rango DIAN usado (se persiste en el documento). */
+  numberingRangeId?: number | null;
+  resolutionNumber?: string | null;
+  rangePrefix?: string | null;
 }
 
 export interface FacturaDianPdfResponse {
@@ -145,5 +149,67 @@ export interface AllowanceChargesFactus {
   reason: string,
   base_amount: string,
   amount: string
+}
+
+export interface FactusV2PayrollSettlement {
+  month: number;
+  year: number;
+  payroll_period_code: string;
+  pay_period_half?: string;
+}
+
+export interface FactusV2PayrollPayment {
+  payment_method_code: string;
+  bank_name?: string;
+  account_type?: string;
+  account_number?: string;
+  payment_date: string;
+}
+
+export interface FactusV2PayrollWorker {
+  identification_document_code: string;
+  identification_number: string;
+  first_name: string;
+  other_names?: string;
+  first_surname: string;
+  second_surname: string;
+  address: string;
+  country_code: string;
+  municipality_code?: string;
+  has_integral_salary: boolean;
+  has_high_risk: boolean;
+  worker_type_code: string;
+  worker_subtype: string;
+  contract_type: string;
+  employee_code?: string;
+  salary: string;
+  entry_date: string;
+  days_worked: string;
+  retirement_date?: string;
+}
+
+export interface FactusV2PayrollPayload {
+  reference_code: string;
+  observation?: string;
+  numbering_range_id?: number | string;
+  settlement_period: FactusV2PayrollSettlement;
+  payment: FactusV2PayrollPayment;
+  worker: FactusV2PayrollWorker;
+  accruals: Record<string, unknown>;
+  deductions: Record<string, unknown>;
+}
+
+export interface FactusPayrollResult {
+  estado: 'aceptada' | 'rechazada';
+  referenceCode: string;
+  cune: string;
+  numero: string;
+  mensaje: string;
+  respuestaCompleta: any;
+  warnings: string[];
+  errors: any;
+  numberingRangeId: number | null;
+  resolutionNumber: string | null;
+  rangePrefix: string | null;
 }
 
