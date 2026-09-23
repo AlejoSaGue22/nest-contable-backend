@@ -200,9 +200,11 @@ export class NotasAjusteService {
       // 4. Crear nota débito
       const notaDebito = queryRunner.manager.create(NotaAjuste, {
         tipo: TipoNota.DEBITO,
-        prefijo: 'ND',
+        prefijo: numeroNota ? 'ND' : '',
         numero: numeroNota,
         numeroCompleto: numeroNota ? `ND-${numeroNota}` : '',
+        formaPago: createDto.formaPago,
+        metodoPago: createDto.metodoPago || null,
         facturaOriginalId: factura.id,
         facturaOriginalNumero: factura.comprobante_completo,
         clienteId: factura.clientId,
@@ -210,7 +212,6 @@ export class NotasAjusteService {
         motivo: createDto.motivo,
         fecha: createDto.fecha || '',
         // fechaVencimiento: createDto.fechaVencimiento || '',
-        items: itemsCalculados,
         subtotal,
         iva,
         descuento: 0,
@@ -223,6 +224,39 @@ export class NotasAjusteService {
       });
 
       const notaGuardada = await queryRunner.manager.save(NotaAjuste, notaDebito);
+
+      // Guardar items explícitamente (la relación no tiene cascade)
+      const itemsToSaveND = itemsCalculados.map(item =>
+        queryRunner.manager.create(ItemNotaAjuste, {
+          ...item,
+          notaId: notaGuardada.id
+        })
+      );
+
+      await queryRunner.manager.save(ItemNotaAjuste, itemsToSaveND);
+
+      // Paridad con NC: contabilizar al crear estándar no borrador
+      // (numeroCompleto ya existe, la referencia del asiento queda correcta).
+      if (factura.tipoFactura == TipoFactura.STANDARD && isDraft == false) {
+        try {
+          notaGuardada.items = itemsToSaveND;
+          notaGuardada.facturaOriginal = factura;
+          await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', notaGuardada.id, notaGuardada.createdById, queryRunner);
+          this.logger.log(`Asiento contable generado automáticamente para nota débito ${notaGuardada.numeroCompleto}`);
+
+        } catch (error) {
+          await queryRunner.manager.update(NotaAjuste,
+            { id: notaGuardada.id },
+            {
+              estado: EstadoNota.ERROR_ASIENTO,
+              asientoError: error.message,
+              fechaAsientoError: new Date()
+            }
+          );
+          this.logger.error(`Error generando asiento contable ND: ${error.message}`);
+        }
+      }
+
       await queryRunner.commitTransaction();
 
       this.logger.log(`✅ Nota Débito ${notaGuardada.numeroCompleto} creada en borrador`);
@@ -305,7 +339,14 @@ export class NotasAjusteService {
 
       // 3. Procesar respuesta
       if (respuesta.estado === 'aceptada') {
-        const updateAceptada: Partial<NotaAjuste> = {
+        // Fuente de verdad: el numeroCompleto de Factus. Fallback al local.
+        const prefijoFinal = nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND';
+        const numeroCompletoFinal = respuesta.numeroCompleto || `${prefijoFinal}-${numeroNota}`;
+
+        // 3a. Persistir el número DEFINITIVO antes de contabilizar, para que
+        // la estrategia lea numeroCompleto y el asiento quede con referencia correcta
+        // (nunca 'Borrador').
+        await queryRunner.manager.update(NotaAjuste, { id }, {
           estado: EstadoNota.ACCEPTED,
           estadoDIAN: EstadoDIANNota.ACEPTADA,
           fechaAceptacionDIAN: new Date(),
@@ -315,29 +356,27 @@ export class NotasAjusteService {
           pdfUrl: respuesta.pdfUrl,
           qrCode: respuesta.qrImageBase64 || respuesta.qrCode,
           proveedorResponse: respuesta.respuestaCompleta,
-          prefijo: nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND',
+          prefijo: prefijoFinal,
           numero: numeroNota,
+          numeroCompleto: numeroCompletoFinal,
           factusNumberingRangeId: respuesta.numberingRangeId ?? null,
           factusResolutionNumber: respuesta.resolutionNumber ?? null,
           factusRangePrefix: respuesta.rangePrefix ?? null,
-        };
+        });
 
-        if (respuesta.numeroCompleto) {
-          updateAceptada.numeroCompleto = respuesta.numeroCompleto;
-        }
-
-        // Generar asiento contable
+        // 3b. Generar asiento contable (lee el número ya persistido)
         try {
           await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', nota.id, userId, queryRunner);
-          this.logger.log(`Asiento contable generado automáticamente para ${nota.tipo} ${nota.numeroCompleto}`);
+          this.logger.log(`Asiento contable generado automáticamente para ${nota.tipo} ${numeroCompletoFinal}`);
         } catch (asientoError) {
-          updateAceptada.estado = EstadoNota.ERROR_ASIENTO;
-          updateAceptada.asientoError = asientoError.message;
-          updateAceptada.fechaAsientoError = new Date();
+          await queryRunner.manager.update(NotaAjuste, { id }, {
+            estado: EstadoNota.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          });
           this.logger.error(`Error generando asiento contable para ${nota.tipo}: ${asientoError.message}`);
         }
 
-        await queryRunner.manager.update(NotaAjuste, { id }, updateAceptada);
         this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: CUFE: ${respuesta.cufe} - CUDE: ${respuesta.cude}`);
 
       } else {

@@ -726,7 +726,7 @@ export class FactusService {
     /**
      * Procesar respuesta V2 de Factus para Notas de Ajuste.
      * La fuente de verdad es data.is_validated, no solo status === 'Created'.
-     */
+    */
     private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito', rangeSnapshot?: NumberingRangeSnapshot | null): any {
         const status: string = responseData?.status || '';
         const data: any = responseData?.data || {};
@@ -807,7 +807,6 @@ export class FactusService {
         }
     }
 
-
     // ========== NÓMINA ELECTRÓNICA (V2 payroll, un documento por trabajador) ==========
 
     /**
@@ -826,13 +825,7 @@ export class FactusService {
      * Crear y validar la nómina de UN trabajador en Factus/DIAN.
      * POST /v2/payroll/validate
      */
-    async crearYValidarNomina(
-        periodo: PeriodoNomina,
-        liquidacion: Liquidacion,
-        empleado: Empleado,
-        referenceCode: string,
-        rangeSnapshot?: NumberingRangeSnapshot | null,
-    ): Promise<FactusPayrollResult> {
+    async crearYValidarNomina(periodo: PeriodoNomina, liquidacion: Liquidacion, empleado: Empleado, referenceCode: string, rangeSnapshot?: NumberingRangeSnapshot | null): Promise<FactusPayrollResult> {
         const snapshot = rangeSnapshot ?? await this.resolverSnapshotNomina();
         const payload = await this.construirPayloadNomina(periodo, liquidacion, empleado, referenceCode, snapshot?.id);
 
@@ -882,13 +875,7 @@ export class FactusService {
      * Construir payload V2 de nómina para UN trabajador.
      * Mapea el modelo local (Empleado/Liquidacion) a los códigos DIAN/Factus.
      */
-    private async construirPayloadNomina(
-        periodo: PeriodoNomina,
-        liquidacion: Liquidacion,
-        empleado: Empleado,
-        referenceCode: string,
-        numberingRangeId?: number | string,
-    ): Promise<FactusV2PayrollPayload> {
+    private async construirPayloadNomina(periodo: PeriodoNomina, liquidacion: Liquidacion, empleado: Empleado, referenceCode: string, numberingRangeId?: number | string): Promise<FactusV2PayrollPayload> {
         const fin = periodo.fechaFin instanceof Date ? periodo.fechaFin : new Date(periodo.fechaFin);
         const settlement: FactusV2PayrollSettlement = {
             month: fin.getMonth() + 1,
@@ -1275,10 +1262,7 @@ export class FactusService {
      * Obtener rangos de numeración desde el caché local (0 llamadas a Factus).
      * Con `forceRefresh=true` sincroniza primero contra la API.
      */
-    async obtenerRangosNumeracion(
-        filtros?: { document?: string; isActive?: boolean },
-        forceRefresh = false,
-    ): Promise<any[]> {
+    async obtenerRangosNumeracion(filtros?: { document?: string; isActive?: boolean }, forceRefresh = false): Promise<any[]> {
         if (forceRefresh) {
             await this.numberingRangeService.syncFromApi('billing');
         }

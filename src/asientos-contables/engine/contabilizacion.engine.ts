@@ -159,14 +159,14 @@ export class ContabilizacionEngine implements OnModuleInit {
         });
 
         const clientConCuenta = factura?.client;
-        const cuentaTerceroId = clientConCuenta?.cuentaContableId || 
+        const cuentaTerceroId = clientConCuenta?.cuentaContableId ||
           (await this.asientosService.obtenerCuentaPorCodigo('1305')).id;
         const cuentaTerceroCodigo = clientConCuenta?.cuentaContable?.codigo || '130505';
         const cuentaTerceroNombre = clientConCuenta?.cuentaContable?.nombre || 'Clientes';
 
         for (const app of aplicaciones) {
           const anticipo = app.anticipo;
-          const cuentaAnticipo = anticipo?.cuentaContable || 
+          const cuentaAnticipo = anticipo?.cuentaContable ||
             await this.asientosService.obtenerCuentaPorCodigo('280505');
 
           // Inyectar línea de débito al anticipo
@@ -226,7 +226,7 @@ export class ContabilizacionEngine implements OnModuleInit {
 
         for (const app of aplicaciones) {
           const anticipo = app.anticipo;
-          const cuentaAnticipo = anticipo?.cuentaContable || 
+          const cuentaAnticipo = anticipo?.cuentaContable ||
             await this.asientosService.obtenerCuentaPorCodigo('133005');
 
           // Inyectar línea de débito a proveedores (CxP)
@@ -280,8 +280,9 @@ export class ContabilizacionEngine implements OnModuleInit {
     }
 
     try {
-      // Calcular la definición usando la transacción activa
-      const definicion = await strategy.generarDefinicion(documentoId, qr);
+      // Calcular la definición usando la transacción activa.
+      // strict=true: prohibido usar placeholders como referencia 'Borrador'.
+      const definicion = await strategy.generarDefinicion(documentoId, qr, true);
 
       if (!definicion.estaBalanceado) {
         throw new BadRequestException(`No se puede contabilizar el documento. El asiento no está balanceado. Diferencia: ${definicion.diferencia}`);

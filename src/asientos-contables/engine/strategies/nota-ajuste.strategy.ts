@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { QueryRunner, DataSource } from 'typeorm';
 import { IContabilizacionStrategy } from '../contabilizacion-strategy.interface';
 import { DefinicionAsientoDto, DefinicionDetalleAsientoDto } from '../../dto/definicion-asiento.dto';
@@ -23,7 +23,8 @@ export class NotaAjusteStrategy implements IContabilizacionStrategy {
 
   async generarDefinicion(
     documentoId: string,
-    queryRunner?: QueryRunner
+    queryRunner?: QueryRunner,
+    strict?: boolean
   ): Promise<DefinicionAsientoDto> {
     const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
 
@@ -41,6 +42,14 @@ export class NotaAjusteStrategy implements IContabilizacionStrategy {
 
     if (!nota) {
       throw new NotFoundException(`Nota de ajuste con ID ${documentoId} no encontrada`);
+    }
+
+    // Fail-fast: en contabilización real la nota debe tener número definitivo.
+    // Si cae aquí, el llamador persiste el número ANTES de contabilizar.
+    if (strict && !nota.numeroCompleto) {
+      throw new BadRequestException(
+        `No se puede contabilizar la nota ${documentoId} sin número definitivo (numeroCompleto vacío). Persista el número antes de generar el asiento.`
+      );
     }
 
     const factura = nota.facturaOriginal;
