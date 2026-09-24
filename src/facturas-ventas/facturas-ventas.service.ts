@@ -29,6 +29,8 @@ import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { PagosService } from 'src/pagos/pagos.service';
+import { InventarioService } from 'src/inventario/inventario.service';
+import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
@@ -61,6 +63,7 @@ export class FacturasVentasService {
     private factusService: FactusService,
     private pagosService: PagosService,
     private readonly parametrizacionService: ParametrizacionContableService,
+    private readonly inventarioService: InventarioService,
   ) { }
 
   async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
@@ -284,8 +287,18 @@ export class FacturasVentasService {
           });
         }
 
-        // Cobro automático si es contado y estándar (dentro de la misma transacción)
-        if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
+      // Kardex best-effort: la venta emitida descuenta stock (nunca bloquea).
+      if (statusInvoice !== InvoiceStatus.DRAFT) {
+        await this.inventarioService.registrarSalidasVenta(
+          queryRunner.manager,
+          savedInvoice.id,
+          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+          userId,
+        ).catch((invError) => this.logger.error(`Error kardex venta ${savedInvoice.comprobante_completo}: ${invError.message}`));
+      }
+
+      // Cobro automático si es contado y estándar (dentro de la misma transacción)
+      if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
           const cobroMonto = MathUtil.sub(total, montoAnticiposTotal);
           if (cobroMonto > 0) {
             const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
@@ -785,6 +798,20 @@ export class FacturasVentasService {
             this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
           }
         }
+        // Kardex best-effort: la FE aceptada descuenta stock (nunca bloquea).
+        try {
+          const itemsVenta = await this.dataSource.manager.find(ItemsFacturaVenta, {
+            where: { facturaId: id },
+          });
+          await this.inventarioService.registrarSalidasVenta(
+            this.dataSource.manager,
+            id,
+            itemsVenta.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+            userId,
+          );
+        } catch (invError) {
+          this.logger.error(`Error kardex FE ${factura.comprobante_completo}: ${invError.message}`);
+        }
         this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
       } else {
         // Rechazada
@@ -1185,6 +1212,19 @@ export class FacturasVentasService {
         this.logger.error(
           `Error generando asientos de anulación: ${asientoError.message}`,
         );
+      }
+
+      // Kardex best-effort: la venta anulada devuelve sus SALIDAs al stock.
+      try {
+        await this.inventarioService.revertirDocumento(
+          this.dataSource.manager,
+          DocumentoInventario.FACTURA_VENTA,
+          id,
+          `Anulación venta ${updatedInvoice.comprobante_completo}`,
+          userId,
+        );
+      } catch (invError) {
+        this.logger.error(`Error kardex anulación venta ${updatedInvoice.comprobante_completo}: ${invError.message}`);
       }
 
       return await this.findOne(id);

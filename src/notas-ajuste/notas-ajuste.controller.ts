@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, BadRequestException, Res } from '@nestjs/common';
 import { NotasAjusteService } from './notas-ajuste.service';
 import { CreateNotaCreditoDto, CreateNotaDebitoDto, CreateNotasAjusteDto } from './dto/create-notas-ajuste.dto';
+import { CreateNotaCreditoV2Dto } from './dto/create-nota-credito-v2.dto';
+import { UpdateNotaCreditoV2Dto } from './dto/update-nota-credito-v2.dto';
 import { UpdateNotasAjusteDto } from './dto/update-notas-ajuste.dto';
 import { Req } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
@@ -11,12 +13,16 @@ import { NotasAjusteFilterDto, toNotaAjusteResponse } from './dto/nota-ajuste-fi
 import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
 import { Response } from 'express';
+import { DisponibilidadNotaService } from './disponibilidad/disponibilidad-nota.service';
+import { PaymentDetailsResolver, PaymentStrategyName } from './factus/payment-details.resolver';
 
 @Controller('notas-ajuste')
 @UseGuards(AuthGuard, RolesGuard)
 export class NotasAjusteController {
   constructor(
-    private readonly notasAjusteService: NotasAjusteService
+    private readonly notasAjusteService: NotasAjusteService,
+    private readonly disponibilidadService: DisponibilidadNotaService,
+    private readonly paymentResolver: PaymentDetailsResolver,
   ) { }
 
   // ========== NOTAS CRÉDITO ==========
@@ -38,6 +44,23 @@ export class NotasAjusteController {
     const nota = await this.notasAjusteService.crearNotaCredito(createDto, req.user.sub);
 
     return toNotaAjusteResponse(nota, 'Nota Crédito creada en borrador. Use /emitir para enviar a DIAN.');
+  }
+
+  /**
+   * Crear Nota Crédito V2 (guía NC 2026).
+   *
+   * POST /api/notas-ajuste/credito/v2
+   *
+   * El concepto DIAN controla el cálculo: el body trae solo el input del
+   * concepto (cantidad | precioNuevo | descuento | vacío=anulación) y el
+   * backend recalcula todo. Sin formaPago: se espeja la factura.
+   */
+  @Post('credito/v2')
+  @Permissions(Permission.INVOICE_CREATE)
+  async crearNotaCreditoV2(@Body() createDto: CreateNotaCreditoV2Dto, @Req() req: AuthenticatedRequest) {
+    const nota = await this.notasAjusteService.crearNotaCreditoV2(createDto, req.user.sub);
+
+    return toNotaAjusteResponse(nota, 'Nota Crédito V2 creada. Use /emitir para enviar a DIAN.');
   }
 
   /**
@@ -180,7 +203,19 @@ export class NotasAjusteController {
 
 
   /**
-   * Actualizar nota (solo borrador)
+   * Actualizar borrador NC V2 (recalcula por concepto).
+   *
+   * PATCH /api/notas-ajuste/:id/v2
+   */
+  @Patch(':id/v2')
+  @Permissions(Permission.INVOICE_UPDATE)
+  async updateV2(@Param('id') id: string, @Body() updateDto: UpdateNotaCreditoV2Dto) {
+    const nota = await this.notasAjusteService.updateNotaCreditoV2(id, updateDto);
+    return toNotaAjusteResponse(nota, 'Nota crédito actualizada (recálculo por concepto)');
+  }
+
+  /**
+   * Actualizar nota (solo borrador, formato legacy)
    */
   @Patch(':id')
   @Permissions(Permission.INVOICE_UPDATE)
@@ -249,8 +284,64 @@ export class NotasAjusteController {
   }
 
   /**
+   * Disponibilidad por concepto para una factura (guía NC 2026 §2).
+   *
+   * GET /api/notas-ajuste/disponibilidad/:facturaId
+   *
+   * Retorna por línea: cantidad disponible (devolución),
+   * valor de descuento disponible, valor de ajuste disponible,
+   * y estado del documento (anulada/bloqueada/saldo).
+   */
+  @Get('disponibilidad/:facturaId')
+  @Permissions(Permission.INVOICE_READ)
+  async calcularDisponibilidad(@Param('facturaId') facturaId: string) {
+    const disponibilidad = await this.disponibilidadService.calcular(facturaId);
+
+    return {
+      success: true,
+      message: 'Disponibilidad por concepto calculada',
+      data: disponibilidad
+    };
+  }
+
+  /**
+   * Sonda de payment_details para sandbox (NO envía a Factus).
+   *
+   * GET /api/notas-ajuste/sonda-pago/:facturaId?total=100000&strategy=espejo-factura
+   *
+   * Devuelve la matriz de candidatas (espejo/contado-10/credito-30d)
+   * para probar qué combinación acepta Factus por concepto antes de fijarla.
+   */
+  @Get('sonda-pago/:facturaId')
+  @Permissions(Permission.INVOICE_READ)
+  async sondaPaymentDetails(
+    @Param('facturaId') facturaId: string,
+    @Query('total') total?: string,
+    @Query('strategy') strategy?: PaymentStrategyName,
+  ) {
+    const factura = await this.disponibilidadService.facturaFuente(facturaId);
+    const totalNota = Number(total ?? (factura as any).total ?? 0);
+    const efectiva = this.paymentResolver.resolve(factura, totalNota, strategy);
+    const matriz = this.paymentResolver.candidates(factura, totalNota);
+
+    return {
+      success: true,
+      message: 'Matriz de payment_details (sin envío a Factus)',
+      data: {
+        facturaId,
+        facturaFormaPago: factura.formaPago,
+        facturaMetodoPago: factura.metodoPago,
+        facturaVencimiento: factura.fechaVencimiento,
+        totalNota,
+        efectiva,
+        matriz,
+      }
+    };
+  }
+
+  /**
    * Calcular impacto de notas en una factura
-   * 
+   *
    * GET /api/notas-ajuste/impacto/:facturaId
    */
   @Get('impacto/:facturaId')

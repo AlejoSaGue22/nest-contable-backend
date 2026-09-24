@@ -24,6 +24,8 @@ import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { InventarioService } from 'src/inventario/inventario.service';
+import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 
 
 @Injectable()
@@ -51,6 +53,7 @@ export class FacturasComprasService {
         private contabilizacionEngine: ContabilizacionEngine,
         private pagosService: PagosService,
         private readonly parametrizacionService: ParametrizacionContableService,
+        private readonly inventarioService: InventarioService,
     ) { }
 
     async create(createFacturaCompraDto: CreateFacturaCompraDto, userId: string): Promise<FacturaCompra> {
@@ -679,6 +682,24 @@ export class FacturasComprasService {
 
             await queryRunner.commitTransaction();
             this.logger.log(`Factura de compra ${numero} registrada correctamente (asiento + pago)`);
+
+            // Kardex best-effort (post-commit, fuera del rollback contable):
+            // la compra registrada suma stock. Nunca bloquea el registro.
+            try {
+                await this.inventarioService.registrarEntradasCompra(
+                    this.dataSource.manager,
+                    id,
+                    (facturaActualizada!.items ?? []).map((it) => ({
+                        articuloId: it.articuloId,
+                        cantidad: Number(it.quantity),
+                    })),
+                    numero,
+                    userId,
+                );
+            } catch (invError) {
+                this.logger.error(`Error kardex compra ${numero}: ${invError.message}`);
+            }
+
             return await this.findOne(id);
 
         } catch (error) {
@@ -818,6 +839,19 @@ export class FacturasComprasService {
                     },
                 );
                 this.logger.error(`Error generando asientos de anulación para compra ${facturaAnulada.numero}: ${asientoError.message}`);
+            }
+
+            // Kardex best-effort: la compra anulada revierte sus ENTRADAs.
+            try {
+                await this.inventarioService.revertirDocumento(
+                    this.dataSource.manager,
+                    DocumentoInventario.FACTURA_COMPRA,
+                    id,
+                    `Anulación compra ${facturaAnulada.numero}`,
+                    userId,
+                );
+            } catch (invError) {
+                this.logger.error(`Error kardex anulación compra ${facturaAnulada.numero}: ${invError.message}`);
             }
 
             return await this.findOne(id);

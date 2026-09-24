@@ -41,6 +41,7 @@ import { CentrosCostosModule } from './settings/centros-costos/centros-costos.mo
 import { ComprobantesModule } from './comprobantes/comprobantes.module';
 import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
 import { EmpresaModule } from './settings/empresa/empresa.module';
+import { InventarioModule } from './inventario/inventario.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { EmpresaModule } from './settings/empresa/empresa.module';
     ComprobantesModule,
     ActivosFijosModule,
     EmpresaModule,
+    InventarioModule,
   ],
   controllers: [],
 })

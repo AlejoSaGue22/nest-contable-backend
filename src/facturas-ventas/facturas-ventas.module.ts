@@ -13,6 +13,7 @@ import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancari
 import { PagosModule } from 'src/pagos/pagos.module';
 
 import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
+import { InventarioModule } from 'src/inventario/inventario.module';
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { ParametrizacionContableModule } from 'src/settings/parametrizacion-cont
     AsientosContablesModule,
     ApiDianModule,
     PagosModule,
-    ParametrizacionContableModule
+    ParametrizacionContableModule,
+    InventarioModule
   ],
   controllers: [FacturasVentasController],
   providers: [FacturasVentasService],

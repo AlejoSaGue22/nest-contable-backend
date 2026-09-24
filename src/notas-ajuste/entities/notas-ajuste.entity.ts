@@ -178,6 +178,25 @@ export class NotaAjuste {
   @Column({ default: 0 })
   intentosEnvio: number;
 
+  // ========== CARTERA (aplicación del crédito, idempotente) ==========
+
+  /** La NC ya movió totalPagado/saldoPendiente de la factura fuente. */
+  @Column({ type: 'boolean', default: false })
+  saldoAplicado: boolean;
+
+  /** Monto exacto aplicado a cartera (para reversar al anular). */
+  @Column('decimal', { precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  valorAplicadoCartera: number | null;
+
+  // ========== CAPA 5: ESTADO FACTUS (trazabilidad envío, idempotencia) ==========
+
+  /**
+   * reference_code estable enviado a Factus. Se persiste ANTES de enviar;
+   * ante timeout/409 se reconcilia por este código en vez de reenviar.
+   */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  factusReferenceCode: string | null;
+
   // ========== SNAPSHOT RANGO DIAN (auditoría/conciliación) ==========
 
   /** ID del rango Factus usado en la emisión. */
@@ -258,12 +277,18 @@ export class NotaAjuste {
   }
 
   /**
-   * Verifica si afecta inventario (para futuras implementaciones)
+   * Verifica si afecta inventario (hook para el futuro módulo de kardex).
+   * Hoy ningún consumidor mueve stock: solo marca la intención por línea
+   * (ItemNotaAjuste.afectaInventario). Separación valor vs inventario:
+   * la NC siempre ajusta valor (contabilidad/cartera); el inventario solo
+   * se moverá para devolución/anulación de bienes inventariables.
    */
   afectaInventario(): boolean {
     if (this.esNotaCredito()) {
-      // NC por devolución afecta inventario
-      return this.concepto === ConceptoNotaCredito.DEVOLUCION_PARCIAL;
+      return (
+        this.concepto === ConceptoNotaCredito.DEVOLUCION_PARCIAL ||
+        this.concepto === ConceptoNotaCredito.ANULACION
+      );
     }
     return false;
   }

@@ -8,14 +8,21 @@ import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entit
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { ApiDianModule } from 'src/api-dian/api-dian.module';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
+import { InventarioModule } from 'src/inventario/inventario.module';
+import { DisponibilidadNotaService } from './disponibilidad/disponibilidad-nota.service';
+import { PaymentDetailsResolver } from './factus/payment-details.resolver';
+import { CreditNoteCalculator } from './credito/credit-note-calculator.service';
+import { CarteraNotaService } from './cartera/cartera-nota.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([NotaAjuste, ItemNotaAjuste, FacturasVenta, Impuesto]), 
+    TypeOrmModule.forFeature([NotaAjuste, ItemNotaAjuste, FacturasVenta, Impuesto]),
     ApiDianModule,
-    AsientosContablesModule
+    AsientosContablesModule,
+    InventarioModule
   ],
   controllers: [NotasAjusteController],
-  providers: [NotasAjusteService],
+  providers: [NotasAjusteService, DisponibilidadNotaService, PaymentDetailsResolver, CreditNoteCalculator, CarteraNotaService],
+  exports: [DisponibilidadNotaService, PaymentDetailsResolver, CreditNoteCalculator, CarteraNotaService],
 })
 export class NotasAjusteModule { }

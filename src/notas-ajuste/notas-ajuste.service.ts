@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateNotaCreditoDto, CreateNotaDebitoDto, CreateNotasAjusteDto } from './dto/create-notas-ajuste.dto';
 import { UpdateNotasAjusteDto } from './dto/update-notas-ajuste.dto';
 import { NotaAjuste } from './entities/notas-ajuste.entity';
-import { EstadoDIANNota, EstadoNota, TipoNota } from './enums/notas-ajuste.enum';
+import { ConceptoNotaCredito, EstadoDIANNota, EstadoNota, TipoNota } from './enums/notas-ajuste.enum';
 import { ItemNotaAjuste } from './entities/items-notas-ajuste.entity';
 import { NotasAjusteFilterDto } from './dto/nota-ajuste-filter.dto';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
@@ -13,6 +13,14 @@ import { FactusService } from 'src/api-dian/services/factus.service';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { MathUtil } from 'src/common/utils/math.util';
+import { DisponibilidadNotaService } from './disponibilidad/disponibilidad-nota.service';
+import { PaymentDetailsResolver } from './factus/payment-details.resolver';
+import { CreateNotaCreditoV2Dto } from './dto/create-nota-credito-v2.dto';
+import { UpdateNotaCreditoV2Dto } from './dto/update-nota-credito-v2.dto';
+import { CreditNoteCalculator } from './credito/credit-note-calculator.service';
+import { CarteraNotaService } from './cartera/cartera-nota.service';
+import { InventarioService } from 'src/inventario/inventario.service';
+import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 
 @Injectable()
 export class NotasAjusteService {
@@ -32,6 +40,11 @@ export class NotasAjusteService {
     private readonly factusService: FactusService,
     private readonly asientosService: AsientosContablesService,
     private readonly contabilizacionEngine: ContabilizacionEngine,
+    private readonly disponibilidadService: DisponibilidadNotaService,
+    private readonly paymentResolver: PaymentDetailsResolver,
+    private readonly creditCalculator: CreditNoteCalculator,
+    private readonly carteraService: CarteraNotaService,
+    private readonly inventarioService: InventarioService,
   ) { }
 
   /**
@@ -47,7 +60,7 @@ export class NotasAjusteService {
     try {
       const factura = await queryRunner.manager.findOne(FacturasVenta, {
         where: { id: createDto.facturaOriginalId },
-        relations: ['client']
+        relations: ['client', 'items']
       });
 
       if (!factura) {
@@ -106,12 +119,41 @@ export class NotasAjusteService {
 
       const notaGuardada = await queryRunner.manager.save(NotaAjuste, notaCredito);
 
-      const itemsToSave = itemsCalculados.map(item =>
-        queryRunner.manager.create(ItemNotaAjuste, {
+      // Capas 1-2: snapshot de la factura fuente + input del usuario por línea.
+      // El resultado (capa 3) ya viene en itemsCalculados; impuestos (capa 4)
+      // en detalleCalculo. Capas pobladas aunque el cálculo por concepto
+      // llegue en la fase de estrategias (hoy cálculo genérico legacy).
+      const facturaItemsPorArticulo = new Map<string, any>();
+      for (const fi of factura.items ?? []) {
+        if (!facturaItemsPorArticulo.has(fi.articuloId)) {
+          facturaItemsPorArticulo.set(fi.articuloId, fi);
+        }
+      }
+      const mueveInventario =
+        createDto.concepto === ConceptoNotaCredito.DEVOLUCION_PARCIAL ||
+        createDto.concepto === ConceptoNotaCredito.ANULACION;
+
+      const itemsToSave = itemsCalculados.map((item, idx) => {
+        const dtoItem: any = createDto.items[idx];
+        const fuente = facturaItemsPorArticulo.get(item.articuloId ?? '');
+        return queryRunner.manager.create(ItemNotaAjuste, {
           ...item,
-          notaId: notaGuardada.id
-        })
-      );
+          notaId: notaGuardada.id,
+          cantidadOriginal: fuente ? Number(fuente.quantity) : null,
+          precioOriginal: fuente ? Number(fuente.unitPrice) : null,
+          subtotalOriginal: fuente ? Number(fuente.subtotal) : null,
+          valorDescuentoOriginal: fuente ? Number(fuente.valor_discount ?? 0) : null,
+          valorIVAOriginal: fuente ? Number(fuente.valor_iva ?? 0) : null,
+          totalOriginal: fuente ? Number(fuente.total) : null,
+          cantidadInput: dtoItem ? Number(dtoItem.cantidad) : null,
+          precioNuevo: createDto.concepto === ConceptoNotaCredito.AJUSTE_PRECIO && dtoItem
+            ? Number(dtoItem.valorUnitario)
+            : null,
+          descuentoTasaInput: dtoItem?.descuento ?? null,
+          descuentoValorInput: null,
+          afectaInventario: mueveInventario,
+        });
+      });
 
       await queryRunner.manager.save(ItemNotaAjuste, itemsToSave);
 
@@ -133,6 +175,14 @@ export class NotasAjusteService {
           );
           this.logger.error(`Error generando asiento contable NC: ${error.message}`);
         }
+
+        // Cartera: la NC estándar emitida acredita de inmediato.
+        // Estricto aquí (nada externo aún): si falla, revierte la creación.
+        await this.carteraService.aplicar(queryRunner.manager, notaGuardada);
+
+        // Kardex: devolución/anulación devuelven stock (estricto, misma tx).
+        notaGuardada.items = itemsToSave;
+        await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
       }
 
       await queryRunner.commitTransaction();
@@ -150,6 +200,178 @@ export class NotasAjusteService {
       }
 
       throw new InternalServerErrorException('Error al crear la nota crédito');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Crear Nota Crédito V2 (guía NC 2026).
+   * El concepto DIAN controla el cálculo: el DTO trae solo el input del
+   * concepto y el CreditNoteCalculator recalcula todo (fuente de verdad).
+   * Sin formaPago en el contrato: se espeja la factura internamente.
+   */
+  async crearNotaCreditoV2(createDto: CreateNotaCreditoV2Dto, userId: string): Promise<NotaAjuste> {
+    this.logger.log(`📝 Creando Nota Crédito V2 (concepto ${createDto.concepto}) para factura ${createDto.facturaOriginalId}`);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const factura = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id: createDto.facturaOriginalId },
+        relations: ['client']
+      });
+
+      if (!factura) {
+        throw new NotFoundException('Factura original no encontrada');
+      }
+
+      const { lines, subtotal, iva, total } = await this.creditCalculator.calculate(createDto);
+
+      // Electrónica siempre borrador → emitir. Estándar según isDraft.
+      const isDraft = factura.esElectronica() ? true : createDto.isDraft ? true : false;
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.CREDITO);
+
+      const notaCredito = queryRunner.manager.create(NotaAjuste, {
+        tipo: TipoNota.CREDITO,
+        prefijo: numeroNota ? 'NC' : '',
+        numero: numeroNota,
+        numeroCompleto: numeroNota ? `NC-${numeroNota}` : '',
+        // Interno: espejo de la factura (el usuario no lo elige).
+        formaPago: factura.formaPago,
+        metodoPago: factura.metodoPago || null,
+        facturaOriginalId: factura.id,
+        facturaOriginalNumero: factura.comprobante_completo,
+        clienteId: factura.clientId,
+        concepto: createDto.concepto,
+        motivo: createDto.motivo,
+        fecha: createDto.fecha,
+        subtotal,
+        iva,
+        descuento: createDto.descuentoTasaGlobal ?? 0,
+        total,
+        saldoPendiente: total,
+        esReembolsoAbono: createDto.esReembolsoAbono ?? false,
+        estado: isDraft ? EstadoNota.DRAFT : EstadoNota.ISSUED,
+        estadoDIAN: factura.esElectronica() ? EstadoDIANNota.PENDIENTE : EstadoDIANNota.NO_APLICA,
+        observaciones: createDto.observaciones,
+        createdById: userId
+      });
+
+      const notaGuardada = await queryRunner.manager.save(NotaAjuste, notaCredito);
+
+      const itemsToSave = lines.map(item =>
+        queryRunner.manager.create(ItemNotaAjuste, {
+          ...item,
+          notaId: notaGuardada.id
+        })
+      );
+
+      await queryRunner.manager.save(ItemNotaAjuste, itemsToSave);
+
+      if (factura.tipoFactura == TipoFactura.STANDARD && isDraft == false) {
+        try {
+          notaGuardada.items = itemsToSave;
+          notaGuardada.facturaOriginal = factura;
+          await this.contabilizacionEngine.contabilizarDocumento('NOTA_AJUSTE', notaGuardada.id, notaGuardada.createdById, queryRunner);
+          this.logger.log(`Asiento contable generado automáticamente para NC V2 ${notaGuardada.numeroCompleto}`);
+
+        } catch (error) {
+          await queryRunner.manager.update(NotaAjuste,
+            { id: notaGuardada.id },
+            {
+              estado: EstadoNota.ERROR_ASIENTO,
+              asientoError: error.message,
+              fechaAsientoError: new Date()
+            }
+          );
+          this.logger.error(`Error generando asiento contable NC V2: ${error.message}`);
+        }
+
+        // Cartera: la NC V2 estándar emitida acredita de inmediato (estricto).
+        await this.carteraService.aplicar(queryRunner.manager, notaGuardada);
+
+        // Kardex: devolución/anulación devuelven stock (estricto, misma tx).
+        notaGuardada.items = itemsToSave;
+        await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
+      }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`✅ Nota Crédito V2 ${notaGuardada.numeroCompleto} creada (concepto ${createDto.concepto})`);
+
+      return notaGuardada;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error creando nota crédito V2: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Error al crear la nota crédito');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Editar borrador NC (V2): recalcula todo por concepto desde la factura.
+   * Solo DRAFT + CREDITO. La factura fuente no cambia (el concepto sí puede).
+   */
+  async updateNotaCreditoV2(id: string, updateDto: UpdateNotaCreditoV2Dto): Promise<NotaAjuste> {
+    const nota = await this.findOne(id);
+
+    if (!nota.esNotaCredito()) {
+      throw new BadRequestException('Esta ruta solo edita Notas Crédito');
+    }
+    if (!nota.puedeEnviarse()) {
+      throw new BadRequestException('Solo se pueden modificar notas en estado borrador');
+    }
+
+    const { lines, subtotal, iva, total } = await this.creditCalculator.calculate({
+      ...updateDto,
+      facturaOriginalId: nota.facturaOriginalId,
+    } as any);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.update(NotaAjuste, { id }, {
+        concepto: updateDto.concepto,
+        motivo: updateDto.motivo,
+        fecha: updateDto.fecha as any,
+        observaciones: updateDto.observaciones,
+        esReembolsoAbono: updateDto.esReembolsoAbono ?? false,
+        subtotal,
+        iva,
+        descuento: updateDto.descuentoTasaGlobal ?? 0,
+        total,
+        saldoPendiente: total,
+      });
+
+      await queryRunner.manager.delete(ItemNotaAjuste, { notaId: id });
+
+      const itemsToSave = lines.map((item) =>
+        queryRunner.manager.create(ItemNotaAjuste, { ...item, notaId: id }),
+      );
+      await queryRunner.manager.save(ItemNotaAjuste, itemsToSave);
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Nota V2 ${nota.numeroCompleto || id} actualizada (concepto ${updateDto.concepto})`);
+      return await this.findOne(id);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error actualizando nota V2 ${id}: ${error.message}`, error.stack);
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al actualizar la nota crédito');
     } finally {
       await queryRunner.release();
     }
@@ -301,6 +523,20 @@ export class NotasAjusteService {
 
     this.logger.log(`📤 Emitiendo ${nota.tipo} ${nota.numeroCompleto} a DIAN`);
     const numeroNota = await this.generateNotaNumber(nota.tipo);
+    const tipoFactus = nota.esNotaCredito() ? 'credito' : 'debito';
+
+    // reference_code estable: se persiste ANTES de enviar (idempotencia).
+    const referenceCode = this.factusService.buildNotaReferenceCode(
+      tipoFactus,
+      numeroNota,
+      factura.comprobante_completo,
+    );
+
+    // payment_details resuelto internamente (no UI, no modelo contable).
+    const paymentResolution = this.paymentResolver.resolve(factura, Number(nota.total));
+    for (const w of paymentResolution.warnings) {
+      this.logger.warn(`payment_details [${paymentResolution.strategy}]: ${w}`);
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -312,7 +548,8 @@ export class NotasAjusteService {
         estado: EstadoNota.SENT,
         estadoDIAN: EstadoDIANNota.ENVIADA,
         fechaEnvioDIAN: new Date(),
-        intentosEnvio: nota.intentosEnvio + 1
+        intentosEnvio: nota.intentosEnvio + 1,
+        factusReferenceCode: referenceCode,
       });
 
       // 2. Enviar a Factus/DIAN
@@ -324,7 +561,8 @@ export class NotasAjusteService {
           nota.motivo,
           nota.metodoPago || '',
           nota.concepto,
-          nota.items
+          nota.items,
+          paymentResolution.details,
         );
       } else {
         respuesta = await this.factusService.crearNotaDebito(
@@ -333,7 +571,8 @@ export class NotasAjusteService {
           nota.motivo,
           nota.metodoPago || '',
           nota.concepto,
-          nota.items
+          nota.items,
+          paymentResolution.details,
         );
       }
 
@@ -359,6 +598,7 @@ export class NotasAjusteService {
           prefijo: prefijoFinal,
           numero: numeroNota,
           numeroCompleto: numeroCompletoFinal,
+          factusReferenceCode: respuesta.referenceCode || referenceCode,
           factusNumberingRangeId: respuesta.numberingRangeId ?? null,
           factusResolutionNumber: respuesta.resolutionNumber ?? null,
           factusRangePrefix: respuesta.rangePrefix ?? null,
@@ -376,6 +616,21 @@ export class NotasAjusteService {
           });
           this.logger.error(`Error generando asiento contable para ${nota.tipo}: ${asientoError.message}`);
         }
+
+        // 3c. Cartera best-effort (Factus ya aceptó: nunca revertir lo externo).
+        await this.carteraService
+          .aplicar(queryRunner.manager, { ...nota, numeroCompleto: numeroCompletoFinal } as NotaAjuste)
+          .catch((carteraError) =>
+            this.logger.error(`Error aplicando cartera a ${numeroCompletoFinal}: ${carteraError.message}`),
+          );
+
+        // 3d. Kardex best-effort: devolución/anulación devuelven stock.
+        await this.entradasInventarioNC(
+          queryRunner.manager,
+          { ...nota, numeroCompleto: numeroCompletoFinal } as NotaAjuste,
+        ).catch((invError) =>
+          this.logger.error(`Error kardex NC ${numeroCompletoFinal}: ${invError.message}`),
+        );
 
         this.logger.log(`✅ ${nota.tipo} ACEPTADA por DIAN: CUFE: ${respuesta.cufe} - CUDE: ${respuesta.cude}`);
 
@@ -484,6 +739,20 @@ export class NotasAjusteService {
         }
 
         await this.notaRepository.save(nota);
+
+        // Cartera best-effort (después del save para no pisar el flag).
+        await this.carteraService
+          .aplicar(this.dataSource.manager, nota)
+          .catch((carteraError) =>
+            this.logger.error(`Error aplicando cartera a ${nota.numeroCompleto}: ${carteraError.message}`),
+          );
+
+        // Kardex best-effort.
+        await this.entradasInventarioNC(this.dataSource.manager, nota)
+          .catch((invError) =>
+            this.logger.error(`Error kardex NC ${nota.numeroCompleto}: ${invError.message}`),
+          );
+
         this.logger.log(`✅ Nota ${nota.numeroCompleto} sincronizada y actualizada`);
       } else {
         this.logger.warn(`La nota ${nota.numeroCompleto} aún no está aceptada en DIAN (Estado: ${respuesta.status})`);
@@ -606,6 +875,25 @@ export class NotasAjusteService {
       throw new BadRequestException('Solo se pueden modificar notas en estado borrador');
     }
 
+    // Guard: el PATCH legacy recalcula con formato legacy. Los borradores V2
+    // (capas por concepto) se recrean, no se editan, hasta tener update V2.
+    const body: any = updateDto;
+    // OJO: `concepto` solo NO marca V2 (el DTO legacy también lo trae).
+    const esPayloadV2 =
+      body?.aplicarDescuentoATodo !== undefined ||
+      (Array.isArray(body?.items) &&
+        body.items.some(
+          (it: any) =>
+            it?.precioNuevo !== undefined ||
+            it?.descuentoTasa !== undefined ||
+            it?.descuentoValor !== undefined,
+        ));
+    if (esPayloadV2) {
+      throw new BadRequestException(
+        'La edición de borradores V2 aún no está soportada: elimine el borrador y cree la nota de nuevo',
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -679,9 +967,23 @@ export class NotasAjusteService {
       throw new BadRequestException('Solo se pueden anular notas aceptadas por DIAN');
     }
 
+    // Cartera primero (estricto): si la reversa falla, la nota sigue aceptada.
+    await this.carteraService.revertir(this.dataSource.manager, nota);
+
+    // Kardex: reversar las entradas de la NC (estricto).
+    await this.inventarioService.revertirDocumento(
+      this.dataSource.manager,
+      DocumentoInventario.NOTA_CREDITO,
+      nota.id,
+      `Anulación NC ${nota.numeroCompleto}`,
+      nota.createdById,
+    );
+
     nota.estado = EstadoNota.CANCELLED;
     nota.estadoDIAN = EstadoDIANNota.ANULADA;
     nota.observaciones = `Anulada: ${motivo}`;
+    // Evitar que el save pise el flag ya revertido en BD.
+    nota.saldoAplicado = false;
 
     // TODO: Generar asiento reversa
     // await this.asientosService.generarAsientoReversaNotaAjuste(nota);
@@ -766,6 +1068,21 @@ export class NotasAjusteService {
 
   // ========== MÉTODOS PRIVADOS ==========
 
+  /** ENTRADAs de kardex por NC (solo líneas con afectaInventario). */
+  private async entradasInventarioNC(manager: any, nota: NotaAjuste): Promise<number> {
+    return this.inventarioService.registrarEntradasNC(
+      manager,
+      nota.id,
+      (nota.items ?? []).map((it) => ({
+        articuloId: it.articuloId,
+        cantidad: Number(it.cantidad),
+        afectaInventario: it.afectaInventario,
+      })),
+      nota.numeroCompleto || '',
+      nota.createdById,
+    );
+  }
+
   private async calcularTotales(queryRunner: any, items: any[]): Promise<{
     subtotal: number;
     iva: number;
@@ -801,6 +1118,7 @@ export class NotasAjusteService {
         descuento: descuento,
         valorDescuento: valorDescuento,
         total: itemTotal,
+        detalleCalculo: { base: itemSubtotal, tasaIva: porcentajeIVA, iva: itemIVA },
       });
 
       subtotal = MathUtil.sum(subtotal, itemSubtotal);

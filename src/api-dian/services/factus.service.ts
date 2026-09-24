@@ -555,14 +555,23 @@ export class FactusService {
     }
 
     /**
+     * reference_code estable para NC/ND. Se persiste ANTES de enviar
+     * (idempotencia: ante timeout/409 se reconcilia por este código).
+     */
+    buildNotaReferenceCode(tipo: 'credito' | 'debito', numeroLocal: string, billNumber: string): string {
+        const prefix = tipo === 'credito' ? 'NC' : 'ND';
+        return `${prefix}-${numeroLocal}_${billNumber}`;
+    }
+
+    /**
      * Crear nota crédito (anulación de factura)
      */
-    async crearNotaCredito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
+    async crearNotaCredito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], paymentDetails?: FactusV2PaymentDetail[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
             const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_NC_NUMBERING_RANGE_ID', 'NC');
-            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito', rangeSnapshot?.id);
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'credito', rangeSnapshot?.id, paymentDetails);
 
             this.logger.log(`📤 Enviando nota crédito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -583,7 +592,8 @@ export class FactusService {
             this.logger.log('✅ Respuesta recibida de Factus');
 
             console.log(response.data);
-            return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito', rangeSnapshot);
+            const sentReference = this.buildNotaReferenceCode('credito', referenceCode, facturaOriginal.comprobante_completo);
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'credito', rangeSnapshot, sentReference);
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -608,12 +618,12 @@ export class FactusService {
     /**
      * Crear Nota Débito en DIAN
      */
-    async crearNotaDebito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[]): Promise<any> {
+    async crearNotaDebito(referenceCode: string, facturaOriginal: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], paymentDetails?: FactusV2PaymentDetail[]): Promise<any> {
         try {
             const token = await this.obtenerToken();
 
             const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_ND_NUMBERING_RANGE_ID', 'ND');
-            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito', rangeSnapshot?.id);
+            const payload = await this.construirPayloadNotaAjusteFactus(referenceCode, facturaOriginal, motivo, metodoPago, concepto, items, 'debito', rangeSnapshot?.id, paymentDetails);
 
             this.logger.log(`📤 Enviando nota débito referenciando factura ${facturaOriginal.comprobante_completo} a Factus...`);
 
@@ -634,7 +644,8 @@ export class FactusService {
 
             this.logger.log('✅ Respuesta recibida de Factus');
 
-            return this.procesarRespuestaNotaAjusteFactus(response.data, 'debito', rangeSnapshot);
+            const sentReference = this.buildNotaReferenceCode('debito', referenceCode, facturaOriginal.comprobante_completo);
+            return this.procesarRespuestaNotaAjusteFactus(response.data, 'debito', rangeSnapshot, sentReference);
 
         } catch (error) {
             this.logger.error('❌ Error en Factus:', error.response?.data || error.message);
@@ -662,9 +673,8 @@ export class FactusService {
      * V2 referencia la factura por bill_number (número oficial DIAN) y usa
      * customer/items con códigos, payment_details[] y cash_rounding_amount.
      */
-    private async construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito', numberingRangeId?: number | string): Promise<FactusV2NotaAjustePayload> {
-        const prefix = tipo === 'credito' ? 'NC' : 'ND';
-        const referenceCodeNew = `${prefix}-${referenceCode}_${factura.comprobante_completo}`;
+    private async construirPayloadNotaAjusteFactus(referenceCode: string, factura: FacturasVenta, motivo: string, metodoPago: string, concepto: string, items: ItemNotaAjuste[], tipo: 'credito' | 'debito', numberingRangeId?: number | string, paymentDetails?: FactusV2PaymentDetail[]): Promise<FactusV2NotaAjustePayload> {
+        const referenceCodeNew = this.buildNotaReferenceCode(tipo, referenceCode, factura.comprobante_completo);
 
         const isNC = tipo === 'credito';
 
@@ -672,6 +682,16 @@ export class FactusService {
         const establishment = await this.obtenerDatosEstablecimiento(empresa);
 
         const totalNota = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+
+        // payment_details lo resuelve el llamador (PaymentDetailsResolver).
+        // Legacy: contado + método de la nota/factura. No exponer en UI.
+        const resolvedPaymentDetails = paymentDetails ?? [
+            {
+                payment_form: '1',
+                payment_method_code: metodoPago || factura.metodoPago || '10',
+                amount: this.toDecimalString(totalNota),
+            },
+        ];
 
         const payload: FactusV2NotaAjustePayload = {
             reference_code: referenceCodeNew,
@@ -682,25 +702,36 @@ export class FactusService {
             bill_number: factura.comprobante_completo,
             observation: (motivo || '').slice(0, 500),
             cash_rounding_amount: '0.00',
-            payment_details: [
-                {
-                    payment_form: '1',
-                    payment_method_code: metodoPago || factura.metodoPago || '10',
-                    amount: this.toDecimalString(totalNota),
-                },
-            ],
+            payment_details: resolvedPaymentDetails,
             customer: await this.construirCustomerV2(factura),
             items: await Promise.all(
                 items.map(async (item) => {
                     const tasaIva = Number(item.porcentajeIVA) || 0;
+                    const esDescuento = ['3', '5', '6'].includes(String(concepto));
+                    // Las líneas de la NC son el CRÉDITO (resultado calculado):
+                    // - Devolución/anulación/ajuste: qty × precio acreditado.
+                    // - Descuento (3/5/6): línea monetaria 1 × D (item.subtotal
+                    //   ya es D + el IVA va en taxes). El descuento ES el
+                    //   crédito: discount_rate siempre 0 desde el mapper.
+                    const esV2 = item.descuentoValorInput !== null && item.descuentoValorInput !== undefined;
+                    const quantity = esDescuento ? 1 : Number(item.cantidad);
+                    const price = esDescuento
+                        ? Number(item.subtotal)
+                        : Number(item.valorUnitario);
+                    const note = esDescuento
+                        ? `Descuento concepto ${concepto} s/ base ${(Number(item.subtotalOriginal ?? 0)).toFixed(2)}${esV2 && item.descuentoTasaInput ? ` (${item.descuentoTasaInput}%)` : ''}`.slice(0, 500)
+                        : concepto === '4' && item.precioNuevo !== null && item.precioNuevo !== undefined
+                            ? `Ajuste precio: ${Number(item.precioOriginal ?? 0).toFixed(2)} → ${Number(item.precioNuevo).toFixed(2)}`.slice(0, 500)
+                            : undefined;
                     return {
                         code_reference: item.articulo?.codigo || String(item.articuloId || 'ITEM'),
                         name: item.articulo?.nombre || 'Ítem',
-                        quantity: this.toDecimalString(item.cantidad),
-                        discount_rate: this.toDecimalString(item.descuento || 0),
-                        price: this.toDecimalString(item.valorUnitario),
+                        quantity: this.toDecimalString(quantity),
+                        discount_rate: this.toDecimalString(0),
+                        price: this.toDecimalString(price),
                         unit_measure_code: await this.resolverUnidadMedidaCode(item.articulo?.unidadmedida),
                         standard_code: '999',
+                        ...(note ? { note } : {}),
                         taxes: [
                             {
                                 code: '01',
@@ -727,7 +758,7 @@ export class FactusService {
      * Procesar respuesta V2 de Factus para Notas de Ajuste.
      * La fuente de verdad es data.is_validated, no solo status === 'Created'.
     */
-    private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito', rangeSnapshot?: NumberingRangeSnapshot | null): any {
+    private procesarRespuestaNotaAjusteFactus(responseData: any, tipo: 'credito' | 'debito', rangeSnapshot?: NumberingRangeSnapshot | null, sentReference?: string): any {
         const status: string = responseData?.status || '';
         const data: any = responseData?.data || {};
         const nota: any = tipo === 'credito' ? data.credit_note : data.debit_note;
@@ -739,6 +770,7 @@ export class FactusService {
             const qrImage: string = data?.qr || '';
 
             return {
+                referenceCode: sentReference ?? '',
                 cufe: data.bill.cufe || '',
                 cude: data.cude || '',
                 xmlUrl: publicUrl,
@@ -761,6 +793,7 @@ export class FactusService {
         }
 
         return {
+            referenceCode: sentReference ?? '',
             cufe: '',
             cude: '',
             xmlUrl: '',

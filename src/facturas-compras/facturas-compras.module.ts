@@ -11,13 +11,15 @@ import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
 import { PagosModule } from 'src/pagos/pagos.module';
+import { InventarioModule } from 'src/inventario/inventario.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([FacturaCompra, FacturaCompraDetalle, Proveedor, Articulo, Impuesto, CuentasBancarias]),
         AsientosContablesModule,
         PagosModule,
-        ParametrizacionContableModule
+        ParametrizacionContableModule,
+        InventarioModule
     ],
     controllers: [FacturasComprasController],
     providers: [FacturasComprasService],

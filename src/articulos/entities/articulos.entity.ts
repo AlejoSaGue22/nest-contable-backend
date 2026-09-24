@@ -73,6 +73,10 @@ export class Articulo {
     @Column({ default: true })
     isInventariable: boolean;
 
+    /** Stock vivo del kardex mínimo (solo artículos inventariables). */
+    @Column('decimal', { precision: 12, scale: 2, default: 0 })
+    stock: number;
+
     @Column({ default: true })
     isActive: boolean;
 
