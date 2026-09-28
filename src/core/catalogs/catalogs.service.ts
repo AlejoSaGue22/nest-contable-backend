@@ -65,8 +65,16 @@ export class CatalogsService {
         return this.unidadMedidaRepo.find({ where: { state: true } });
     }
 
-    async findAllConceptsNotes() {
-        return this.conceptoCorreccionRepo.find({ where: { state: true } });
+    async findAllConceptsNotes(tipo?: string) {
+        const where: any = { state: true };
+        if (tipo) {
+            const t = String(tipo).toLowerCase();
+            if (t !== 'credito' && t !== 'debito') {
+                throw new BadRequestException(`Tipo de concepto inválido: ${tipo}. Use 'credito' o 'debito'.`);
+            }
+            where.tipo = t;
+        }
+        return this.conceptoCorreccionRepo.find({ where, order: { tipo: 'ASC', codigo: 'ASC' } });
     }
 
     async findAllCategoriesArticles(pagination: PaginatioDto) {
@@ -272,7 +280,15 @@ export class CatalogsService {
     }
 
     private async seedConceptsCorrections() {
-        const data = [
+        // Backfill: filas legacy sin tipo pertenecen a crédito
+        await this.conceptoCorreccionRepo
+            .createQueryBuilder()
+            .update(ConceptoCorreccion)
+            .set({ tipo: 'credito' })
+            .where('tipo IS NULL')
+            .execute();
+
+        const credito = [
             { codigo: '1', nombre: 'Devolución parcial de los bienes y/o no aceptación parcial del servicio', state: true },
             { codigo: '2', nombre: 'Anulación de factura electrónica', state: true },
             { codigo: '3', nombre: 'Rebaja o descuento parcial o total', state: true },
@@ -281,10 +297,24 @@ export class CatalogsService {
             { codigo: '6', nombre: 'Descuento comercial por volumen de ventas', state: true },
         ];
 
-        for (const item of data) {
-            const exists = await this.conceptoCorreccionRepo.findOne({ where: { codigo: item.codigo } });
+        for (const item of credito) {
+            const exists = await this.conceptoCorreccionRepo.findOne({ where: { codigo: item.codigo, tipo: 'credito' } });
             if (!exists) {
-                await this.conceptoCorreccionRepo.save(item);
+                await this.conceptoCorreccionRepo.save({ ...item, tipo: 'credito' });
+            }
+        }
+
+        const debito = [
+            { codigo: '1', nombre: 'Intereses de mora', state: true },
+            { codigo: '2', nombre: 'Gastos de cobranza', state: true },
+            { codigo: '3', nombre: 'Ajuste de precio', state: true },
+            { codigo: '4', nombre: 'Otros conceptos', state: true },
+        ];
+
+        for (const item of debito) {
+            const exists = await this.conceptoCorreccionRepo.findOne({ where: { codigo: item.codigo, tipo: 'debito' } });
+            if (!exists) {
+                await this.conceptoCorreccionRepo.save({ ...item, tipo: 'debito' });
             }
         }
         this.logger.log('✔ Conceptos de corrección sincronizados');

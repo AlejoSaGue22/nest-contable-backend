@@ -3,6 +3,7 @@ import { CuentasBancariasService } from './cuentas-bancarias.service';
 import { CreateCuentasBancariaDto } from './dto/create-cuentas-bancaria.dto';
 import { UpdateCuentasBancariaDto } from './dto/update-cuentas-bancaria.dto';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
+import { CreateMovimientoBancarioDto } from './dto/create-movimiento-bancario.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
@@ -25,6 +26,16 @@ export class CuentasBancariasController {
   @Permissions(Permission.ACCOUNTING_VIEW)
   transferir(@Body() dto: CreateTransferenciaDto, @Req() req: AuthenticatedRequest) {
     return this.cuentasBancariasService.transferir(dto, req.user.sub);
+  }
+
+  @Post(':id/movimiento')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  registrarMovimiento(
+    @Param('id') id: string,
+    @Body() dto: CreateMovimientoBancarioDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.cuentasBancariasService.registrarMovimiento(id, dto, req.user.sub);
   }
 
   @Get()

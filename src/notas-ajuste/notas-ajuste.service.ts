@@ -790,6 +790,10 @@ export class NotasAjusteService {
         queryBuilder.andWhere('nota.tipo = :tipo', { tipo: where.tipo });
       }
 
+      if (where.tipoFactura) {
+        queryBuilder.andWhere('factura.tipoFactura = :tipoFactura', { tipoFactura: where.tipoFactura });
+      }
+
       if (where.estado) {
         queryBuilder.andWhere('nota.estado = :estado', { estado: where.estado });
       }

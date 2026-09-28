@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional } from 'class-validator';
 import { TipoCuentaBancaria } from '../entities/cuentas-bancaria.entity';
+import { ToOptionalNumber } from 'src/common/decorators/to-number.decorator';
 
 export class CreateCuentasBancariaDto {
   @IsString()
@@ -24,7 +25,7 @@ export class CreateCuentasBancariaDto {
 
   @IsNumber()
   @IsOptional()
-  @Min(0)
+  @ToOptionalNumber()
   saldoInicial?: number;
 
   @IsString()

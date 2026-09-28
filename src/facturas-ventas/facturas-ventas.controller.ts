@@ -34,6 +34,12 @@ export class FacturasVentasController {
     return toInvoiceResponse(stats, 'Estadísticas obtenidas exitosamente');
   }
 
+  @Get(':id/notas-resumen')
+  async getNotasResumen(@Param('id') id: string) {
+    const resumen = await this.facturasVentasService.getNotasResumen(id);
+    return { success: true, data: resumen, message: 'Resumen de notas obtenido exitosamente' };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const invoice = await this.facturasVentasService.findOne(id);

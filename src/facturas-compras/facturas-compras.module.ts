@@ -3,6 +3,7 @@ import { FacturasComprasService } from './facturas-compras.service';
 import { FacturasComprasController } from './facturas-compras.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacturaCompra } from './entities/factura-compra.entity';
+import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste-compra.entity';
 import { AsientosContablesModule } from 'src/asientos-contables/asientos-contables.module';
 import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
@@ -15,7 +16,7 @@ import { InventarioModule } from 'src/inventario/inventario.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([FacturaCompra, FacturaCompraDetalle, Proveedor, Articulo, Impuesto, CuentasBancarias]),
+        TypeOrmModule.forFeature([FacturaCompra, FacturaCompraDetalle, Proveedor, Articulo, Impuesto, CuentasBancarias, NotaAjusteCompra]),
         AsientosContablesModule,
         PagosModule,
         ParametrizacionContableModule,

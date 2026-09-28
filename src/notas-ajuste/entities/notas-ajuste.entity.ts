@@ -71,9 +71,11 @@ export class NotaAjuste {
   clienteId: string;
 
   /**
-   * Concepto según DIAN
+   * Concepto según DIAN.
+   * Sin FK física: codigo se repite entre tipos (credito/debito) tras
+   * agregar el discriminador `tipo` al catálogo. Solo join de lectura.
    */
-  @ManyToOne(() => ConceptoCorreccion)
+  @ManyToOne(() => ConceptoCorreccion, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'concepto', referencedColumnName: 'codigo' })
   conceptoRelacion: ConceptoCorreccion; 
 

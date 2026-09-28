@@ -2,13 +2,17 @@ import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } fr
 
 export class CreateItemNotaAjusteCompraDto {
   @IsUUID()
-  @IsNotEmpty()
-  articuloId: string;
+  @IsOptional()
+  articuloId?: string | null;
+
+  @IsUUID()
+  @IsOptional()
+  cuentaContableId?: string | null;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(500)
-  descripcion: string;
+  descripcion?: string;
 
   @IsNumber()
   @Min(0)

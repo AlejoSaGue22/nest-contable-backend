@@ -1,5 +1,6 @@
 import { Transform } from "class-transformer";
 import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, IsUUID } from "class-validator";
+import { ToNumber } from "src/common/decorators/to-number.decorator";
 
 export class CreateClienteDto {
 
@@ -15,6 +16,7 @@ export class CreateClienteDto {
 
     @IsNumber()
     @IsNotEmpty()
+    @ToNumber()
     tipoDocumento: number;
 
     @IsString()
@@ -40,6 +42,7 @@ export class CreateClienteDto {
 
     @IsNumber()
     @IsNotEmpty()
+    @ToNumber()
     ciudad: number;
 
     @IsString()

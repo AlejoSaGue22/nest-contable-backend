@@ -36,11 +36,11 @@ export class CuentasBancarias {
   numeroCuenta: string;
 
   /**
-   * Código de la cuenta contable asociada.
-   * Normalmente '1110' (Bancos) — pero podría ser una subcuenta
-   * si manejan varios bancos con cuentas distintas.
+   * Código de la subcuenta contable propia del banco/caja (ej. 111005).
+   * Es única: cada banco/caja tiene su cuenta independiente, de modo que
+   * los movimientos de uno nunca alteran el saldo de otro.
    */
-  @Column({ length: 10 })
+  @Column({ length: 10, unique: true })
   codigoCuentaContable: string;
 
   @Column({ default: true })

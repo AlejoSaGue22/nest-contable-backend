@@ -1,4 +1,5 @@
 import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { ToNumber, ToOptionalNumber } from "src/common/decorators/to-number.decorator";
 
 export class CreateProveedorDto {
     @IsString()
@@ -15,6 +16,7 @@ export class CreateProveedorDto {
     
     @IsNumber()
     @IsNotEmpty()
+    @ToNumber()
     tipoDocumento: number;
 
     @IsString()
@@ -43,6 +45,7 @@ export class CreateProveedorDto {
 
     @IsNumber()
     @IsOptional()
+    @ToOptionalNumber()
     ciudad?: number;
 
     @IsString()

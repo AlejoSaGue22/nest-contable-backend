@@ -120,9 +120,10 @@ export class NotasAjusteController {
 
   /**
    * Listar todas las notas de ajuste
-   * 
+   *
    * GET /api/notas-ajuste
    * ?tipo=credito|debito
+   * &tipoFactura=ELECTRONICA|ESTANDAR
    * &estado=borrador|aceptada|rechazada
    * &facturaNumero=FE-00012345
    */

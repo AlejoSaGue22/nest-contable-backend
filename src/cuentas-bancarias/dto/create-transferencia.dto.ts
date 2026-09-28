@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { ToNumber } from 'src/common/decorators/to-number.decorator';
 
 export class CreateTransferenciaDto {
   @IsUUID()
@@ -11,6 +12,7 @@ export class CreateTransferenciaDto {
 
   @IsNumber()
   @Min(0.01)
+  @ToNumber()
   monto: number;
 
   @IsString()

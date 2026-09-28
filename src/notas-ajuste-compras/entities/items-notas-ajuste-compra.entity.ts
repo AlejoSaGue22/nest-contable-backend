@@ -9,6 +9,7 @@ import {
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { Articulo } from "src/articulos/entities/articulos.entity";
 import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
 import { NotaAjusteCompra } from "./notas-ajuste-compra.entity";
 
 @Entity('items_nota_ajuste_compra')
@@ -17,10 +18,21 @@ export class ItemNotaAjusteCompra {
   id: string;
 
   @ManyToOne(() => Articulo, { nullable: true, eager: true })
-  articulo: Articulo;
+  @JoinColumn({ name: 'articuloId' })
+  articulo?: Articulo | null;
 
   @Column({ nullable: true })
-  articuloId: string;
+  articuloId?: string | null;
+
+  @ManyToOne(() => CuentaContable, { nullable: true, eager: true })
+  @JoinColumn({ name: 'cuentaContableId' })
+  cuentaContable?: CuentaContable | null;
+
+  @Column({ nullable: true })
+  cuentaContableId?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  descripcion?: string | null;
 
   @ManyToOne(() => Impuesto, { nullable: true })
   @JoinColumn({ name: 'impuestoId' })

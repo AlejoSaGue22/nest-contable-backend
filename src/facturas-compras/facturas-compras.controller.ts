@@ -29,6 +29,13 @@ export class FacturasComprasController {
         return toInvoiceResponse(result.data, 'Facturas de compra obtenidas exitosamente', result.meta);
     }
 
+    @Get(':id/notas-resumen')
+    @Permissions(Permission.INVOICE_READ)
+    async getNotasResumen(@Param('id') id: string) {
+        const resumen = await this.facturasComprasService.getNotasResumen(id);
+        return { success: true, data: resumen, message: 'Resumen de notas obtenido exitosamente' };
+    }
+
     @Get(':id')
     @Permissions(Permission.INVOICE_READ)
     async findOne(@Param('id') id: string) {

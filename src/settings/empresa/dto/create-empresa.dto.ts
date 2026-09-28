@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsEmail, IsNotEmpty, IsObject, IsUUID, IsNumber } from 'class-validator';
+import { ToOptionalNumber } from 'src/common/decorators/to-number.decorator';
 
 export class CreateEmpresaDto {
   @IsString()
@@ -35,5 +36,6 @@ export class CreateEmpresaDto {
 
   @IsOptional()
   @IsNumber()
+  @ToOptionalNumber()
   ciudad?: number;
 }

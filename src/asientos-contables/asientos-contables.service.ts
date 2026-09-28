@@ -1708,7 +1708,7 @@ export class AsientosContablesService {
       detalles: DetalleAsiento[];
       userId: string;
     },
-    queryRunner: any,
+    queryRunner: QueryRunner,
   ): Promise<AsientoContable> {
     const totalDebito = data.detalles.reduce((s, d) => s + d.debito, 0);
     const totalCredito = data.detalles.reduce((s, d) => s + d.credito, 0);
@@ -1778,24 +1778,35 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
-        if (!item.articuloId) continue;
-        const articulo = await queryRunner.manager.findOne(Articulo, {
-          where: { id: item.articuloId },
-          relations: [
-            'categoriaArticulo',
-            'categoriaArticulo.cuentaPrincipal',
-            'impuestoRel',
-            'impuestoRel.cuentaCompras',
-          ],
-        });
+        const itemAny = item as any;
+        let cuentaId: string | null = null;
+        let cuentaIvaFallbackId: string | undefined;
 
-        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo no tiene cuenta contable principal configurada`,
-          );
+        if (itemAny.cuentaContableId) {
+          cuentaId = itemAny.cuentaContableId;
+        } else if (item.articuloId) {
+          const articulo = await queryRunner.manager.findOne(Articulo, {
+            where: { id: item.articuloId },
+            relations: [
+              'categoriaArticulo',
+              'categoriaArticulo.cuentaPrincipal',
+              'impuestoRel',
+              'impuestoRel.cuentaCompras',
+            ],
+          });
+
+          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+            throw new Error(
+              `Artículo no tiene cuenta contable principal configurada`,
+            );
+          }
+
+          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          cuentaIvaFallbackId = articulo.impuestoRel?.cuentaComprasId;
+        } else {
+          continue;
         }
-
-        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        if (!cuentaId) continue;
         const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
         gastosAgrupados.set(
           cuentaId,
@@ -1814,8 +1825,8 @@ export class AsientosContablesService {
           let cuentaIvaId: string;
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
-          } else if (articulo.impuestoRel?.cuentaComprasId) {
-            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else if (cuentaIvaFallbackId) {
+            cuentaIvaId = cuentaIvaFallbackId;
           } else {
             cuentaIvaId = '1355';
           }
@@ -1933,24 +1944,35 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
-        if (!item.articuloId) continue;
-        const articulo = await queryRunner.manager.findOne(Articulo, {
-          where: { id: item.articuloId },
-          relations: [
-            'categoriaArticulo',
-            'categoriaArticulo.cuentaPrincipal',
-            'impuestoRel',
-            'impuestoRel.cuentaCompras',
-          ],
-        });
+        const itemAny = item as any;
+        let cuentaId: string | null = null;
+        let cuentaIvaFallbackId: string | undefined;
 
-        if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-          throw new Error(
-            `Artículo no tiene cuenta contable principal configurada`,
-          );
+        if (itemAny.cuentaContableId) {
+          cuentaId = itemAny.cuentaContableId;
+        } else if (item.articuloId) {
+          const articulo = await queryRunner.manager.findOne(Articulo, {
+            where: { id: item.articuloId },
+            relations: [
+              'categoriaArticulo',
+              'categoriaArticulo.cuentaPrincipal',
+              'impuestoRel',
+              'impuestoRel.cuentaCompras',
+            ],
+          });
+
+          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
+            throw new Error(
+              `Artículo no tiene cuenta contable principal configurada`,
+            );
+          }
+
+          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          cuentaIvaFallbackId = articulo.impuestoRel?.cuentaComprasId;
+        } else {
+          continue;
         }
-
-        const cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+        if (!cuentaId) continue;
         const valorGasto = Number(item.subtotal) - Number(item.valorDescuento);
         gastosAgrupados.set(
           cuentaId,
@@ -1969,8 +1991,8 @@ export class AsientosContablesService {
           let cuentaIvaId: string;
           if (cuentaIvaPorcentaje) {
             cuentaIvaId = cuentaIvaPorcentaje.id;
-          } else if (articulo.impuestoRel?.cuentaComprasId) {
-            cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
+          } else if (cuentaIvaFallbackId) {
+            cuentaIvaId = cuentaIvaFallbackId;
           } else {
             cuentaIvaId = '1355';
           }
@@ -2078,97 +2100,249 @@ export class AsientosContablesService {
     });
   }
 
-  async generarAsientoSaldoInicial(params: {
-    nombreCuenta: string;
-    monto: number;
-    cuentaContrapartidaCodigo: string;
-    userId: string;
-  }): Promise<AsientoContable> {
-    const { nombreCuenta, monto, cuentaContrapartidaCodigo, userId } = params;
+  /**
+   * SRP/DIP: resuelve una cuenta activa dentro de la transacción dada.
+   * Usar siempre este helper desde métodos que reciben un QueryRunner
+   * externo, para no leer fuera de la transacción propietaria.
+   */
+  private async buscarCuentaActiva(
+    codigo: string,
+    queryRunner: QueryRunner,
+  ): Promise<CuentaContable> {
+    const cuenta = await queryRunner.manager.findOne(CuentaContable, {
+      where: { codigo, isActive: true },
+    });
+    if (!cuenta) {
+      throw new Error(`Cuenta contable '${codigo}' no encontrada o inactiva`);
+    }
+    return cuenta;
+  }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  async generarAsientoSaldoInicial(
+    params: {
+      nombreCuenta: string;
+      /** Monto con signo: positivo = aumento, negativo = disminución. */
+      monto: number;
+      /** Subcuenta propia del banco/caja (ej. 111005), no la madre 1110. */
+      cuentaBancoCodigo: string;
+      cuentaContrapartidaCodigo: string;
+      userId: string;
+    },
+    externalRunner?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const { nombreCuenta, monto, cuentaBancoCodigo, cuentaContrapartidaCodigo, userId } = params;
+
+    // OCP: si el llamador aporta su transacción, nos sumamos a ella;
+    // si no, mantenemos el comportamiento anterior (transacción propia).
+    const queryRunner = externalRunner ?? this.dataSource.createQueryRunner();
+    const owned = !externalRunner;
+    if (owned) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
-      const cuentaBancos = await this.obtenerCuentaPorCodigo('1110');
-      const cuentaContrapartida = await this.obtenerCuentaPorCodigo(
-        cuentaContrapartidaCodigo,
-      );
-
-      const detalles: DetalleAsiento[] = [
+      const asiento = await this.registrarAsientoBanco(
         {
-          cuentaId: cuentaBancos.id,
-          debito: monto,
-          credito: 0,
-          descripcion: `Saldo inicial - ${nombreCuenta}`,
-        },
-        {
-          cuentaId: cuentaContrapartida.id,
-          debito: 0,
-          credito: monto,
-          descripcion: `Contrapartida saldo inicial - ${nombreCuenta}`,
-        },
-      ];
-
-      const asiento = await this.crearAsiento(
-        {
+          ...params,
           tipo: TipoAsiento.SALDO_INICIAL_BANCO,
-          fecha: new Date(),
-          referencia: nombreCuenta,
-          descripcion: `Saldo inicial de cuenta bancaria ${nombreCuenta} por $${monto.toLocaleString('es-CO')}`,
-          detalles,
-          userId,
+          etiqueta: 'Saldo inicial',
         },
         queryRunner,
       );
 
-      await queryRunner.commitTransaction();
+      if (owned) {
+        await queryRunner.commitTransaction();
+      }
       this.logger.log(
         `Asiento SALDO_INICIAL generado: ${asiento.numero} | $${monto} | ${nombreCuenta}`,
       );
       return asiento;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento saldo inicial: ${error.message}`,
-        error.stack,
-      );
+      if (owned) {
+        await queryRunner.rollbackTransaction();
+      }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Error asiento saldo inicial: ${message}`, stack);
       throw new InternalServerErrorException(
-        `Error al generar asiento de saldo inicial: ${error.message}`,
+        `Error al generar asiento de saldo inicial: ${message}`,
       );
     } finally {
-      await queryRunner.release();
+      if (owned) {
+        await queryRunner.release();
+      }
     }
   }
 
-  async generarAsientoTransferencia(params: {
-    nombreOrigen: string;
-    nombreDestino: string;
-    monto: number;
-    userId: string;
-  }): Promise<AsientoContable> {
-    const { nombreOrigen, nombreDestino, monto, userId } = params;
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  /**
+   * SRP: asiento para ingresos/egresos corrientes de un banco/caja.
+   * Usa tipo MOVIMIENTO_BANCARIO para no contaminar reportes de apertura,
+   * y conserva las observaciones del movimiento.
+   */
+  async generarAsientoMovimientoBanco(
+    params: {
+      nombreCuenta: string;
+      /** Monto con signo: positivo = ingreso, negativo = egreso. */
+      monto: number;
+      /** Subcuenta propia del banco/caja (ej. 111005). */
+      cuentaBancoCodigo: string;
+      cuentaContrapartidaCodigo: string;
+      userId: string;
+      observaciones?: string;
+    },
+    externalRunner?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const queryRunner = externalRunner ?? this.dataSource.createQueryRunner();
+    const owned = !externalRunner;
+    if (owned) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
-      const cuentaBancos = await this.obtenerCuentaPorCodigo('1110');
+      const asiento = await this.registrarAsientoBanco(
+        {
+          ...params,
+          tipo: TipoAsiento.MOVIMIENTO_BANCARIO,
+          etiqueta: params.monto >= 0 ? 'Ingreso bancario' : 'Egreso bancario',
+        },
+        queryRunner,
+      );
 
+      if (owned) {
+        await queryRunner.commitTransaction();
+      }
+      this.logger.log(
+        `Asiento MOVIMIENTO generado: ${asiento.numero} | $${params.monto} | ${params.nombreCuenta}`,
+      );
+      return asiento;
+    } catch (error) {
+      if (owned) {
+        await queryRunner.rollbackTransaction();
+      }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Error asiento movimiento bancario: ${message}`, stack);
+      throw new InternalServerErrorException(
+        `Error al generar asiento de movimiento bancario: ${message}`,
+      );
+    } finally {
+      if (owned) {
+        await queryRunner.release();
+      }
+    }
+  }
+
+  /**
+   * DRY: núcleo compartido banco ↔ contrapartida con monto signado.
+   * Monto > 0 debita el banco; monto < 0 lo acredita (por el absoluto).
+   */
+  private async registrarAsientoBanco(
+    params: {
+      nombreCuenta: string;
+      monto: number;
+      cuentaBancoCodigo: string;
+      cuentaContrapartidaCodigo: string;
+      userId: string;
+      tipo: TipoAsiento;
+      etiqueta: string;
+      observaciones?: string;
+    },
+    queryRunner: QueryRunner,
+  ): Promise<AsientoContable> {
+    const {
+      nombreCuenta,
+      monto,
+      cuentaBancoCodigo,
+      cuentaContrapartidaCodigo,
+      userId,
+      tipo,
+      etiqueta,
+      observaciones,
+    } = params;
+
+    if (monto === 0) {
+      throw new Error('El monto del movimiento bancario debe ser distinto de 0');
+    }
+
+    const cuentaBanco = await this.buscarCuentaActiva(cuentaBancoCodigo, queryRunner);
+    const cuentaContrapartida = await this.buscarCuentaActiva(
+      cuentaContrapartidaCodigo,
+      queryRunner,
+    );
+
+    const abs = Math.abs(monto);
+    const esAumento = monto > 0;
+    const detalleExtra = observaciones?.trim() ? ` | ${observaciones.trim()}` : '';
+    const detalles: DetalleAsiento[] = [
+      {
+        cuentaId: cuentaBanco.id,
+        debito: esAumento ? abs : 0,
+        credito: esAumento ? 0 : abs,
+        descripcion: `${etiqueta} - ${nombreCuenta}${detalleExtra}`,
+      },
+      {
+        cuentaId: cuentaContrapartida.id,
+        debito: esAumento ? 0 : abs,
+        credito: esAumento ? abs : 0,
+        descripcion: `Contrapartida ${etiqueta.toLowerCase()} - ${nombreCuenta}${detalleExtra}`,
+      },
+    ];
+
+    return await this.crearAsiento(
+      {
+        tipo,
+        fecha: new Date(),
+        referencia: nombreCuenta,
+        descripcion: `${etiqueta} de cuenta bancaria ${nombreCuenta} por $${monto.toLocaleString('es-CO')}${detalleExtra}`,
+        detalles,
+        userId,
+      },
+      queryRunner,
+    );
+  }
+
+  async generarAsientoTransferencia(
+    params: {
+      nombreOrigen: string;
+      nombreDestino: string;
+      monto: number;
+      /** Subcuenta propia del banco/caja origen (ej. 111005). */
+      codigoCuentaOrigen: string;
+      /** Subcuenta propia del banco/caja destino (ej. 111010). */
+      codigoCuentaDestino: string;
+      userId: string;
+      observaciones?: string;
+    },
+    externalRunner?: QueryRunner,
+  ): Promise<AsientoContable> {
+    const { nombreOrigen, nombreDestino, monto, codigoCuentaOrigen, codigoCuentaDestino, userId, observaciones } = params;
+
+    const queryRunner = externalRunner ?? this.dataSource.createQueryRunner();
+    const owned = !externalRunner;
+    if (owned) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const cuentaOrigen = await this.buscarCuentaActiva(codigoCuentaOrigen, queryRunner);
+      const cuentaDestino = await this.buscarCuentaActiva(codigoCuentaDestino, queryRunner);
+
+      const detalleExtra = observaciones?.trim() ? ` | ${observaciones.trim()}` : '';
       const detalles: DetalleAsiento[] = [
         {
-          cuentaId: cuentaBancos.id,
+          cuentaId: cuentaDestino.id,
           debito: monto,
           credito: 0,
-          descripcion: `Transferencia recibida - ${nombreDestino}`,
+          descripcion: `Transferencia recibida - ${nombreDestino}${detalleExtra}`,
         },
         {
-          cuentaId: cuentaBancos.id,
+          cuentaId: cuentaOrigen.id,
           debito: 0,
           credito: monto,
-          descripcion: `Transferencia enviada - ${nombreOrigen}`,
+          descripcion: `Transferencia enviada - ${nombreOrigen}${detalleExtra}`,
         },
       ];
 
@@ -2177,7 +2351,7 @@ export class AsientosContablesService {
           tipo: TipoAsiento.TRANSFERENCIA_BANCARIA,
           fecha: new Date(),
           referencia: `${nombreOrigen} -> ${nombreDestino}`,
-          descripcion: `Transferencia de ${nombreOrigen} a ${nombreDestino} por $${monto.toLocaleString('es-CO')}`,
+          descripcion: `Transferencia de ${nombreOrigen} a ${nombreDestino} por $${monto.toLocaleString('es-CO')}${detalleExtra}`,
           detalles,
           userId,
         },
@@ -2190,16 +2364,19 @@ export class AsientosContablesService {
       );
       return asiento;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error asiento transferencia: ${error.message}`,
-        error.stack,
-      );
+      if (owned) {
+        await queryRunner.rollbackTransaction();
+      }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Error asiento transferencia: ${message}`, stack);
       throw new InternalServerErrorException(
-        `Error al generar asiento de transferencia: ${error.message}`,
+        `Error al generar asiento de transferencia: ${message}`,
       );
     } finally {
-      await queryRunner.release();
+      if (owned) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -2692,7 +2869,7 @@ export class AsientosContablesService {
     return asientoReverso;
   }
 
-  private async generarNumeroAsiento(queryRunner: any): Promise<string> {
+  private async generarNumeroAsiento(queryRunner: QueryRunner): Promise<string> {
     const ultimoAsiento = await queryRunner.manager.findOne(AsientoContable, {
       where: {},
       order: { createdAt: 'DESC' },

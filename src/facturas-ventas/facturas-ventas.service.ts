@@ -34,6 +34,8 @@ import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventar
 import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
+import { EstadoNota, TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 
 @Injectable()
 export class FacturasVentasService {
@@ -54,6 +56,9 @@ export class FacturasVentasService {
 
     @InjectRepository(Impuesto)
     private impuestoRepository: Repository<Impuesto>,
+
+    @InjectRepository(NotaAjuste)
+    private readonly notaAjusteRepository: Repository<NotaAjuste>,
 
     private dataSource: DataSource,
 
@@ -407,6 +412,8 @@ export class FacturasVentasService {
 
       const [data, total] = await queryBuilder.getManyAndCount();
 
+      await this.anexarResumenNotas(data);
+
       const meta = {
         page,
         limit,
@@ -421,6 +428,105 @@ export class FacturasVentasService {
         error.stack,
       );
       throw new InternalServerErrorException('Error al obtener las facturas');
+    }
+  }
+
+  /**
+   * Resumen de notas crédito/débito aplicadas a una factura de venta (Fase 1: solo lectura).
+   * Fuente de verdad de "afecta saldo": `saldoAplicado` + `valorAplicadoCartera`
+   * (CarteraNotaService). Las ND se reportan como informativas: su efecto en
+   * cartera queda para Fase 2.
+   */
+  async getNotasResumen(facturaId: string) {
+    const factura = await this.facturaVentaRepository.findOne({ where: { id: facturaId } });
+    if (!factura) {
+      throw new NotFoundException(`Factura con ID ${facturaId} no encontrada`);
+    }
+
+    const notas = await this.notaAjusteRepository.find({
+      where: { facturaOriginalId: facturaId },
+      order: { fecha: 'DESC', createdAt: 'DESC' },
+    });
+
+    let totalNCAplicado = 0;
+    let countNC = 0;
+    let countND = 0;
+    let countBorrador = 0;
+
+    const items = notas.map((n) => {
+      const afectaSaldo = n.saldoAplicado === true;
+      const aplicado = afectaSaldo ? Number(n.valorAplicadoCartera ?? 0) : 0;
+      if (n.tipo === TipoNota.CREDITO) {
+        countNC++;
+        totalNCAplicado += n.saldoAplicado ? aplicado : 0;
+      } else {
+        countND++;
+      }
+      if (n.estado === EstadoNota.DRAFT) countBorrador++;
+      return {
+        id: n.id,
+        tipo: n.tipo,
+        numeroCompleto: n.numeroCompleto,
+        fecha: n.fecha,
+        concepto: n.concepto ?? null,
+        motivo: n.motivo,
+        total: Number(n.total),
+        estado: n.estado,
+        estadoDIAN: n.estadoDIAN,
+        afectaSaldo,
+        valorAplicadoCartera: aplicado,
+        esReembolsoAbono: n.esReembolsoAbono ?? false,
+      };
+    });
+
+    const total = Number(factura.total);
+    return {
+      facturaId,
+      totalFactura: total,
+      totalNCAplicado: Math.round(totalNCAplicado * 100) / 100,
+      netoExigible: Math.round((total - totalNCAplicado) * 100) / 100,
+      tieneNota: notas.length > 0,
+      countNC,
+      countND,
+      countBorrador,
+      notaDebitoPendienteFase2: countND > 0,
+      items,
+    };
+  }
+
+  /**
+   * Enriquecimiento liviano del listado: 1 sola query agregada (sin N+1,
+   * sin detalle de items). Adjunta `notasResumen` a cada factura.
+   */
+  private async anexarResumenNotas(facturas: FacturasVenta[]): Promise<void> {
+    if (!facturas || facturas.length === 0) return;
+    const ids = facturas.map((f) => f.id);
+    const rows: Array<{ facturaId: string; total: string; aplicadas: string; countNC: string; countND: string }> =
+      await this.notaAjusteRepository
+        .createQueryBuilder('nota')
+        .select('nota.facturaOriginalId', 'facturaId')
+        .addSelect('COUNT(*)', 'total')
+        .addSelect(
+          `SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' AND nota."saldoAplicado" = true THEN nota."valorAplicadoCartera" ELSE 0 END)`,
+          'aplicadas',
+        )
+        .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' THEN 1 ELSE 0 END)`, 'countNC')
+        .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.DEBITO}' THEN 1 ELSE 0 END)`, 'countND')
+        .where('nota.facturaOriginalId IN (:...ids)', { ids })
+        .groupBy('nota.facturaOriginalId')
+        .getRawMany();
+
+    const map = new Map(rows.map((r) => [r.facturaId, r]));
+    for (const f of facturas) {
+      const r = map.get(f.id);
+      (f as any).notasResumen = r
+        ? {
+            tieneNota: true,
+            totalNCAplicado: Number(r.aplicadas ?? 0),
+            countNC: Number(r.countNC ?? 0),
+            countND: Number(r.countND ?? 0),
+          }
+        : { tieneNota: false, totalNCAplicado: 0, countNC: 0, countND: 0 };
     }
   }
 

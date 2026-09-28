@@ -34,8 +34,8 @@ export class CatalogsController {
     }
 
     @Get('concepts-notes')
-    findAllConceptsNotes() {
-        return this.catalogsService.findAllConceptsNotes();
+    findAllConceptsNotes(@Query('tipo') tipo?: string) {
+        return this.catalogsService.findAllConceptsNotes(tipo);
     }
 
     // Categorias de articulos

@@ -149,7 +149,7 @@ export class NotasAjusteComprasService {
   async findOne(id: string) {
     const nota = await this.notaRepository.findOne({
       where: { id },
-      relations: ['proveedor', 'items', 'items.articulo', 'items.impuesto', 'facturaOriginal', 'createdBy']
+      relations: ['proveedor', 'items', 'items.articulo', 'items.cuentaContable', 'items.impuesto', 'facturaOriginal', 'createdBy']
     });
 
     if (!nota) {
@@ -510,7 +510,9 @@ export class NotasAjusteComprasService {
       const itemTotal = MathUtil.sum(itemSubtotal, itemIVA);
  
       itemsCalculados.push({
-        articuloId: itemDto.articuloId,
+        articuloId: itemDto.articuloId || null,
+        cuentaContableId: itemDto.cuentaContableId || null,
+        descripcion: itemDto.descripcion || '',
         impuestoId: itemDto.impuestoId || null,
         valorUnitario,
         porcentajeIVA,

@@ -5,7 +5,7 @@ export interface EntidadSSConfig {
 }
 
 export const ENTIDADES_SEGURO_SOCIAL: Record<string, EntidadSSConfig> = {
-    'eps-susalud': { codigo: 'EPS001', nombre: 'Susalud', tipo: 'EPS' },
+    'eps-susalud': { codigo: 'EPS001', nombre: 'Salud Total', tipo: 'EPS' },
     'eps-nuevaeps': { codigo: 'EPS002', nombre: 'Nueva EPS', tipo: 'EPS' },
     'eps-sanitas': { codigo: 'EPS003', nombre: 'EPS Sanitas', tipo: 'EPS' },
     'eps-famisanar': { codigo: 'EPS004', nombre: 'Famisanar', tipo: 'EPS' },

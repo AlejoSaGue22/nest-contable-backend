@@ -1,5 +1,6 @@
 import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
 import { TipoNota } from "../enums/notas-ajuste.enum";
+import { TipoFactura } from "src/facturas-ventas/enums/factura-venta.enum";
 import { Type } from "class-transformer";
 
 /**
@@ -23,6 +24,13 @@ export class NotasAjusteFilterDto {
   @IsEnum(TipoNota)
   @IsOptional()
   tipo?: TipoNota;
+
+  /**
+   * Filtrar por tipo de la factura original (ELECTRONICA | ESTANDAR)
+   */
+  @IsEnum(TipoFactura)
+  @IsOptional()
+  tipoFactura?: TipoFactura;
  
   /**
    * Filtrar por estado

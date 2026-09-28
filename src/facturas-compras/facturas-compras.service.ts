@@ -24,6 +24,8 @@ import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
+import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste-compra.entity';
+import { EstadoNotaCompra, TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
 import { InventarioService } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 
@@ -47,6 +49,9 @@ export class FacturasComprasService {
 
         @InjectRepository(Impuesto)
         private impuestoRepository: Repository<Impuesto>,
+
+        @InjectRepository(NotaAjusteCompra)
+        private readonly notaAjusteCompraRepository: Repository<NotaAjusteCompra>,
 
         private dataSource: DataSource,
         private asientosContablesService: AsientosContablesService,
@@ -354,9 +359,9 @@ export class FacturasComprasService {
                                     tipo: 'compra',
                                     cuentaTerceroId,
                                     cuentaAnticipoId,
-                                monto: app.montoAplicado,
-                                fecha: this.toDate(gastoGuardado.fecha),
-                                referencia: gastoGuardado.numero || '',
+                                    monto: app.montoAplicado,
+                                    fecha: this.toDate(gastoGuardado.fecha),
+                                    referencia: gastoGuardado.numero || '',
                                     descripcion: `Cruce automático de anticipo ${anticipo.numero} en Compra ${gastoGuardado.numero || ''}`,
                                     terceroId: gastoGuardado.proveedorId,
                                     userId,
@@ -475,6 +480,8 @@ export class FacturasComprasService {
 
             const [data, total] = await queryBuilder.getManyAndCount();
 
+            await this.anexarResumenNotas(data);
+
             const meta = {
                 page,
                 limit,
@@ -487,6 +494,103 @@ export class FacturasComprasService {
         } catch (error) {
             this.logger.error(`Error obteniendo facturas de compra: ${error.message}`, error.stack);
             throw new InternalServerErrorException('Error al obtener las facturas de compra');
+        }
+    }
+
+    /**
+     * Resumen de notas crédito/débito aplicadas a una factura de compra (Fase 1: solo lectura).
+     * "Afecta saldo": estado registrado o error_asiento (mismo criterio que
+     * calcularTotalNotasCredito en notas-ajuste-compras). Borradores y anuladas
+     * se reportan como informativas.
+     */
+    async getNotasResumen(facturaId: string) {
+        const factura = await this.facturaCompraRepository.findOne({ where: { id: facturaId } });
+        if (!factura) {
+            throw new NotFoundException(`Factura de compra ${facturaId} no encontrada`);
+        }
+
+        const notas = await this.notaAjusteCompraRepository.find({
+            where: { facturaOriginalId: facturaId },
+            order: { fecha: 'DESC', createdAt: 'DESC' },
+        });
+
+        const afecta = (estado: EstadoNotaCompra) =>
+            estado === EstadoNotaCompra.REGISTERED || estado === EstadoNotaCompra.ERROR_ASIENTO;
+
+        let totalNCAplicado = 0;
+        let totalNDAplicado = 0;
+        let countNC = 0;
+        let countND = 0;
+        let countBorrador = 0;
+
+        const items = notas.map((n) => {
+            const afectaSaldo = afecta(n.estado);
+            if (n.tipo === TipoNotaCompra.CREDITO) {
+                countNC++;
+                if (afectaSaldo) totalNCAplicado += Number(n.total);
+            } else {
+                countND++;
+                if (afectaSaldo) totalNDAplicado += Number(n.total);
+            }
+            if (n.estado === EstadoNotaCompra.DRAFT) countBorrador++;
+            return {
+                id: n.id,
+                tipo: n.tipo,
+                numeroCompleto: n.numeroCompleto,
+                fecha: n.fecha,
+                motivo: n.motivo,
+                total: Number(n.total),
+                estado: n.estado,
+                afectaSaldo,
+                esReembolsoAbono: n.esReembolsoAbono ?? false,
+            };
+        });
+
+        const total = Number(factura.total);
+        const round2 = (v: number) => Math.round(v * 100) / 100;
+        return {
+            facturaId,
+            totalFactura: total,
+            totalNCAplicado: round2(totalNCAplicado),
+            totalNDAplicado: round2(totalNDAplicado),
+            netoExigible: round2(total - totalNCAplicado + totalNDAplicado),
+            tieneNota: notas.length > 0,
+            countNC,
+            countND,
+            countBorrador,
+            items,
+        };
+    }
+
+    private async anexarResumenNotas(facturas: FacturaCompra[]): Promise<void> {
+        if (!facturas || facturas.length === 0) return;
+        const ids = facturas.map((f) => f.id);
+        const rows: Array<{ facturaId: string; total: string; aplicadas: string; countNC: string; countND: string }> =
+            await this.notaAjusteCompraRepository
+                .createQueryBuilder('nota')
+                .select('nota.facturaOriginalId', 'facturaId')
+                .addSelect('COUNT(*)', 'total')
+                .addSelect(
+                    `SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.CREDITO}' AND nota.estado IN ('${EstadoNotaCompra.REGISTERED}', '${EstadoNotaCompra.ERROR_ASIENTO}') THEN nota.total ELSE 0 END)`,
+                    'aplicadas',
+                )
+                .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.CREDITO}' THEN 1 ELSE 0 END)`, 'countNC')
+                .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.DEBITO}' THEN 1 ELSE 0 END)`, 'countND')
+                .where('nota.facturaOriginalId IN (:...ids)', { ids })
+                .groupBy('nota.facturaOriginalId')
+                .getRawMany();
+
+        const map = new Map(rows.map((r) => [r.facturaId, r]));
+        for (const f of facturas) {
+            const r = map.get(f.id);
+            (f as any).notasResumen = r
+                ? {
+                    tieneNota: true,
+                    totalNCAplicado: Number(r.aplicadas ?? 0),
+                    countNC: Number(r.countNC ?? 0),
+                    countND: Number(r.countND ?? 0),
+                }
+                : { tieneNota: false, totalNCAplicado: 0, countNC: 0, countND: 0 };
         }
     }
 
@@ -667,9 +771,9 @@ export class FacturasComprasService {
                     await this.pagosService.registrarPago(
                         factura.id,
                         {
-                                monto: pagoMonto,
-                                fecha: this.toISOString(factura.fecha),
-                                medioPago,
+                            monto: pagoMonto,
+                            fecha: this.toISOString(factura.fecha),
+                            medioPago,
                             cuentaBancariaId: factura.cuentaBancariaId || undefined,
                             referencia: `Pago automático contado - Compra ${numero}`,
                             notas: 'Pago generado de forma automática al registrar compra de contado.',
