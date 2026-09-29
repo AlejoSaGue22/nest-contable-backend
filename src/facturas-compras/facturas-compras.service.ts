@@ -525,12 +525,16 @@ export class FacturasComprasService {
 
         const items = notas.map((n) => {
             const afectaSaldo = afecta(n.estado);
+            // Aplicación exacta si la nota la registró (espejo ventas); legacy: su total.
+            const aplicado = afectaSaldo
+                ? (n.saldoAplicado ? Number(n.valorAplicadoCartera ?? 0) : Number(n.total))
+                : 0;
             if (n.tipo === TipoNotaCompra.CREDITO) {
                 countNC++;
-                if (afectaSaldo) totalNCAplicado += Number(n.total);
+                if (afectaSaldo) totalNCAplicado += aplicado;
             } else {
                 countND++;
-                if (afectaSaldo) totalNDAplicado += Number(n.total);
+                if (afectaSaldo) totalNDAplicado += aplicado;
             }
             if (n.estado === EstadoNotaCompra.DRAFT) countBorrador++;
             return {
@@ -542,6 +546,7 @@ export class FacturasComprasService {
                 total: Number(n.total),
                 estado: n.estado,
                 afectaSaldo,
+                valorAplicado: Math.round(aplicado * 100) / 100,
                 esReembolsoAbono: n.esReembolsoAbono ?? false,
             };
         });
@@ -565,14 +570,18 @@ export class FacturasComprasService {
     private async anexarResumenNotas(facturas: FacturaCompra[]): Promise<void> {
         if (!facturas || facturas.length === 0) return;
         const ids = facturas.map((f) => f.id);
-        const rows: Array<{ facturaId: string; total: string; aplicadas: string; countNC: string; countND: string }> =
+        const rows: Array<{ facturaId: string; total: string; aplicadas: string; aplicadasND: string; countNC: string; countND: string }> =
             await this.notaAjusteCompraRepository
                 .createQueryBuilder('nota')
                 .select('nota.facturaOriginalId', 'facturaId')
                 .addSelect('COUNT(*)', 'total')
                 .addSelect(
-                    `SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.CREDITO}' AND nota.estado IN ('${EstadoNotaCompra.REGISTERED}', '${EstadoNotaCompra.ERROR_ASIENTO}') THEN nota.total ELSE 0 END)`,
+                    `SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.CREDITO}' AND nota.estado IN ('${EstadoNotaCompra.REGISTERED}', '${EstadoNotaCompra.ERROR_ASIENTO}') THEN COALESCE(CASE WHEN nota."saldoAplicado" THEN nota."valorAplicadoCartera" ELSE nota.total END, 0) ELSE 0 END)`,
                     'aplicadas',
+                )
+                .addSelect(
+                    `SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.DEBITO}' AND nota.estado IN ('${EstadoNotaCompra.REGISTERED}', '${EstadoNotaCompra.ERROR_ASIENTO}') THEN COALESCE(CASE WHEN nota."saldoAplicado" THEN nota."valorAplicadoCartera" ELSE nota.total END, 0) ELSE 0 END)`,
+                    'aplicadasND',
                 )
                 .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.CREDITO}' THEN 1 ELSE 0 END)`, 'countNC')
                 .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNotaCompra.DEBITO}' THEN 1 ELSE 0 END)`, 'countND')
@@ -587,10 +596,11 @@ export class FacturasComprasService {
                 ? {
                     tieneNota: true,
                     totalNCAplicado: Number(r.aplicadas ?? 0),
+                    totalNDAplicado: Number(r.aplicadasND ?? 0),
                     countNC: Number(r.countNC ?? 0),
                     countND: Number(r.countND ?? 0),
                 }
-                : { tieneNota: false, totalNCAplicado: 0, countNC: 0, countND: 0 };
+                : { tieneNota: false, totalNCAplicado: 0, totalNDAplicado: 0, countNC: 0, countND: 0 };
         }
     }
 

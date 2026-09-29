@@ -79,6 +79,16 @@ export class NotaAjusteCompra {
   @Column({ type: 'boolean', nullable: true })
   esReembolsoAbono: boolean; // Solo para NC, indica si es reembolso/abono a favor del proveedor
 
+  /**
+   * Idempotencia de cartera (espejo de ventas): `saldoAplicado` + `valorAplicadoCartera`.
+   * Filas legacy (NULL/false) usan la reversa directa del saldo anterior.
+   */
+  @Column({ type: 'boolean', default: false })
+  saldoAplicado: boolean;
+
+  @Column('decimal', { precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  valorAplicadoCartera: number | null;
+
   @OneToMany(() => ItemNotaAjusteCompra, item => item.nota, { cascade: true })
   items: ItemNotaAjusteCompra[];
 

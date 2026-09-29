@@ -477,6 +477,10 @@ export class NotasAjusteService {
           );
           this.logger.error(`Error generando asiento contable ND: ${error.message}`);
         }
+
+        // Cartera: la ND estándar emitida adiciona de inmediato (espejo de NC).
+        // Estricto aquí (nada externo aún): si falla, revierte la creación.
+        await this.carteraService.aplicar(queryRunner.manager, notaGuardada);
       }
 
       await queryRunner.commitTransaction();

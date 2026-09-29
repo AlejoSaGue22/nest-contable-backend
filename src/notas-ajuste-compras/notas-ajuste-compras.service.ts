@@ -124,6 +124,23 @@ export class NotasAjusteComprasService {
           );
           this.logger.error(`Error generando asiento contable para ${tipo}: ${asientoError.message}`);
         }
+
+        // Cartera espejo de ventas (estricto: si falla, revierte la creación).
+        // La nota nace registrada: su efecto debe mover la factura de inmediato.
+        const cartera = this.aplicarACartera(factura, {
+          tipo,
+          total,
+          esReembolsoAbono: dto.esReembolsoAbono,
+        });
+        factura.totalPagado = cartera.totalPagado;
+        factura.saldoPendiente = cartera.saldoPendiente;
+        factura.paymentStatus = cartera.paymentStatus;
+        await queryRunner.manager.save(FacturaCompra, factura);
+        await queryRunner.manager.update(NotaAjusteCompra,
+          { id: notaGuardada.id },
+          { saldoAplicado: true, valorAplicadoCartera: cartera.aplicado },
+        );
+        this.logger.log(`Cartera: ${tipo} ${notaGuardada.numeroCompleto} aplica $${cartera.aplicado} a factura ${factura.numero}`);
       }
 
       await queryRunner.commitTransaction();
@@ -241,27 +258,20 @@ export class NotasAjusteComprasService {
       nota.prefijo = prefijo;
       nota.estado = EstadoNotaCompra.REGISTERED;
 
-      // Actualizar la factura original si es nota crédito
-      if (nota.tipo === TipoNotaCompra.CREDITO) {
-        factura.saldoPendiente = Number(factura.saldoPendiente) - Number(nota.total);
-        if (factura.saldoPendiente < 0) {
-           factura.saldoPendiente = 0; 
-        }
+      // Actualizar la cartera espejo de ventas: el efecto vive en totalPagado
+      // para que un pago posterior no lo borre (saldo = total − totalPagado).
+      const cartera = this.aplicarACartera(factura, nota);
+      factura.totalPagado = cartera.totalPagado;
+      factura.saldoPendiente = cartera.saldoPendiente;
+      factura.paymentStatus = cartera.paymentStatus;
 
-        if (factura.saldoPendiente <= 0) {
-          factura.paymentStatus = PaymentStatus.PAID;
-        }
-
-        await queryRunner.manager.save(FacturaCompra, factura);
-      } else if (nota.tipo === TipoNotaCompra.DEBITO) {
-        factura.saldoPendiente = Number(factura.saldoPendiente) + Number(nota.total);
-        if (factura.saldoPendiente > 0 && factura.paymentStatus === PaymentStatus.PAID) {
-          factura.paymentStatus = PaymentStatus.PARTIAL;
-        }
-        await queryRunner.manager.save(FacturaCompra, factura);
-      }
+      await queryRunner.manager.save(FacturaCompra, factura);
 
       const notaGuardada = await queryRunner.manager.save(NotaAjusteCompra, nota);
+      await queryRunner.manager.update(NotaAjusteCompra,
+        { id: notaGuardada.id },
+        { saldoAplicado: true, valorAplicadoCartera: cartera.aplicado },
+      );
 
       await queryRunner.commitTransaction();
 
@@ -313,20 +323,16 @@ export class NotasAjusteComprasService {
       nota.estado = EstadoNotaCompra.CANCELLED;
       nota.observaciones = `${nota.observaciones ? nota.observaciones + '\n' : ''}Anulada: ${motivo}`;
 
-      if (nota.tipo === TipoNotaCompra.CREDITO) {
-        factura.saldoPendiente = Number(factura.saldoPendiente) + Number(nota.total);
-        if (factura.saldoPendiente > 0 && factura.paymentStatus === PaymentStatus.PAID) {
-           factura.paymentStatus = PaymentStatus.PARTIAL;
-        }
-      } else {
-        factura.saldoPendiente = Number(factura.saldoPendiente) - Number(nota.total);
-        if (factura.saldoPendiente <= 0) {
-           factura.saldoPendiente = 0;
-           factura.paymentStatus = PaymentStatus.PAID;
-        }
-      }
-      
+      // Reversa exacta de la aplicación (legacy: reversa directa del saldo).
+      const cartera = this.revertirDeCartera(factura, nota);
+      factura.totalPagado = cartera.totalPagado;
+      factura.saldoPendiente = cartera.saldoPendiente;
+      factura.paymentStatus = cartera.paymentStatus;
+
       await queryRunner.manager.save(FacturaCompra, factura);
+      if (nota.saldoAplicado) {
+        await queryRunner.manager.update(NotaAjusteCompra, { id: nota.id }, { saldoAplicado: false });
+      }
       await queryRunner.manager.save(NotaAjusteCompra, nota);
 
       await queryRunner.commitTransaction();
@@ -440,6 +446,99 @@ export class NotasAjusteComprasService {
 
     await this.notaRepository.softDelete({ id });
     this.logger.log(`Nota de compra eliminada: ${nota.numeroCompleto || id}`);
+  }
+
+  /**
+   * Cartera espejo de ventas: el efecto de la nota vive en `totalPagado`
+   * (NO como ajuste directo del saldo) para que un pago posterior no lo borre.
+   * Invariante: saldoPendiente = total − totalPagado.
+   *
+   * - NC normal: se debe menos → totalPagado += min(total, saldo).
+   * - NC con esReembolsoAbono: devuelven un abono en efectivo → totalPagado −= aplicado.
+   * - ND: se debe más → totalPagado −= total.
+   * Retorna el valor aplicado (0 si no aplicó).
+   */
+  private aplicarACartera(factura: FacturaCompra, nota: { tipo: TipoNotaCompra; total: number; esReembolsoAbono?: boolean | null }): {
+    totalPagado: number;
+    saldoPendiente: number;
+    paymentStatus: PaymentStatus;
+    aplicado: number;
+  } {
+    const total = Number(factura.total);
+    const pagado = Number(factura.totalPagado);
+    const saldo = Number(factura.saldoPendiente);
+    const monto = Number(nota.total);
+
+    let nuevoPagado = pagado;
+    let aplicado = 0;
+
+    if (nota.tipo === TipoNotaCompra.DEBITO) {
+      aplicado = monto;
+      nuevoPagado = MathUtil.sub(pagado, aplicado);
+    } else if (nota.esReembolsoAbono) {
+      aplicado = Math.min(monto, pagado);
+      nuevoPagado = MathUtil.sub(pagado, aplicado);
+    } else {
+      aplicado = Math.min(monto, Math.max(0, saldo));
+      nuevoPagado = MathUtil.sum(pagado, aplicado);
+    }
+
+    const nuevoSaldo = Math.max(0, MathUtil.sub(total, nuevoPagado));
+    const paymentStatus = nuevoSaldo === 0
+      ? PaymentStatus.PAID
+      : nuevoPagado !== 0
+        ? PaymentStatus.PARTIAL
+        : PaymentStatus.PENDING;
+
+    return { totalPagado: nuevoPagado, saldoPendiente: nuevoSaldo, paymentStatus, aplicado };
+  }
+
+  /**
+   * Reversa exacta de aplicarACartera. Filas legacy (saldoAplicado falsy)
+   * usan la reversa directa del saldo del comportamiento anterior.
+   */
+  private revertirDeCartera(factura: FacturaCompra, nota: NotaAjusteCompra): {
+    totalPagado: number;
+    saldoPendiente: number;
+    paymentStatus: PaymentStatus;
+  } {
+    const total = Number(factura.total);
+
+    if (!nota.saldoAplicado) {
+      // Legacy: la nota movió el saldo directamente; se revierte igual.
+      let saldo = Number(factura.saldoPendiente);
+      if (nota.tipo === TipoNotaCompra.CREDITO) {
+        saldo = MathUtil.sum(saldo, Number(nota.total));
+      } else {
+        saldo = MathUtil.sub(saldo, Number(nota.total));
+        if (saldo < 0) saldo = 0;
+      }
+      const pagado = Number(factura.totalPagado);
+      let paymentStatus = factura.paymentStatus;
+      if (nota.tipo === TipoNotaCompra.CREDITO) {
+        if (saldo > 0 && factura.paymentStatus === PaymentStatus.PAID) {
+          paymentStatus = PaymentStatus.PARTIAL;
+        }
+      } else if (saldo <= 0) {
+        paymentStatus = PaymentStatus.PAID;
+      }
+      return { totalPagado: pagado, saldoPendiente: saldo, paymentStatus };
+    }
+
+    const aplicado = Number(nota.valorAplicadoCartera ?? 0);
+    const pagado = Number(factura.totalPagado);
+    const nuevoPagado = (nota.tipo === TipoNotaCompra.DEBITO || nota.esReembolsoAbono)
+      ? MathUtil.sum(pagado, aplicado)
+      : Math.max(0, MathUtil.sub(pagado, aplicado));
+
+    const nuevoSaldo = Math.max(0, MathUtil.sub(total, nuevoPagado));
+    const paymentStatus = nuevoSaldo === 0
+      ? PaymentStatus.PAID
+      : nuevoPagado !== 0
+        ? PaymentStatus.PARTIAL
+        : PaymentStatus.PENDING;
+
+    return { totalPagado: nuevoPagado, saldoPendiente: nuevoSaldo, paymentStatus };
   }
 
   private async calcularTotalNotasCredito(facturaId: string): Promise<number> {

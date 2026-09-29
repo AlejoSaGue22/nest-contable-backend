@@ -1864,6 +1864,8 @@ export class AsientosContablesService {
 
       // Contrapartida: CxP o Bancos/Caja
       // Débito: CxP (para NC) | Crédito: CxP (para ND)
+      // Espejo de NC ventas y de la factura original (generarAsientoGasto):
+      // proveedor.cuentaContable → parametrización → código 2205/2335.
       const isContado = factura.formaPago === FormaPago.CONTADO;
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
@@ -1876,13 +1878,34 @@ export class AsientosContablesService {
         }
       }
 
-      const codigoCuentaContra = isContado
-        ? factura.cuentaBancaria?.codigoCuentaContable
+      let cuentaContra: CuentaContable;
+      if (isContado) {
+        const codigoCuentaContra = factura.cuentaBancaria?.codigoCuentaContable
           ? factura.cuentaBancaria.codigoCuentaContable
-          : await this.resolverCuentaContado(factura.metodoPago!)
-        : codigoCxP;
-      const cuentaContra =
-        await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+          : await this.resolverCuentaContado(factura.metodoPago!);
+        cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
+      } else {
+        let proveedor: Proveedor | null = (nota as any).proveedor ?? null;
+        if (!proveedor || !proveedor.cuentaContableId) {
+          proveedor = await queryRunner.manager.findOne(Proveedor, {
+            where: { id: factura.proveedorId },
+            relations: ['cuentaContable'],
+          });
+        }
+        if (proveedor?.cuentaContable) {
+          cuentaContra = proveedor.cuentaContable;
+        } else {
+          const config = await this.parametrizacionService.getConfiguracion();
+          if (config?.cuentaPagarProveedoresId) {
+            const temp = await queryRunner.manager.findOne(CuentaContable, {
+              where: { id: config.cuentaPagarProveedoresId },
+            });
+            cuentaContra = temp || (await this.obtenerCuentaPorCodigo(codigoCxP));
+          } else {
+            cuentaContra = await this.obtenerCuentaPorCodigo(codigoCxP);
+          }
+        }
+      }
 
       detalles.push({
         cuentaId: cuentaContra.id,

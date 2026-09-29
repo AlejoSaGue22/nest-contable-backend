@@ -434,8 +434,7 @@ export class FacturasVentasService {
   /**
    * Resumen de notas crédito/débito aplicadas a una factura de venta (Fase 1: solo lectura).
    * Fuente de verdad de "afecta saldo": `saldoAplicado` + `valorAplicadoCartera`
-   * (CarteraNotaService). Las ND se reportan como informativas: su efecto en
-   * cartera queda para Fase 2.
+   * (CarteraNotaService). NC acredita (baja el saldo), ND adiciona (sube el saldo).
    */
   async getNotasResumen(facturaId: string) {
     const factura = await this.facturaVentaRepository.findOne({ where: { id: facturaId } });
@@ -449,6 +448,7 @@ export class FacturasVentasService {
     });
 
     let totalNCAplicado = 0;
+    let totalNDAplicado = 0;
     let countNC = 0;
     let countND = 0;
     let countBorrador = 0;
@@ -458,9 +458,10 @@ export class FacturasVentasService {
       const aplicado = afectaSaldo ? Number(n.valorAplicadoCartera ?? 0) : 0;
       if (n.tipo === TipoNota.CREDITO) {
         countNC++;
-        totalNCAplicado += n.saldoAplicado ? aplicado : 0;
+        if (n.saldoAplicado) totalNCAplicado += aplicado;
       } else {
         countND++;
+        if (n.saldoAplicado) totalNDAplicado += aplicado;
       }
       if (n.estado === EstadoNota.DRAFT) countBorrador++;
       return {
@@ -480,16 +481,17 @@ export class FacturasVentasService {
     });
 
     const total = Number(factura.total);
+    const round2 = (v: number) => Math.round(v * 100) / 100;
     return {
       facturaId,
       totalFactura: total,
-      totalNCAplicado: Math.round(totalNCAplicado * 100) / 100,
-      netoExigible: Math.round((total - totalNCAplicado) * 100) / 100,
+      totalNCAplicado: round2(totalNCAplicado),
+      totalNDAplicado: round2(totalNDAplicado),
+      netoExigible: round2(total - totalNCAplicado + totalNDAplicado),
       tieneNota: notas.length > 0,
       countNC,
       countND,
       countBorrador,
-      notaDebitoPendienteFase2: countND > 0,
       items,
     };
   }
@@ -501,7 +503,7 @@ export class FacturasVentasService {
   private async anexarResumenNotas(facturas: FacturasVenta[]): Promise<void> {
     if (!facturas || facturas.length === 0) return;
     const ids = facturas.map((f) => f.id);
-    const rows: Array<{ facturaId: string; total: string; aplicadas: string; countNC: string; countND: string }> =
+    const rows: Array<{ facturaId: string; total: string; aplicadas: string; aplicadasND: string; countNC: string; countND: string }> =
       await this.notaAjusteRepository
         .createQueryBuilder('nota')
         .select('nota.facturaOriginalId', 'facturaId')
@@ -509,6 +511,10 @@ export class FacturasVentasService {
         .addSelect(
           `SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' AND nota."saldoAplicado" = true THEN nota."valorAplicadoCartera" ELSE 0 END)`,
           'aplicadas',
+        )
+        .addSelect(
+          `SUM(CASE WHEN nota.tipo = '${TipoNota.DEBITO}' AND nota."saldoAplicado" = true THEN nota."valorAplicadoCartera" ELSE 0 END)`,
+          'aplicadasND',
         )
         .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' THEN 1 ELSE 0 END)`, 'countNC')
         .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.DEBITO}' THEN 1 ELSE 0 END)`, 'countND')
@@ -523,10 +529,11 @@ export class FacturasVentasService {
         ? {
             tieneNota: true,
             totalNCAplicado: Number(r.aplicadas ?? 0),
+            totalNDAplicado: Number(r.aplicadasND ?? 0),
             countNC: Number(r.countNC ?? 0),
             countND: Number(r.countND ?? 0),
           }
-        : { tieneNota: false, totalNCAplicado: 0, countNC: 0, countND: 0 };
+        : { tieneNota: false, totalNCAplicado: 0, totalNDAplicado: 0, countNC: 0, countND: 0 };
     }
   }
 

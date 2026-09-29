@@ -283,13 +283,13 @@ export class DashboardService {
         const series = await Promise.all(months.map(async (m) => {
             // No exceder la fecha fin real si es el mes actual
             const effectiveEnd = m.end > endDate ? endDate : m.end;
-            
+
             const salesQuery = await this.facturaVentaRepository.createQueryBuilder('f')
                 .select('SUM(f.total)', 'total')
                 .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
                 .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
                 .getRawOne();
-            
+
             const purchasesQuery = await this.facturaCompraRepository.createQueryBuilder('f')
                 .select('SUM(f.total)', 'total')
                 .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })

@@ -92,7 +92,17 @@ export class CuentasService {
     sortedByLevel.forEach(acc => {
       if (acc.cuentaPadreId && accountMap.has(acc.cuentaPadreId)) {
         const parent = accountMap.get(acc.cuentaPadreId);
-        parent.saldo += acc.saldo;
+        parent.totalDebito += acc.totalDebito;
+        parent.totalCredito += acc.totalCredito;
+      }
+    });
+
+    // Recalcular el saldo final de todas las cuentas tras consolidar los débitos y créditos
+    Array.from(accountMap.values()).forEach(acc => {
+      if (acc.naturaleza === NaturalezaCuenta.DEBITO) {
+        acc.saldo = acc.totalDebito - acc.totalCredito;
+      } else {
+        acc.saldo = acc.totalCredito - acc.totalDebito;
       }
     });
 

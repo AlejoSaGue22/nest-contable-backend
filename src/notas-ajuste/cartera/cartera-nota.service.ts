@@ -1,17 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { NotaAjuste } from '../entities/notas-ajuste.entity';
+import { TipoNota } from '../enums/notas-ajuste.enum';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { MathUtil } from 'src/common/utils/math.util';
 
 /**
- * Sincronización de cartera al aceptar/anular Nota Crédito.
+ * Sincronización de cartera al aceptar/anular Nota Crédito/Débito.
  *
  * Invariante del sistema: saldoPendiente = total − totalPagado
- * (pagos.service la recomputa así en cada cobro). Por eso el crédito de la
- * NC vive en `totalPagado` y NO como ajuste directo del saldo: un cobro
- * posterior no borra el efecto de la NC.
+ * (pagos.service la recomputa así en cada cobro). Por eso el efecto de la
+ * nota vive en `totalPagado` y NO como ajuste directo del saldo: un cobro
+ * posterior no borra el efecto de la nota.
  *
  * - NC normal: el cliente debe menos → totalPagado += min(totalNC, saldo).
  *   Si el saldo es 0 (factura ya pagada), no se mueve cartera: la NC queda
@@ -19,13 +20,16 @@ import { MathUtil } from 'src/common/utils/math.util';
  *   aparte (fuera de alcance v1).
  * - NC con esReembolsoAbono: se devuelve un abono en efectivo →
  *   totalPagado −= totalNC y el saldo sube (espejo de anular-cobro).
+ * - ND: el cliente debe más → totalPagado −= totalND y el saldo sube.
+ *   Sin tope superior: una ND sobre factura pagada genera saldo a cobrar.
+ *   `totalPagado` puede quedar negativo; es consistente con el invariante.
  * - Idempotencia: `saldoAplicado` + `valorAplicadoCartera` (reversa exacta).
  */
 @Injectable()
 export class CarteraNotaService {
   private readonly logger = new Logger(CarteraNotaService.name);
 
-  /** Aplica la NC a la cartera. Retorna el valor aplicado (0 si no aplicó). */
+  /** Aplica la NC/ND a la cartera. Retorna el valor aplicado (0 si no aplicó). */
   async aplicar(manager: EntityManager, nota: NotaAjuste): Promise<number> {
     if (nota.saldoAplicado) {
       return Number(nota.valorAplicadoCartera ?? 0);
@@ -36,6 +40,10 @@ export class CarteraNotaService {
     if (!factura) {
       this.logger.warn(`Cartera: factura ${nota.facturaOriginalId} no encontrada, se omite`);
       return 0;
+    }
+
+    if (nota.tipo === TipoNota.DEBITO) {
+      return this.aplicarDebito(manager, nota, factura);
     }
 
     const totalNC = Number(nota.total);
@@ -73,7 +81,34 @@ export class CarteraNotaService {
     return aplicado;
   }
 
-  /** Revierte la aplicación (al anular la NC). Retorna el valor reversado. */
+  /**
+   * ND: el cliente debe más → totalPagado −= totalND y el saldo sube.
+   * Sin tope superior (una ND sobre factura pagada genera saldo a cobrar).
+   */
+  private async aplicarDebito(manager: EntityManager, nota: NotaAjuste, factura: FacturasVenta): Promise<number> {
+    const totalND = Number(nota.total);
+    if (!(totalND > 0)) {
+      this.logger.log(
+        `Cartera: ND ${nota.numeroCompleto} con total 0, no mueve cartera`,
+      );
+      return 0;
+    }
+
+    const nuevoPagado = MathUtil.sub(Number(factura.totalPagado), totalND);
+    await this.guardar(manager, factura, nuevoPagado);
+    this.logger.log(
+      `Cartera: ND ${nota.numeroCompleto} adiciona $${totalND} a ${factura.comprobante_completo}`,
+    );
+
+    await manager.update(
+      NotaAjuste,
+      { id: nota.id },
+      { saldoAplicado: true, valorAplicadoCartera: totalND },
+    );
+    return totalND;
+  }
+
+  /** Revierte la aplicación (al anular la NC/ND). Retorna el valor reversado. */
   async revertir(manager: EntityManager, nota: NotaAjuste): Promise<number> {
     if (!nota.saldoAplicado) {
       return 0;
@@ -88,9 +123,11 @@ export class CarteraNotaService {
 
     const aplicado = Number(nota.valorAplicadoCartera ?? 0);
     const pagado = Number(factura.totalPagado);
-    const nuevoPagado = nota.esReembolsoAbono
+    const nuevoPagado = nota.tipo === TipoNota.DEBITO
       ? MathUtil.sum(pagado, aplicado)
-      : Math.max(0, MathUtil.sub(pagado, aplicado));
+      : nota.esReembolsoAbono
+        ? MathUtil.sum(pagado, aplicado)
+        : Math.max(0, MathUtil.sub(pagado, aplicado));
     await this.guardar(manager, factura, nuevoPagado);
 
     await manager.update(NotaAjuste, { id: nota.id }, { saldoAplicado: false });
