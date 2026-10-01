@@ -1,0 +1,7 @@
+export enum TipoContrato {
+    FIJO = 'FIJO',
+    INDEFINIDO = 'INDEFINIDO',
+    OBRA_LABOR = 'OBRA_LABOR',
+    APRENDIZAJE = 'APRENDIZAJE',
+    PRESTACION = 'PRESTACION'
+}

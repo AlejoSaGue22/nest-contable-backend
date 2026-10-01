@@ -1,0 +1,66 @@
+import {
+  Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import { Banco } from '../../bancos/entities/banco.entity';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
+import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
+
+export enum TipoCuentaBancaria {
+  BANCO = 'Banco' ,
+  CAJA = 'Caja'
+}
+
+@Entity('cuentas_bancarias')
+export class CuentasBancarias {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @ManyToOne(() => Empresa, { nullable: true })
+  @JoinColumn({ name: 'empresaId' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  empresaId: string;
+
+  @Column({ length: 120 })
+  nombre: string;
+
+  @ManyToOne(() => Banco, { eager: true })
+  @JoinColumn({ name: 'bancoId' })
+  banco: Banco;
+
+  @Column({ type: 'enum', enum: TipoCuentaBancaria })
+  tipoCuenta: TipoCuentaBancaria;
+
+  /** Número de cuenta (se guarda enmascarado si se desea) */
+  @Column({ length: 30, nullable: true })
+  numeroCuenta: string;
+
+  /**
+   * Código de la subcuenta contable propia del banco/caja (ej. 111005).
+   * Es única: cada banco/caja tiene su cuenta independiente, de modo que
+   * los movimientos de uno nunca alteran el saldo de otro.
+   */
+  @Column({ length: 10, unique: true })
+  codigoCuentaContable: string;
+
+  @Column({ default: true })
+  activa: boolean;
+
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2, transformer: new ColumnNumericTransformer() })
+  saldoInicial: number;
+
+  @Column({ default: 0, type: 'decimal', precision: 18, scale: 2, transformer: new ColumnNumericTransformer() })
+  saldoActual: number;
+
+  @Column({ nullable: true })
+  observaciones: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
+}

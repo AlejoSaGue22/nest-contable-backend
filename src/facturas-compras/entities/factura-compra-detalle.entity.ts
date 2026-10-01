@@ -1,0 +1,72 @@
+import { Articulo } from "src/articulos/entities/articulos.entity";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { FacturaCompra } from "./factura-compra.entity";
+import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
+
+@Entity('facturas_compras_detalles')
+export class FacturaCompraDetalle {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
+
+    @ManyToOne(() => FacturaCompra, facturaCompra => facturaCompra.items)
+    facturaCompra: FacturaCompra;
+
+    @Column()
+    facturaCompraId: string;
+
+    @ManyToOne(() => Articulo, { eager: true, nullable: true })
+    @JoinColumn({ name: 'articuloId' })
+    articulo?: Articulo | null;
+
+    @Column({ nullable: true })
+    articuloId?: string | null;
+
+    @ManyToOne(() => CuentaContable, { eager: true, nullable: true })
+    @JoinColumn({ name: 'cuentaContableId' })
+    cuentaContable?: CuentaContable | null;
+
+    @Column({ nullable: true })
+    cuentaContableId?: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    descripcion: string;
+
+    @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+    unitPrice: number;
+
+    @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+    quantity: number;
+
+    @Column('decimal', { precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    porcentajeIva: number;
+
+    @Column({ type: 'uuid', nullable: true })
+    impuestoId?: string;
+
+    @ManyToOne(() => Impuesto, { eager: true, nullable: true })
+    @JoinColumn({ name: 'impuestoId' })
+    impuestoRel?: Impuesto;
+
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    valorIva: number;
+
+    @Column('decimal', { precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    descuento: number;
+
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    valorDescuento: number;
+
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    valorSubtotal: number;
+
+    @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+    itemTotal: number;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @DeleteDateColumn()
+    deletedAt: Date;
+}

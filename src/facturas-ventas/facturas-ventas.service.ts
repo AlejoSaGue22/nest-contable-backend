@@ -1,0 +1,1658 @@
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateFacturasVentaDto } from './dto/create-facturas-venta.dto';
+import { UpdateFacturasVentaDto } from './dto/update-facturas-venta.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FacturasVenta } from './entities/facturas-venta.entity';
+import {
+  DianStatus,
+  FormaPago,
+  InvoiceStatus,
+  TipoFactura,
+} from './enums/factura-venta.enum';
+import { DataSource, Not, Repository } from 'typeorm';
+import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
+import { PaymentStatus, MedioPago, AnticipoEstado } from 'src/pagos/enums/pago.enum';
+import { Cliente } from 'src/clientes/entities/cliente.entity';
+import { InvoiceFilterDto } from './dto/invoice-filter.dto';
+import { Articulo } from 'src/articulos/entities/articulos.entity';
+import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
+import { TipoAsiento } from 'src/asientos-contables/entities/asientos-contable.entity';
+import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
+import { FactusService } from 'src/api-dian/services/factus.service';
+import { MathUtil } from 'src/common/utils/math.util';
+import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
+import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
+import { PagosService } from 'src/pagos/pagos.service';
+import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
+import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
+import { Anticipo } from 'src/pagos/entities/anticipo.entity';
+import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
+import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
+import { EstadoNota, TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
+
+@Injectable()
+export class FacturasVentasService {
+  private readonly logger = new Logger(FacturasVentasService.name);
+
+  constructor(
+    @InjectRepository(FacturasVenta)
+    private readonly facturaVentaRepository: Repository<FacturasVenta>,
+
+    @InjectRepository(ItemsFacturaVenta)
+    private ItemsfacturaVentaRepository: Repository<ItemsFacturaVenta>,
+
+    @InjectRepository(Cliente)
+    private ClienteRepository: Repository<Cliente>,
+
+    @InjectRepository(Articulo)
+    private ArticuloRepository: Repository<Articulo>,
+
+    @InjectRepository(Impuesto)
+    private impuestoRepository: Repository<Impuesto>,
+
+    @InjectRepository(NotaAjuste)
+    private readonly notaAjusteRepository: Repository<NotaAjuste>,
+
+    private dataSource: DataSource,
+
+    private asientosContablesService: AsientosContablesService,
+    private contabilizacionEngine: ContabilizacionEngine,
+
+    private factusService: FactusService,
+    private pagosService: PagosService,
+    private readonly parametrizacionService: ParametrizacionContableService,
+    private readonly inventarioService: InventarioService,
+  ) { }
+
+  async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
+    // Política solo-alertar: negativos del kardex como advertencias (nunca bloquea).
+    let advertenciasInventario: AdvertenciaInventario[] = [];
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const client = await queryRunner.manager.findOne(Cliente, {
+        where: { id: createFacturasVentaDto.clientId },
+      });
+
+      if (!client) {
+        throw new NotFoundException('Cliente no encontrado');
+      }
+
+      if (createFacturasVentaDto.fechaVencimiento && createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA) {
+        const fechaVencimiento = new Date(createFacturasVentaDto.fechaVencimiento);
+        if (fechaVencimiento < new Date()) {
+          throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+        }
+      }
+
+      if (createFacturasVentaDto.metodoPago) {
+        const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
+          where: { codigo: createFacturasVentaDto.metodoPago },
+        });
+
+        if (!metodoPago) {
+          throw new NotFoundException('Método de pago no encontrado');
+        }
+
+        createFacturasVentaDto.metodoPago = metodoPago.codigo;
+      }
+
+      const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
+      const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
+
+      const numberFactura = await this.generateInvoiceNumber();
+      const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+        ? 'FE'
+        : 'FV';
+
+      const { items, ...createDtoRest } = createFacturasVentaDto;
+
+      const statusInvoice = createFacturasVentaDto.saveAsDraft === true
+        ? InvoiceStatus.DRAFT
+        : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+          ? InvoiceStatus.DRAFT
+          : InvoiceStatus.ISSUED;
+      // ⭐ Determinar estado de pago según si es borrador o no y considerando anticipos
+      let paymentStatus: PaymentStatus;
+      let saldoPendiente: number;
+      let totalPagado: number;
+      let dianStatus: DianStatus;
+
+      let montoAnticiposTotal = 0;
+      if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
+        montoAnticiposTotal = createFacturasVentaDto.anticiposAsociados.reduce(
+          (acc, curr) => MathUtil.sum(acc, curr.montoAplicado),
+          0,
+        );
+      }
+
+      if (statusInvoice === InvoiceStatus.DRAFT) {
+        // Para BORRADORES: siempre PENDING con saldo = 0
+        paymentStatus = PaymentStatus.PENDING;
+        saldoPendiente = 0;
+        totalPagado = 0;
+        dianStatus = DianStatus.PENDING;
+      } else {
+        // Para NO-BORRADORES: restamos el anticipo
+        totalPagado = montoAnticiposTotal;
+        saldoPendiente = MathUtil.sub(total, montoAnticiposTotal);
+        paymentStatus = saldoPendiente === 0
+          ? PaymentStatus.PAID
+          : (totalPagado > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
+        dianStatus = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+          ? DianStatus.PENDING
+          : DianStatus.ACCEPTED;
+      }
+
+      const facturaVenta = queryRunner.manager.create(FacturasVenta, {
+        ...createDtoRest,
+        fechaVencimiento: createFacturasVentaDto.fechaVencimiento || null,
+        metodoPago: createFacturasVentaDto.metodoPago || null,
+        cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || null,
+        vendedor: createFacturasVentaDto.vendedor || null,
+        comprobante: statusInvoice === InvoiceStatus.DRAFT ? '' : numberFactura,
+        comprobante_completo: statusInvoice === InvoiceStatus.DRAFT ? '' : `${prefijo}-${numberFactura}`,
+        prefijo: statusInvoice === InvoiceStatus.DRAFT ? '' : prefijo,
+        createdById: userId,
+        subtotal,
+        descuento,
+        iva,
+        total,
+        status: statusInvoice,
+        paymentStatus,
+        saldoPendiente,
+        totalPagado,
+        dianStatus,
+      });
+
+      const savedInvoice = await queryRunner.manager.save(FacturasVenta, facturaVenta);
+
+      // Guardar items explícitamente para asegurar persistencia
+      const itemsToSave = itemsCalculados.map((item) =>
+        queryRunner.manager.create(ItemsFacturaVenta, {
+          ...item,
+          facturaId: savedInvoice.id,
+        }),
+      );
+      await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
+
+      // BLOQUEO de inventario: sin stock no se emite (rollback total, nada a medias).
+      if (statusInvoice !== InvoiceStatus.DRAFT) {
+        await this.inventarioService.validarDisponibilidad(
+          queryRunner.manager,
+          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+          `venta ${savedInvoice.comprobante_completo || 'nueva'}`,
+        );
+      }
+
+      // ⭐ Procesar aplicaciones de anticipos
+      if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
+        for (const assoc of createFacturasVentaDto.anticiposAsociados) {
+          if (statusInvoice === InvoiceStatus.DRAFT) {
+            // Borradores: guardar aplicación sin alterar saldos
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: savedInvoice.id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(createFacturasVentaDto.fecha),
+              estado: AplicacionEstado.BORRADOR,
+              creadoPorId: userId
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          } else {
+            // Emisión directa: validar, descontar saldo y guardar aplicación activa
+            const anticipo = await queryRunner.manager.findOne(Anticipo, {
+              where: { id: assoc.anticipoId },
+              lock: { mode: 'pessimistic_write' }
+            });
+            if (!anticipo) {
+              throw new NotFoundException(`Anticipo con ID ${assoc.anticipoId} no encontrado`);
+            }
+            if (anticipo.saldoDisponible < assoc.montoAplicado) {
+              throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo suficiente disponible. Saldo actual: $${anticipo.saldoDisponible}, requerido: $${assoc.montoAplicado}`);
+            }
+
+            anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, assoc.montoAplicado);
+            anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+            await queryRunner.manager.save(Anticipo, anticipo);
+
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: savedInvoice.id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(createFacturasVentaDto.fecha),
+              estado: AplicacionEstado.ACTIVO,
+              creadoPorId: userId
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          }
+        }
+      }
+
+      // ⭐ GENERAR ASIENTO CONTABLE AUTOMÁTICO PARA FACTURAS STANDARD (Factura + Cruces de Anticipo)
+      if (savedInvoice.tipoFactura === TipoFactura.STANDARD && savedInvoice.status !== InvoiceStatus.DRAFT) {
+        try {
+          savedInvoice.items = itemsToSave;
+          if (savedInvoice.cuentaBancariaId) {
+            const facturaVentaConRelacion = await queryRunner.manager.findOne(FacturasVenta, {
+              where: { id: savedInvoice.id },
+              relations: ['cuentaBancaria'],
+            });
+            if (facturaVentaConRelacion) {
+              savedInvoice.cuentaBancaria = facturaVentaConRelacion.cuentaBancaria;
+            }
+          }
+          await this.contabilizacionEngine.contabilizarDocumento('FACTURA_VENTA', savedInvoice.id, userId, queryRunner);
+          this.logger.log(`Asiento contable generado automáticamente para factura ${savedInvoice.comprobante_completo}`);
+
+          // Generar asientos de cruce para cada anticipo asociado (estándar al crear directamente)
+          const aplicacionesActivas = await queryRunner.manager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: savedInvoice.id, estado: AplicacionEstado.ACTIVO },
+            relations: ['anticipo'],
+          });
+
+          const clientConCuenta = await queryRunner.manager.findOne(Cliente, {
+            where: { id: savedInvoice.clientId },
+            relations: ['cuentaContable'],
+          });
+
+          const config = await this.parametrizacionService.getConfiguracion();
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId ||
+            (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+          for (const app of aplicacionesActivas) {
+            const anticipo = app.anticipo;
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id ||
+              clientConCuenta?.cuentaContableId ||
+              cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId ||
+              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: savedInvoice.fecha || new Date(),
+                referencia: savedInvoice.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${savedInvoice.comprobante_completo}`,
+                terceroId: savedInvoice.clientId,
+                userId,
+              },
+              queryRunner,
+            );
+            app.asientoId = asientoCruce.id;
+            await queryRunner.manager.save(AnticipoAplicacion, app);
+            this.logger.log(`Asiento de cruce de anticipo (${anticipo.numero}) generado para factura estándar ${savedInvoice.comprobante_completo}`);
+          }
+        } catch (asientoError) {
+          await queryRunner.manager.update(FacturasVenta, { id: savedInvoice.id }, {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          });
+        }
+
+      // Kardex best-effort: la venta emitida descuenta stock (nunca bloquea).
+      // Política solo-alertar: los negativos se devuelven como advertencias.
+      if (statusInvoice !== InvoiceStatus.DRAFT) {
+        await this.inventarioService.registrarSalidasVenta(
+          queryRunner.manager,
+          savedInvoice.id,
+          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+          userId,
+        ).then((kardex: ResultadoKardex) => {
+          const alertas = InventarioService.alertasNegativo(kardex);
+          if (alertas.length) {
+            advertenciasInventario.push(...alertas);
+          }
+        }).catch((invError) => this.logger.error(`Error kardex venta ${savedInvoice.comprobante_completo}: ${invError.message}`));
+      }
+
+      // Cobro automático si es contado y estándar (dentro de la misma transacción)
+      if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
+          const cobroMonto = MathUtil.sub(total, montoAnticiposTotal);
+          if (cobroMonto > 0) {
+            const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
+              ? MedioPago.BANCO
+              : MedioPago.CAJA;
+
+            await this.pagosService.registrarCobro(
+              savedInvoice.id,
+              {
+                monto: cobroMonto,
+                fecha: createFacturasVentaDto.fecha || new Date().toISOString(),
+                medioPago,
+                cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || undefined,
+                referencia: `Cobro automático contado - Factura ${savedInvoice.comprobante_completo}`,
+                notas: 'Cobro generado de forma automática al emitir factura de contado.',
+              },
+              userId,
+              queryRunner,
+            );
+          }
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Factura creada exitosamente: ${savedInvoice.comprobante_completo}`);
+      if (advertenciasInventario.length) {
+        (savedInvoice as any).advertenciasInventario = advertenciasInventario;
+      }
+      return savedInvoice;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error creando factura: ${error.message}`, error.stack);
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al crear la factura');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findAll(options: InvoiceFilterDto): Promise<{ data: FacturasVenta[]; meta: any }> {
+    try {
+      const { page = 1, limit = 10, ...where } = options;
+      const skip = (page - 1) * limit;
+
+      const queryBuilder = this.facturaVentaRepository
+        .createQueryBuilder('invoice')
+        .leftJoinAndSelect('invoice.client', 'client')
+        .leftJoinAndSelect('invoice.items', 'items')
+        .leftJoinAndSelect('items.articulo', 'articulo')
+        .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+        .leftJoinAndSelect('invoice.cuentaBancaria', 'cuentaBancaria')
+        .leftJoinAndSelect('invoice.canalVentaRel', 'canalVentaRel')
+        .leftJoinAndSelect('invoice.metodoPagoRel', 'metodoPagoRel')
+        .where('1=1');
+
+      // Filtros
+      if (where.status) {
+        queryBuilder.andWhere('invoice.status = :status', {
+          status: where.status,
+        });
+      }
+
+      if (where.noStatus) {
+        queryBuilder.andWhere('invoice.status != :noStatus', {
+          noStatus: where.noStatus,
+        });
+      }
+
+      if (where.dianStatus) {
+        queryBuilder.andWhere('invoice.dianStatus = :dianStatus', {
+          dianStatus: where.dianStatus,
+        });
+      }
+
+      if (where.tipoFactura) {
+        queryBuilder.andWhere('invoice.tipoFactura = :tipoFactura', {
+          tipoFactura: where.tipoFactura,
+        });
+      }
+
+      if (where.numeroFactura) {
+        queryBuilder.andWhere('invoice.comprobante = :numeroFactura', {
+          numeroFactura: where.numeroFactura,
+        });
+      }
+
+      if (where.clientName) {
+        queryBuilder.andWhere('client.nombre LIKE :clientName', {
+          clientName: `%${where.clientName}%`,
+        });
+      }
+
+      if (where.startDate && where.endDate) {
+        queryBuilder.andWhere(
+          'invoice.createdAt BETWEEN :startDate AND :endDate',
+          {
+            startDate: where.startDate,
+            endDate: where.endDate,
+          },
+        );
+      }
+
+      queryBuilder.orderBy('invoice.createdAt', 'DESC').skip(skip).take(limit);
+
+      const [data, total] = await queryBuilder.getManyAndCount();
+
+      await this.anexarResumenNotas(data);
+
+      const meta = {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      };
+
+      return { data, meta };
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo facturas: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al obtener las facturas');
+    }
+  }
+
+  /**
+   * Resumen de notas crédito/débito aplicadas a una factura de venta (Fase 1: solo lectura).
+   * Fuente de verdad de "afecta saldo": `saldoAplicado` + `valorAplicadoCartera`
+   * (CarteraNotaService). NC acredita (baja el saldo), ND adiciona (sube el saldo).
+   */
+  async getNotasResumen(facturaId: string) {
+    const factura = await this.facturaVentaRepository.findOne({ where: { id: facturaId } });
+    if (!factura) {
+      throw new NotFoundException(`Factura con ID ${facturaId} no encontrada`);
+    }
+
+    const notas = await this.notaAjusteRepository.find({
+      where: { facturaOriginalId: facturaId },
+      order: { fecha: 'DESC', createdAt: 'DESC' },
+    });
+
+    let totalNCAplicado = 0;
+    let totalNDAplicado = 0;
+    let countNC = 0;
+    let countND = 0;
+    let countBorrador = 0;
+
+    const items = notas.map((n) => {
+      const afectaSaldo = n.saldoAplicado === true;
+      const aplicado = afectaSaldo ? Number(n.valorAplicadoCartera ?? 0) : 0;
+      if (n.tipo === TipoNota.CREDITO) {
+        countNC++;
+        if (n.saldoAplicado) totalNCAplicado += aplicado;
+      } else {
+        countND++;
+        if (n.saldoAplicado) totalNDAplicado += aplicado;
+      }
+      if (n.estado === EstadoNota.DRAFT) countBorrador++;
+      return {
+        id: n.id,
+        tipo: n.tipo,
+        numeroCompleto: n.numeroCompleto,
+        fecha: n.fecha,
+        concepto: n.concepto ?? null,
+        motivo: n.motivo,
+        total: Number(n.total),
+        estado: n.estado,
+        estadoDIAN: n.estadoDIAN,
+        afectaSaldo,
+        valorAplicadoCartera: aplicado,
+        esReembolsoAbono: n.esReembolsoAbono ?? false,
+      };
+    });
+
+    const total = Number(factura.total);
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    return {
+      facturaId,
+      totalFactura: total,
+      totalNCAplicado: round2(totalNCAplicado),
+      totalNDAplicado: round2(totalNDAplicado),
+      netoExigible: round2(total - totalNCAplicado + totalNDAplicado),
+      tieneNota: notas.length > 0,
+      countNC,
+      countND,
+      countBorrador,
+      items,
+    };
+  }
+
+  /**
+   * Enriquecimiento liviano del listado: 1 sola query agregada (sin N+1,
+   * sin detalle de items). Adjunta `notasResumen` a cada factura.
+   */
+  private async anexarResumenNotas(facturas: FacturasVenta[]): Promise<void> {
+    if (!facturas || facturas.length === 0) return;
+    const ids = facturas.map((f) => f.id);
+    const rows: Array<{ facturaId: string; total: string; aplicadas: string; aplicadasND: string; countNC: string; countND: string }> =
+      await this.notaAjusteRepository
+        .createQueryBuilder('nota')
+        .select('nota.facturaOriginalId', 'facturaId')
+        .addSelect('COUNT(*)', 'total')
+        .addSelect(
+          `SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' AND nota."saldoAplicado" = true THEN nota."valorAplicadoCartera" ELSE 0 END)`,
+          'aplicadas',
+        )
+        .addSelect(
+          `SUM(CASE WHEN nota.tipo = '${TipoNota.DEBITO}' AND nota."saldoAplicado" = true THEN nota."valorAplicadoCartera" ELSE 0 END)`,
+          'aplicadasND',
+        )
+        .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.CREDITO}' THEN 1 ELSE 0 END)`, 'countNC')
+        .addSelect(`SUM(CASE WHEN nota.tipo = '${TipoNota.DEBITO}' THEN 1 ELSE 0 END)`, 'countND')
+        .where('nota.facturaOriginalId IN (:...ids)', { ids })
+        .groupBy('nota.facturaOriginalId')
+        .getRawMany();
+
+    const map = new Map(rows.map((r) => [r.facturaId, r]));
+    for (const f of facturas) {
+      const r = map.get(f.id);
+      (f as any).notasResumen = r
+        ? {
+            tieneNota: true,
+            totalNCAplicado: Number(r.aplicadas ?? 0),
+            totalNDAplicado: Number(r.aplicadasND ?? 0),
+            countNC: Number(r.countNC ?? 0),
+            countND: Number(r.countND ?? 0),
+          }
+        : { tieneNota: false, totalNCAplicado: 0, totalNDAplicado: 0, countNC: 0, countND: 0 };
+    }
+  }
+
+  async update(id: string, updateDto: UpdateFacturasVentaDto): Promise<FacturasVenta> {
+    if (updateDto.items && updateDto.items.length === 0) {
+      throw new BadRequestException('La factura debe tener al menos un item');
+    }
+
+    if (updateDto.fechaVencimiento) {
+      const fechaVencimiento = new Date(updateDto.fechaVencimiento);
+      if (fechaVencimiento < new Date()) {
+        throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
+      }
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const invoice = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items'],
+      });
+
+      if (!invoice) {
+        throw new NotFoundException(`Factura con ID ${id} no encontrada`);
+      }
+
+      if (!invoice.puedeEditarse()) {
+        throw new BadRequestException(`No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`);
+      }
+
+      let subtotal = invoice.subtotal;
+      let iva = invoice.iva;
+      let descuento = invoice.descuento;
+      let total = invoice.total;
+
+      if (updateDto.items && updateDto.items.length > 0) {
+        const calc = await this.calcularTotales(queryRunner, updateDto.items);
+
+        subtotal = calc.subtotal;
+        iva = calc.iva;
+        descuento = calc.descuento;
+        total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
+
+        // eliminar items actuales
+        await queryRunner.manager.delete(ItemsFacturaVenta, { facturaId: id });
+
+        // crear nuevos
+        const newItems = calc.itemsCalculados.map((item) =>
+          queryRunner.manager.create(ItemsFacturaVenta, {
+            ...item,
+            facturaId: id,
+          }),
+        );
+
+        await queryRunner.manager.save(ItemsFacturaVenta, newItems);
+      }
+
+      const updatePayload: any = {
+        clientId: updateDto.clientId,
+        canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
+        vendedor: updateDto.vendedor || null,
+        fecha: updateDto.fecha,
+        formaPago: updateDto.formaPago,
+        metodoPago: updateDto.metodoPago || null,
+        cuentaBancariaId: updateDto.cuentaBancariaId || null,
+        fechaVencimiento: updateDto.fechaVencimiento || null,
+        tipoFactura: updateDto.tipoFactura,
+        subtotal,
+        iva,
+        descuento,
+        total,
+      };
+
+      // ⭐ Si la factura sigue siendo DRAFT, resetear estados de pago
+      if (invoice.status === InvoiceStatus.DRAFT) {
+        updatePayload.paymentStatus = PaymentStatus.PENDING;
+        updatePayload.saldoPendiente = 0;
+        updatePayload.totalPagado = 0;
+        updatePayload.dianStatus = DianStatus.PENDING;
+
+        // Limpiar y recrear las aplicaciones de anticipo en borrador
+        if (updateDto.anticiposAsociados) {
+          await queryRunner.manager.delete(AnticipoAplicacion, { facturaVentaId: id });
+          for (const assoc of updateDto.anticiposAsociados) {
+            const aplicacion = queryRunner.manager.create(AnticipoAplicacion, {
+              anticipoId: assoc.anticipoId,
+              facturaVentaId: id,
+              montoAplicado: assoc.montoAplicado,
+              fecha: new Date(updateDto.fecha || invoice.fecha),
+              estado: AplicacionEstado.BORRADOR,
+              creadoPorId: invoice.createdById
+            });
+            await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
+          }
+        }
+      }
+
+      this.logger.debug(
+        `Actualizando factura ${id} con payload: ${JSON.stringify(updatePayload)}`,
+      );
+
+      // update directo (más rápido que save)
+      await queryRunner.manager.update(FacturasVenta, { id }, updatePayload);
+
+      await queryRunner.commitTransaction();
+
+      return await this.findOne(id);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        `Error actualizando factura ${id}: ${error.message}`,
+        error.stack,
+      );
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al actualizar la factura');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findOne(id: string): Promise<FacturasVenta> {
+    try {
+      const invoice = await this.facturaVentaRepository.findOne({
+        where: { id },
+        relations: [
+          'client',
+          'client.tipoDocumentoRel',
+          'items',
+          'items.articulo',
+          'items.impuestoRel',
+          'metodoPagoRel',
+          'canalVentaRel',
+          'createdBy',
+          'cuentaBancaria',
+          'cuentaBancaria.banco',
+        ],
+      });
+
+      if (!invoice) {
+        throw new NotFoundException(`Factura con ID ${id} no encontrada`);
+      }
+
+      return invoice;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error obteniendo factura ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al obtener la factura');
+    }
+  }
+
+  async remove(id: string): Promise<void> {
+    const invoice = await this.findOne(id);
+
+    if (invoice.status != InvoiceStatus.DRAFT) {
+      throw new BadRequestException('No se puede eliminar una factura que no está en estado borrador');
+    }
+
+    try {
+      await this.facturaVentaRepository.softDelete(id);
+      this.logger.log(`Factura eliminada: ${id}`);
+    } catch (error) {
+      this.logger.error(`Error eliminando factura ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al eliminar la factura');
+    }
+  }
+
+  /**
+   * Emitir factura electrónica (enviar a DIAN vía Factus)
+   */
+  async emitir(id: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    // Política solo-alertar: negativos del kardex como advertencias (nunca bloquea).
+    let advertenciasKardexFE: AdvertenciaInventario[] = [];
+
+    if (!factura.puedeEmitirse()) {
+      throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
+    }
+    this.logger.log(`Emitiendo factura electrónica: ${factura.comprobante_completo}`);
+    const numberFactura = await this.generateInvoiceNumber();
+
+    try {
+      // 1. Cambiar estado a "enviando a DIAN"
+      // ✅ FIX: update() selectivo — NUNCA escribe subtotal/iva/descuento/total
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: InvoiceStatus.PENDING_DIAN,
+          dianStatus: DianStatus.SENT,
+          fechaEnvioDIAN: new Date(),
+          intentosEnvio: (factura.intentosEnvio ?? 0) + 1,
+        },
+      );
+      // BLOQUEO de inventario ANTES de enviar a DIAN: sin stock no se emite
+      // (una FE aceptada por DIAN ya no se puede frenar, así que se valida aquí).
+      const itemsEmitir = await this.dataSource.manager.find(ItemsFacturaVenta, {
+        where: { facturaId: id },
+      });
+      await this.inventarioService.validarDisponibilidad(
+        this.dataSource.manager,
+        itemsEmitir.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+        `venta ${factura.comprobante_completo}`,
+      );
+
+      // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
+      this.logger.log('📤 Enviando factura a Factus...');
+      const respuesta = await this.factusService.crearYValidarFactura(factura, numberFactura);
+      // 3. Procesar respuesta
+      if (respuesta.estado === 'aceptada') {
+        const updateAceptada: Partial<FacturasVenta> = {
+          status: InvoiceStatus.ACCEPTED,
+          dianStatus: DianStatus.ACCEPTED,
+          fechaAceptacionDIAN: new Date(),
+          cufe: respuesta.cufe,
+          xmlUrl: respuesta.xmlUrl,
+          pdfUrl: respuesta.pdfUrl,
+          qrCode: respuesta.qrCode,
+          proveedorResponse: respuesta.respuestaCompleta,
+          prefijo: 'FE',
+          comprobante: numberFactura,
+          factusNumberingRangeId: respuesta.numberingRangeId ?? null,
+          factusResolutionNumber: respuesta.resolutionNumber ?? null,
+          factusRangePrefix: respuesta.rangePrefix ?? null,
+        };
+
+        if (respuesta.numeroCompleto) {
+          updateAceptada.comprobante_completo = respuesta.numeroCompleto;
+          factura.comprobante_completo = respuesta.numeroCompleto;
+        }
+
+        // Ejecutar en transacción para asegurar la consistencia del cruce de anticipos
+        let montoAnticiposTotal = 0;
+        await this.dataSource.transaction(async (transactionalEntityManager) => {
+          const aplicaciones = await transactionalEntityManager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+          });
+
+          for (const app of aplicaciones) {
+            const anticipo = await transactionalEntityManager.findOne(Anticipo, {
+              where: { id: app.anticipoId },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (!anticipo) {
+              throw new NotFoundException(`Anticipo con ID ${app.anticipoId} no encontrado`);
+            }
+            if (anticipo.saldoDisponible < app.montoAplicado) {
+              throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo disponible suficiente.`);
+            }
+
+            anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, app.montoAplicado);
+            anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+            await transactionalEntityManager.save(Anticipo, anticipo);
+
+            app.estado = AplicacionEstado.ACTIVO;
+            await transactionalEntityManager.save(AnticipoAplicacion, app);
+
+            montoAnticiposTotal = MathUtil.sum(montoAnticiposTotal, app.montoAplicado);
+          }
+
+          updateAceptada.totalPagado = montoAnticiposTotal;
+          updateAceptada.saldoPendiente = MathUtil.sub(factura.total, montoAnticiposTotal);
+          updateAceptada.paymentStatus = updateAceptada.saldoPendiente === 0
+            ? PaymentStatus.PAID
+            : (montoAnticiposTotal > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
+
+          await transactionalEntityManager.update(FacturasVenta, { id }, updateAceptada);
+        });
+
+        // ✅ GENERAR ASIENTOS CONTABLES TRAS ACEPTACIÓN (Factura + Cruces de Anticipo)
+        const facturaParaAsiento = await this.findOne(id);
+        const queryRunnerAsiento = this.dataSource.createQueryRunner();
+        await queryRunnerAsiento.connect();
+        await queryRunnerAsiento.startTransaction();
+
+        try {
+          // 1. Contabilizar factura al 100%
+          await this.contabilizacionEngine.contabilizarDocumento(
+            'FACTURA_VENTA',
+            facturaParaAsiento.id,
+            userId,
+            queryRunnerAsiento,
+          );
+
+          // 2. Generar asientos de cruce para cada aplicación activa de anticipo
+          const aplicacionesActivas = await queryRunnerAsiento.manager.find(AnticipoAplicacion, {
+            where: { facturaVentaId: id, estado: AplicacionEstado.ACTIVO },
+            relations: ['anticipo'],
+          });
+
+          // Cargar cuenta contable del cliente si existe
+          const clientConCuenta = await queryRunnerAsiento.manager.findOne(Cliente, {
+            where: { id: facturaParaAsiento.clientId },
+            relations: ['cuentaContable'],
+          });
+
+          const config = await this.parametrizacionService.getConfiguracion();
+          const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId || (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+          for (const app of aplicacionesActivas) {
+            const anticipo = app.anticipo;
+            const cuentaTerceroId = clientConCuenta?.cuentaContable?.id || clientConCuenta?.cuentaContableId || cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId || (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: facturaParaAsiento.fecha || new Date(),
+                referencia: facturaParaAsiento.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${facturaParaAsiento.comprobante_completo}`,
+                terceroId: facturaParaAsiento.clientId,
+                userId,
+              },
+              queryRunnerAsiento,
+            );
+
+            app.asientoId = asientoCruce.id;
+            await queryRunnerAsiento.manager.save(AnticipoAplicacion, app);
+          }
+
+          await queryRunnerAsiento.commitTransaction();
+          this.logger.log(`Asiento contable de factura y comprobante(s) de cruce generados para FE ${facturaParaAsiento.comprobante_completo}`);
+        } catch (asientoError) {
+          await queryRunnerAsiento.rollbackTransaction();
+          await this.facturaVentaRepository.update({ id }, {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          });
+          this.logger.error(
+            `Error generando asientos contables para FE: ${asientoError.message}`,
+          );
+        } finally {
+          await queryRunnerAsiento.release();
+        }
+
+        // Si es de contado, registrar cobro automático (usando transacción independiente para cobros de FE)
+        if (factura.formaPago === FormaPago.CONTADO) {
+          try {
+            const cobroMonto = MathUtil.sub(Number(factura.total), montoAnticiposTotal);
+            if (cobroMonto > 0) {
+              const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+                ? MedioPago.BANCO
+                : MedioPago.CAJA;
+
+              const qrCobro = this.dataSource.createQueryRunner();
+              await qrCobro.connect();
+              await qrCobro.startTransaction();
+              try {
+                await this.pagosService.registrarCobro(
+                  factura.id,
+                  {
+                    monto: cobroMonto,
+                    fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+                    medioPago,
+                    cuentaBancariaId: factura.cuentaBancariaId || undefined,
+                    referencia: `Cobro automático contado - Factura ${factura.comprobante_completo}`,
+                    notas: 'Cobro generado de forma automática al emitir factura electrónica de contado.',
+                  },
+                  userId,
+                  qrCobro,
+                );
+                await qrCobro.commitTransaction();
+              } catch (qrError) {
+                await qrCobro.rollbackTransaction();
+                throw qrError;
+              } finally {
+                await qrCobro.release();
+              }
+              this.logger.log(`Cobro automático registrado para factura electrónica ${factura.comprobante_completo}`);
+            }
+          } catch (cobroError) {
+            console.log('cobroError', cobroError);
+            this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
+          }
+        }
+        // Kardex best-effort: la FE aceptada descuenta stock (nunca bloquea).
+        try {
+          const itemsVenta = await this.dataSource.manager.find(ItemsFacturaVenta, {
+            where: { facturaId: id },
+          });
+          const kardex: ResultadoKardex = await this.inventarioService.registrarSalidasVenta(
+            this.dataSource.manager,
+            id,
+            itemsVenta.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+            userId,
+          );
+          advertenciasKardexFE = InventarioService.alertasNegativo(kardex);
+        } catch (invError) {
+          this.logger.error(`Error kardex FE ${factura.comprobante_completo}: ${invError.message}`);
+        }
+        this.logger.log(`✅ Factura ACEPTADA por DIAN: ${respuesta.cufe}`);
+      } else {
+        // Rechazada
+        await this.facturaVentaRepository.update(
+          { id },
+          {
+            status: InvoiceStatus.REJECTED,
+            dianStatus: DianStatus.REJECTED,
+            mensajeError: respuesta.mensaje || '',
+            dianResponse: respuesta.respuestaCompleta,
+          },
+        );
+        this.logger.error(
+          `❌ Factura RECHAZADA por DIAN: ${respuesta.mensaje}`,
+        );
+      }
+
+      const emitida = await this.findOne(id);
+      if (advertenciasKardexFE.length) {
+        (emitida as any).advertenciasInventario = advertenciasKardexFE;
+      }
+      return emitida;
+    } catch (error) {
+      // Revertir estado en caso de error
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: InvoiceStatus.DRAFT,
+          dianStatus: DianStatus.PENDING,
+          mensajeError: error.message,
+        },
+      );
+      this.logger.error(`Error emitiendo factura: ${error.message}`);
+      throw new InternalServerErrorException(`Error al emitir factura electrónica: ${error.message}`);
+    }
+  }
+
+  async reintentarEnvio(id: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    if (!factura.puedeReintentarse()) {
+      throw new BadRequestException('No se puede reintentar el envío.');
+    }
+    // ✅ FIX: update() selectivo
+    await this.facturaVentaRepository.update(
+      { id },
+      {
+        status: InvoiceStatus.DRAFT,
+        dianStatus: DianStatus.PENDING,
+        mensajeError: '',
+      },
+    );
+    return await this.emitir(id, userId);
+  }
+
+  async emitirEstandar(id: string, userId: string): Promise<FacturasVenta> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const factura = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items', 'client', 'cuentaBancaria'],
+      });
+
+      if (!factura) {
+        throw new NotFoundException('Factura no encontrada');
+      }
+
+      if (factura.tipoFactura !== TipoFactura.STANDARD) {
+        throw new BadRequestException(
+          'Solo se pueden emitir facturas estándar desde borrador',
+        );
+      }
+
+      if (factura.status !== InvoiceStatus.DRAFT) {
+        throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
+      }
+
+      // BLOQUEO de inventario en la misma tx: sin stock no se emite (rollback total).
+      await this.inventarioService.validarDisponibilidad(
+        queryRunner.manager,
+        (factura.items ?? []).map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+        `venta ${factura.comprobante_completo || 'estándar'}`,
+      );
+
+      const numberFactura = await this.generateInvoiceNumber();
+      const prefijo = 'FV';
+
+      // 1. Obtener y procesar los anticipos en borrador
+      const aplicacionesBorrador = await queryRunner.manager.find(AnticipoAplicacion, {
+        where: { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+      });
+
+      let montoAnticiposTotal = 0;
+      for (const app of aplicacionesBorrador) {
+        const anticipo = await queryRunner.manager.findOne(Anticipo, {
+          where: { id: app.anticipoId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!anticipo) {
+          throw new NotFoundException(`Anticipo con ID ${app.anticipoId} no encontrado`);
+        }
+        if (anticipo.saldoDisponible < app.montoAplicado) {
+          throw new BadRequestException(`El anticipo ${anticipo.numero} ya no cuenta con saldo disponible suficiente.`);
+        }
+
+        anticipo.saldoDisponible = MathUtil.sub(anticipo.saldoDisponible, app.montoAplicado);
+        anticipo.estado = anticipo.saldoDisponible === 0 ? AnticipoEstado.APLICADO : AnticipoEstado.PARCIAL;
+        await queryRunner.manager.save(Anticipo, anticipo);
+
+        app.estado = AplicacionEstado.ACTIVO;
+        await queryRunner.manager.save(AnticipoAplicacion, app);
+
+        montoAnticiposTotal = MathUtil.sum(montoAnticiposTotal, app.montoAplicado);
+      }
+
+      const totalPagado = montoAnticiposTotal;
+      const saldoPendiente = MathUtil.sub(factura.total, totalPagado);
+      const paymentStatus = saldoPendiente === 0
+        ? PaymentStatus.PAID
+        : (totalPagado > 0 ? PaymentStatus.PARTIAL : PaymentStatus.PENDING);
+
+      await queryRunner.manager.update(
+        FacturasVenta,
+        { id },
+        {
+          status: InvoiceStatus.ISSUED,
+          paymentStatus,
+          saldoPendiente,
+          totalPagado,
+          dianStatus: DianStatus.ACCEPTED,
+          prefijo,
+          comprobante: numberFactura,
+          comprobante_completo: `${prefijo}-${numberFactura}`,
+        },
+      );
+
+      const updatedInvoice = await queryRunner.manager.findOne(FacturasVenta, {
+        where: { id },
+        relations: ['items', 'client', 'client.cuentaContable', 'cuentaBancaria'],
+      });
+
+      if (!updatedInvoice) {
+        throw new NotFoundException('Factura no encontrada');
+      }
+
+      try {
+        await this.contabilizacionEngine.contabilizarDocumento(
+          'FACTURA_VENTA',
+          updatedInvoice.id,
+          userId,
+          queryRunner,
+        );
+        this.logger.log(
+          `Asiento contable generado para factura estándar ${updatedInvoice.comprobante_completo}`,
+        );
+
+        const config = await this.parametrizacionService.getConfiguracion();
+        const cuentaTerceroDefaultId = config?.cuentaCobrarClientesId ||
+          (await this.asientosContablesService.obtenerCuentaPorCodigo('1305')).id;
+
+        for (const app of aplicacionesBorrador) {
+          const anticipo = await queryRunner.manager.findOne(Anticipo, {
+            where: { id: app.anticipoId },
+          });
+          if (anticipo) {
+            const cuentaTerceroId = updatedInvoice.client?.cuentaContable?.id ||
+              updatedInvoice.client?.cuentaContableId ||
+              cuentaTerceroDefaultId;
+            const cuentaAnticipoId = anticipo.cuentaContableId ||
+              (await this.asientosContablesService.obtenerCuentaPorCodigo('280505')).id;
+
+            const asientoCruce = await this.asientosContablesService.generarAsientoCruceAnticipo(
+              {
+                tipo: 'venta',
+                cuentaTerceroId,
+                cuentaAnticipoId,
+                monto: app.montoAplicado,
+                fecha: updatedInvoice.fecha || new Date(),
+                referencia: updatedInvoice.comprobante_completo,
+                descripcion: `Cruce automático de anticipo ${anticipo.numero} en Factura ${updatedInvoice.comprobante_completo}`,
+                terceroId: updatedInvoice.clientId,
+                userId,
+              },
+              queryRunner,
+            );
+            app.asientoId = asientoCruce.id;
+            await queryRunner.manager.save(AnticipoAplicacion, app);
+            this.logger.log(`Asiento de cruce de anticipo (${anticipo.numero}) generado para factura estándar ${updatedInvoice.comprobante_completo}`);
+          }
+        }
+      } catch (asientoError) {
+        await queryRunner.manager.update(
+          FacturasVenta,
+          { id },
+          {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          },
+        );
+        this.logger.error(
+          `Error generando asiento contable para factura estándar: ${asientoError.message}`,
+        );
+      }
+
+      // Cobro automático si es contado (dentro de la misma transacción)
+      if (factura.formaPago === FormaPago.CONTADO) {
+        const cobroMonto = MathUtil.sub(Number(factura.total), montoAnticiposTotal);
+        if (cobroMonto > 0) {
+          const medioPago = factura.metodoPago === '47' || factura.metodoPago === '42'
+            ? MedioPago.BANCO
+            : MedioPago.CAJA;
+
+          await this.pagosService.registrarCobro(
+            factura.id,
+            {
+              monto: cobroMonto,
+              fecha: factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+              medioPago,
+              cuentaBancariaId: factura.cuentaBancariaId || undefined,
+              referencia: `Cobro automático contado - Factura ${updatedInvoice.comprobante_completo}`,
+              notas: 'Cobro generado de forma automática al emitir factura de contado.',
+            },
+            userId,
+            queryRunner,
+          );
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `Factura estándar emitida: ${updatedInvoice.comprobante_completo}`,
+      );
+
+      // Kardex best-effort (post-commit): el borrador estándar emitido
+      // descuenta stock (el create() solo lo hace si nace no-borrador).
+      let advertenciasEstandar: AdvertenciaInventario[] = [];
+      try {
+        const kardex: ResultadoKardex = await this.inventarioService.registrarSalidasVenta(
+          this.dataSource.manager,
+          id,
+          (updatedInvoice.items ?? []).map((it) => ({
+            articuloId: (it as any).articuloId,
+            cantidad: Number((it as any).quantity),
+          })),
+          userId,
+        );
+        advertenciasEstandar = InventarioService.alertasNegativo(kardex);
+      } catch (invError) {
+        this.logger.error(`Error kardex estándar ${updatedInvoice.comprobante_completo}: ${invError.message}`);
+      }
+
+      const emitidaEstandar = await this.findOne(id);
+      if (advertenciasEstandar.length) {
+        (emitidaEstandar as any).advertenciasInventario = advertenciasEstandar;
+      }
+      return emitidaEstandar;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        `Error emitiendo factura estándar: ${error.message}`,
+        error.stack,
+      );
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        `Error al emitir factura estándar: ${error.message}`,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async registrarPago(
+    id: string,
+    metodoPago: string,
+    userId: string,
+  ): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    if (
+      !factura.estaAceptada() &&
+      factura.tipoFactura === TipoFactura.ELECTRONICA
+    ) {
+      throw new BadRequestException(
+        'Solo se puede registrar pago de facturas aceptadas por DIAN',
+      );
+    }
+
+    // ✅ FIX: update() selectivo — no toca campos financieros
+    await this.facturaVentaRepository.update(
+      { id },
+      { status: InvoiceStatus.PAID, metodoPago },
+    );
+
+    const updatedInvoice = await this.findOne(id);
+
+    // Generar asiento contable de pago (Cartera)
+    try {
+      await this.asientosContablesService.generarAsientoPagoFacturaVenta(
+        updatedInvoice,
+        userId,
+      );
+      this.logger.log(
+        `Asiento de pago generado para factura ${updatedInvoice.comprobante_completo}`,
+      );
+    } catch (error) {
+      this.logger.error(`Error generando asiento de pago: ${error.message}`);
+    }
+
+    return updatedInvoice;
+  }
+
+  async anular(
+    id: string,
+    motivo: string,
+    userId: string,
+  ): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+    if (factura.tipoFactura === TipoFactura.ELECTRONICA) {
+      if (!factura.puedeAnularseElectronica()) {
+        throw new BadRequestException('No se puede anular esta factura.');
+      }
+    } else {
+      if (!factura.puedeAnularseEstandar()) {
+        throw new BadRequestException('No se puede anular esta factura.');
+      }
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Revertir aplicaciones de anticipos
+      const aplicaciones = await queryRunner.manager.find(AnticipoAplicacion, {
+        where: { facturaVentaId: id, estado: AplicacionEstado.ACTIVO }
+      });
+
+      for (const app of aplicaciones) {
+        const anticipo = await queryRunner.manager.findOne(Anticipo, {
+          where: { id: app.anticipoId },
+          lock: { mode: 'pessimistic_write' }
+        });
+        if (anticipo) {
+          const nuevoSaldo = MathUtil.sum(anticipo.saldoDisponible, app.montoAplicado);
+          const nuevoEstado = nuevoSaldo === anticipo.montoOriginal ? AnticipoEstado.PENDIENTE : AnticipoEstado.PARCIAL;
+
+          await queryRunner.manager.update(Anticipo, { id: anticipo.id }, {
+            saldoDisponible: nuevoSaldo,
+            estado: nuevoEstado
+          });
+        }
+        await queryRunner.manager.update(AnticipoAplicacion, { id: app.id }, {
+          estado: AplicacionEstado.REVERTIDO
+        });
+      }
+
+      // Revertir también las de borrador por si acaso
+      await queryRunner.manager.update(
+        AnticipoAplicacion,
+        { facturaVentaId: id, estado: AplicacionEstado.BORRADOR },
+        { estado: AplicacionEstado.REVERTIDO }
+      );
+
+      // 2. Anular la factura
+      await queryRunner.manager.update(
+        FacturasVenta,
+        { id },
+        {
+          status: InvoiceStatus.CANCELLED,
+          dianStatus: DianStatus.CANCELLED,
+          paymentStatus: PaymentStatus.CANCELLED,
+          observaciones: `Anulada: ${motivo}`,
+        },
+      );
+
+      await queryRunner.commitTransaction();
+
+      const updatedInvoice = await this.findOne(id);
+
+      // Generar asiento contable de anulación y de reversión de cruces de anticipo
+      try {
+        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(
+          updatedInvoice,
+          userId,
+        );
+        this.logger.log(
+          `Asiento de anulación generado para factura ${updatedInvoice.comprobante_completo}`,
+        );
+
+        // Anular los asientos contables de cruce asociados
+        if (aplicaciones.length > 0) {
+          const qrAnulacionCruce = this.dataSource.createQueryRunner();
+          await qrAnulacionCruce.connect();
+          await qrAnulacionCruce.startTransaction();
+          try {
+            for (const app of aplicaciones) {
+              if (app.asientoId) {
+                await this.asientosContablesService.anularAsiento(
+                  app.asientoId,
+                  TipoAsiento.ANULACION_COMPROBANTE,
+                  userId,
+                  qrAnulacionCruce,
+                );
+                this.logger.log(`Asiento de cruce de anticipo (${app.asientoId}) anulado para factura ${updatedInvoice.comprobante_completo}`);
+              }
+            }
+            await qrAnulacionCruce.commitTransaction();
+          } catch (cruceAnulacionError) {
+            await qrAnulacionCruce.rollbackTransaction();
+            this.logger.error(`Error anulando asientos de cruce: ${cruceAnulacionError.message}`);
+            throw cruceAnulacionError;
+          } finally {
+            await qrAnulacionCruce.release();
+          }
+        }
+      } catch (asientoError) {
+        await this.facturaVentaRepository.update(
+          { id },
+          {
+            status: InvoiceStatus.ERROR_ASIENTO,
+            asientoError: asientoError.message,
+            fechaAsientoError: new Date(),
+          },
+        );
+        this.logger.error(
+          `Error generando asientos de anulación: ${asientoError.message}`,
+        );
+      }
+
+      // Kardex best-effort: la venta anulada devuelve sus SALIDAs al stock.
+      let advertenciasAnulacion: AdvertenciaInventario[] = [];
+      try {
+        const kardex: ResultadoKardex = await this.inventarioService.revertirDocumento(
+          this.dataSource.manager,
+          DocumentoInventario.FACTURA_VENTA,
+          id,
+          `Anulación venta ${updatedInvoice.comprobante_completo}`,
+          userId,
+        );
+        advertenciasAnulacion = InventarioService.alertasNegativo(kardex);
+      } catch (invError) {
+        this.logger.error(`Error kardex anulación venta ${updatedInvoice.comprobante_completo}: ${invError.message}`);
+      }
+
+      const anulada = await this.findOne(id);
+      if (advertenciasAnulacion.length) {
+        (anulada as any).advertenciasInventario = advertenciasAnulacion;
+      }
+      return anulada;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Error anulando factura ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al anular factura');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async descargarPDF(
+    id: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const factura = await this.findOne(id);
+    if (!factura.comprobante_completo) {
+      throw new BadRequestException(
+        'Esta factura no tiene Número de Comprobante Completo.',
+      );
+    }
+    return await this.factusService.descargarPDF(factura.comprobante_completo);
+  }
+
+  async descargarXML(
+    id: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const factura = await this.findOne(id);
+    if (!factura.comprobante_completo) {
+      throw new BadRequestException(
+        'Esta factura no tiene Número de Comprobante Completo.',
+      );
+    }
+    return await this.factusService.descargarXML(factura.comprobante_completo);
+  }
+
+  async getEstadisticas(): Promise<any> {
+    const facturas = await this.facturaVentaRepository.find();
+    return {
+      total: facturas.length,
+      aceptadas: facturas.filter((f) => f.status === InvoiceStatus.ACCEPTED)
+        .length,
+      rechazadas: facturas.filter((f) => f.status === InvoiceStatus.REJECTED)
+        .length,
+      montoTotal: facturas.reduce(
+        (sum, f) => MathUtil.sum(sum, Number(f.total)),
+        0,
+      ),
+    };
+  }
+
+  private async calcularTotales(queryRunner: any, items: any[]): Promise<{
+    subtotal: number;
+    iva: number;
+    descuento: number;
+    itemsCalculados: Partial<ItemsFacturaVenta>[];
+  }> {
+    let subtotal = 0;
+    let iva = 0;
+    let descuento = 0;
+    const itemsCalculados: Partial<ItemsFacturaVenta>[] = [];
+
+    for (const itemDto of items) {
+      const product = await queryRunner.manager.findOne(Articulo, {
+        where: { id: itemDto.articuloId },
+        relations: ['categoriaArticulo', 'categoriaArticulo.cuentaPrincipal'],
+      });
+
+      if (!product)
+        throw new NotFoundException(
+          `Producto no encontrado: ${itemDto.articuloId}`,
+        );
+      if (!product.isActive)
+        throw new BadRequestException(
+          `El producto ${product.nombre} no está activo`,
+        );
+
+      const unitPrice = Number(itemDto.unitPrice) || product.precio || 0;
+      if (unitPrice <= 0) {
+        throw new BadRequestException(
+          `El precio unitario del artículo ${product.nombre} debe ser mayor a cero`,
+        );
+      }
+      const quantity = Number(itemDto.quantity) || 0;
+      if (quantity <= 0) {
+        throw new BadRequestException(
+          `La cantidad del artículo ${product.nombre} debe ser mayor a cero`,
+        );
+      }
+      const totalSinDescuento = MathUtil.mul(unitPrice, quantity);
+      const discountRate = Number(itemDto.discount) || 0;
+      const itemDiscount = MathUtil.percentage(totalSinDescuento, discountRate);
+
+      const itemImporte = MathUtil.sub(totalSinDescuento, itemDiscount);
+
+      const taxRate = Number(itemDto.iva) || 0;
+      const itemIva = MathUtil.percentage(itemImporte, taxRate);
+
+      let impuestoIdSeleccionado: string | undefined;
+      if (itemDto.impuestoId) {
+        const impuesto = await queryRunner.manager.findOne(Impuesto, {
+          where: { id: itemDto.impuestoId, activo: true },
+        });
+        if (!impuesto)
+          throw new NotFoundException(
+            `Impuesto ${itemDto.impuestoId} no encontrado`,
+          );
+        impuestoIdSeleccionado = impuesto.id;
+      } else {
+        impuestoIdSeleccionado = product.impuestoId || undefined;
+      }
+
+      const itemTotal = MathUtil.sum(itemImporte, itemIva);
+
+      itemsCalculados.push({
+        articuloId: product.id,
+        description: itemDto.description || product.observacion,
+        unitPrice,
+        iva: taxRate,
+        impuestoId: impuestoIdSeleccionado,
+        quantity,
+        subtotal: totalSinDescuento,
+        valor_iva: itemIva,
+        importe: itemImporte,
+        discount: discountRate,
+        valor_discount: itemDiscount,
+        total: itemTotal,
+      });
+
+      subtotal = MathUtil.sum(subtotal, totalSinDescuento);
+      iva = MathUtil.sum(iva, itemIva);
+      descuento = MathUtil.sum(descuento, itemDiscount);
+    }
+
+    return {
+      subtotal,
+      iva,
+      descuento,
+      itemsCalculados,
+    };
+  }
+
+  private async generateInvoiceNumber(): Promise<string> {
+    const lastInvoice = await this.facturaVentaRepository.findOne({
+      where: {
+        comprobante: Not(''),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante, 10) : 0;
+    const nextNumber = isNaN(lastNumber) ? 0 : lastNumber;
+    return (nextNumber + 1).toString().padStart(8, '0');
+  }
+
+  async reintentarAsiento(id: string, userId: string): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+
+    if (!factura) {
+      throw new NotFoundException('Factura no encontrada.');
+    }
+
+    if (factura.status !== InvoiceStatus.ERROR_ASIENTO) {
+      throw new BadRequestException(
+        'Solo se pueden reintentar facturas con error en el asiento.',
+      );
+    }
+
+    try {
+      await this.contabilizacionEngine.contabilizarDocumento(
+        'FACTURA_VENTA',
+        factura.id,
+        userId,
+      );
+
+      // ✅ FIX: update() selectivo — restaurar estado sin tocar campos financieros
+      const nuevoStatus =
+        factura.tipoFactura === TipoFactura.ELECTRONICA
+          ? InvoiceStatus.ACCEPTED
+          : InvoiceStatus.ISSUED;
+
+      await this.facturaVentaRepository.update(
+        { id },
+        {
+          status: nuevoStatus,
+          asientoError: null,
+          fechaAsientoError: undefined,
+        },
+      );
+
+      this.logger.log(
+        `Asiento reintentado exitosamente para factura ${factura.comprobante_completo}`,
+      );
+      return await this.findOne(id);
+    } catch (error) {
+      await this.facturaVentaRepository.update(
+        { id },
+        { asientoError: error.message, fechaAsientoError: new Date() },
+      );
+      this.logger.error(
+        `Fallo reintento de asiento para factura ${factura.comprobante_completo}: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `El asiento sigue fallando: ${error.message}`,
+      );
+    }
+  }
+
+  async enviarEmail(
+    id: string,
+    email: string,
+    userId: string,
+  ): Promise<FacturasVenta> {
+    const factura = await this.findOne(id);
+
+    if (!factura) {
+      throw new NotFoundException('Factura no encontrada.');
+    }
+
+    if (factura.status !== InvoiceStatus.ACCEPTED) {
+      throw new BadRequestException(
+        'Solo se pueden enviar facturas aceptadas.',
+      );
+    }
+
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException('Email inválido.');
+    }
+
+    // ✅ Usar factusService para envío
+    try {
+      await this.factusService.sendEmail(factura.comprobante_completo, email);
+    } catch (error) {
+      this.logger.error(
+        `Fallo envío email factura ${factura.comprobante_completo}: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `El envío de email sigue fallando: ${error.message}`,
+      );
+    }
+
+    return factura;
+  }
+}

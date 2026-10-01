@@ -1,0 +1,70 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req } from '@nestjs/common';
+import { CuentasBancariasService } from './cuentas-bancarias.service';
+import { CreateCuentasBancariaDto } from './dto/create-cuentas-bancaria.dto';
+import { UpdateCuentasBancariaDto } from './dto/update-cuentas-bancaria.dto';
+import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
+import { CreateMovimientoBancarioDto } from './dto/create-movimiento-bancario.dto';
+import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
+import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
+import { Permissions } from 'src/auth/decorators/roles.decorator';
+import { Permission } from 'src/common/constants/roles.constants';
+import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface';
+import { CuentasBancariasPaginationDto } from './dto/cuentas-bancarias-pagination.dto';
+
+@Controller('cuentas-bancarias')
+@UseGuards(AuthGuard, RolesGuard)
+export class CuentasBancariasController {
+  constructor(private readonly cuentasBancariasService: CuentasBancariasService) { }
+
+  @Post()
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  create(@Body() createCuentasBancariaDto: CreateCuentasBancariaDto, @Req() req: AuthenticatedRequest) {
+    return this.cuentasBancariasService.create(createCuentasBancariaDto, req.user.sub);
+  }
+
+  @Post('transferir')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  transferir(@Body() dto: CreateTransferenciaDto, @Req() req: AuthenticatedRequest) {
+    return this.cuentasBancariasService.transferir(dto, req.user.sub);
+  }
+
+  @Post(':id/movimiento')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  registrarMovimiento(
+    @Param('id') id: string,
+    @Body() dto: CreateMovimientoBancarioDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.cuentasBancariasService.registrarMovimiento(id, dto, req.user.sub);
+  }
+
+  @Get()
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  findAll(@Query() paginationDto: CuentasBancariasPaginationDto) {
+    return this.cuentasBancariasService.findAll(paginationDto);
+  }
+
+  @Get(':id')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  findOne(@Param('id') id: string) {
+    return this.cuentasBancariasService.findOne(id);
+  }
+
+  @Patch('toggle-status/:id')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  toggleStatus(@Param('id') id: string) {
+    return this.cuentasBancariasService.toggleStatus(id);
+  }
+
+  @Patch(':id')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  update(@Param('id') id: string, @Body() updateCuentasBancariaDto: UpdateCuentasBancariaDto) {
+    return this.cuentasBancariasService.update(id, updateCuentasBancariaDto);
+  }
+
+  @Delete(':id')
+  @Permissions(Permission.ACCOUNTING_VIEW)
+  remove(@Param('id') id: string) {
+    return this.cuentasBancariasService.remove(id);
+  }
+}
