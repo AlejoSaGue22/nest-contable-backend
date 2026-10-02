@@ -15,6 +15,7 @@ import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
+import { DocumentoSoporte, DocumentoSoporteEstado } from 'src/documentos-soportes/entities/documento-soporte.entity';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
 
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
@@ -473,6 +474,179 @@ export class PagosService {
     }
   }
 
+  /**
+   * Registrar pago a un Documento Soporte registrado (espejo de registrarPago).
+   * Genera asiento PAGO_PROVEEDOR, comprobante y actualiza CxP del documento.
+   */
+  async registrarPagoDocumentoSoporte(
+    documentoSoporteId: string,
+    dto: RegistrarPagoDto,
+    userId: string,
+    qr?: QueryRunner,
+  ): Promise<{ pago: Pago; documento: DocumentoSoporte }> {
+    const queryRunner = qr || this.dataSource.createQueryRunner();
+    const isCustomRunner = !!qr;
+    if (!isCustomRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
+
+    try {
+      const documento = await queryRunner.manager.findOne(DocumentoSoporte, {
+        where: { id: documentoSoporteId },
+        relations: ['proveedor'],
+      });
+
+      if (!documento) {
+        throw new NotFoundException(`Documento soporte ${documentoSoporteId} no encontrado`);
+      }
+
+      if (documento.estado !== DocumentoSoporteEstado.REGISTRADO) {
+        throw new BadRequestException(
+          `No se puede pagar un documento soporte en estado: ${documento.estado}`,
+        );
+      }
+
+      if (documento.paymentStatus === PaymentStatus.PAID) {
+        throw new BadRequestException('Este documento soporte ya está completamente pagado');
+      }
+
+      if (dto.monto <= 0) {
+        throw new BadRequestException('El monto debe ser mayor a 0');
+      }
+      if (dto.monto > documento.saldoPendiente) {
+        throw new BadRequestException(
+          `El monto $${dto.monto} supera el saldo pendiente de $${documento.saldoPendiente}`,
+        );
+      }
+
+      let medioPago = dto.medioPago;
+      let metodoPagoRel: MetodoPago | null = null;
+      if (dto.metodoPagoId) {
+        metodoPagoRel = await queryRunner.manager.findOne(MetodoPago, {
+          where: { id: dto.metodoPagoId },
+        });
+        if (!metodoPagoRel) {
+          throw new NotFoundException(`Método de pago con ID ${dto.metodoPagoId} no encontrado`);
+        }
+        medioPago = this.getMedioPagoFromCodigo(metodoPagoRel.codigo);
+      }
+
+      if (medioPago !== MedioPago.CAJA && !dto.cuentaBancariaId) {
+        throw new BadRequestException(
+          'Debe especificar cuentaBancariaId cuando el medio de pago no es caja',
+        );
+      }
+
+      if (dto.cuentaBancariaId) {
+        const cuentaBancaria = await queryRunner.manager.findOne(CuentasBancarias, {
+          where: { id: dto.cuentaBancariaId, activa: true },
+        });
+        if (!cuentaBancaria) {
+          throw new NotFoundException(`Cuenta bancaria ${dto.cuentaBancariaId} no encontrada`);
+        }
+      }
+
+      const nuevoTotalPagado = MathUtil.sum(documento.totalPagado, dto.monto);
+      const nuevoSaldoPendiente = MathUtil.sub(documento.total, nuevoTotalPagado);
+      const nuevoPaymentStatus = nuevoSaldoPendiente === 0
+        ? PaymentStatus.PAID
+        : PaymentStatus.PARTIAL;
+
+      const cuentaCreditoCodigo = medioPago === MedioPago.CAJA ? '1105' : '1110';
+
+      let asientoId: string = '';
+      try {
+        const asiento = await this.asientosContablesService.generarAsientoPagoCompra(
+          {
+            facturaCompra: documento,
+            monto: dto.monto,
+            fecha: new Date(dto.fecha),
+            cuentaCreditoCodigo,
+            cuentaBancariaId: dto.cuentaBancariaId,
+            medioPago: medioPago,
+            userId,
+            etiquetaDoc: 'Documento soporte',
+          },
+          queryRunner,
+        );
+        asientoId = asiento.id;
+        this.logger.log(`Asiento de pago generado: ${asientoId}`);
+      } catch (asientoError) {
+        this.logger.error(`Error generando asiento de pago: ${asientoError.message}`);
+      }
+
+      const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.PAGO);
+
+      const pago = queryRunner.manager.create(Pago, {
+        numero: numeroComprobante,
+        tipo: TipoPago.PAGO,
+        documentoSoporteId: documento.id,
+        fecha: new Date(dto.fecha),
+        monto: dto.monto,
+        medioPago: medioPago,
+        metodoPagoId: metodoPagoRel?.id || null,
+        cuentaBancariaId: dto.cuentaBancariaId || null,
+        referencia: dto.referencia || null,
+        notas: dto.notas || null,
+        asientoId,
+        creadoPorId: userId,
+        createdAt: new Date(),
+      });
+
+      const pagoGuardado = await queryRunner.manager.save(Pago, pago);
+
+      await queryRunner.manager.update(DocumentoSoporte, { id: documento.id }, {
+        totalPagado: nuevoTotalPagado,
+        saldoPendiente: nuevoSaldoPendiente,
+        paymentStatus: nuevoPaymentStatus,
+      });
+
+      if (dto.cuentaBancariaId) {
+        const cta = await queryRunner.manager.findOne(CuentasBancarias, { where: { id: dto.cuentaBancariaId } });
+        if (cta) {
+          cta.saldoActual = MathUtil.sub(cta.saldoActual, dto.monto);
+          await queryRunner.manager.save(CuentasBancarias, cta);
+        }
+      }
+
+      if (!isCustomRunner) {
+        await queryRunner.commitTransaction();
+      }
+
+      const documentoActualizado = await queryRunner.manager.findOne(DocumentoSoporte, {
+        where: { id: documentoSoporteId },
+        relations: ['proveedor', 'pagos'],
+      });
+
+      if (!documentoActualizado) {
+        throw new NotFoundException(`Documento soporte ${documentoSoporteId} no encontrado`);
+      }
+
+      this.logger.log(
+        `Pago registrado: $${dto.monto} en documento soporte ${documento.numero} ` +
+        `| Saldo restante: $${nuevoSaldoPendiente}`,
+      );
+
+      return { pago: pagoGuardado, documento: documentoActualizado };
+
+    } catch (error) {
+      if (!isCustomRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Error registrando pago de documento soporte: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al registrar el pago');
+    } finally {
+      if (!isCustomRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // HISTORIAL
   // ═══════════════════════════════════════════════════════════════
@@ -490,6 +664,15 @@ export class PagosService {
   async historialPagos(facturaCompraId: string): Promise<Pago[]> {
     return this.pagoRepository.find({
       where: { facturaCompraId, tipo: TipoPago.PAGO },
+      relations: ['cuentaBancaria', 'creadoPor'],
+      order: { fecha: 'ASC' },
+    });
+  }
+
+  /** Historial de pagos de un documento soporte */
+  async historialPagosDocumentoSoporte(documentoSoporteId: string): Promise<Pago[]> {
+    return this.pagoRepository.find({
+      where: { documentoSoporteId, tipo: TipoPago.PAGO },
       relations: ['cuentaBancaria', 'creadoPor'],
       order: { fecha: 'ASC' },
     });
@@ -1618,6 +1801,17 @@ export class PagosService {
     return this.anticipoAplicacionRepository.find({
       where: {
         facturaCompraId,
+        estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
+      },
+      relations: ['anticipo'],
+    });
+  }
+
+
+  async obtenerAplicacionesDocumentoSoporte(documentoSoporteId: string): Promise<AnticipoAplicacion[]> {
+    return this.anticipoAplicacionRepository.find({
+      where: {
+        documentoSoporteId,
         estado: In([AplicacionEstado.ACTIVO, AplicacionEstado.BORRADOR]),
       },
       relations: ['anticipo'],

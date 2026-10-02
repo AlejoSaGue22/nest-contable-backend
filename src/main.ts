@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { GlobalValidationPipe } from './common/validation/global-validation.pipe';
 import * as express from 'express';
 import { join } from 'path';
 import * as helmet from 'helmet';
@@ -34,14 +34,7 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new GlobalValidationPipe());
 
   // Graceful shutdown
   app.enableShutdownHooks();

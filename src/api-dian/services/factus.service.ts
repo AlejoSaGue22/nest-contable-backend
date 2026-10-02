@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AllowanceChargesFactus, FacturaDianResponse, FactusPayrollResult, FactusV2BillPayload, FactusV2Customer, FactusV2Item, FactusV2NotaAjustePayload, FactusV2PaymentDetail, FactusV2PayrollPayload, FactusV2PayrollPayment, FactusV2PayrollSettlement, FactusV2PayrollWorker, FactusV2PrepaymentDetail } from '../interfaces/api-dian-interface';
+import { AllowanceChargesFactus, FacturaDianResponse, FactusPayrollResult, FactusSupportAdjustmentResult, FactusSupportDocumentResult, FactusV2BillPayload, FactusV2Customer, FactusV2Item, FactusV2NotaAjustePayload, FactusV2PaymentDetail, FactusV2PayrollPayload, FactusV2PayrollPayment, FactusV2PayrollSettlement, FactusV2PayrollWorker, FactusV2PrepaymentDetail, FactusV2SupportAdjustmentPayload, FactusV2SupportDocumentPayload, FactusV2SupportItem, FactusV2SupportProvider } from '../interfaces/api-dian-interface';
 import { PeriodoNomina } from 'src/nomina/entities/periodo-nomina.entity';
 import { Liquidacion } from 'src/nomina/entities/liquidacion.entity';
 import { Empleado } from 'src/nomina/entities/empleado.entity';
@@ -810,6 +810,452 @@ export class FactusService {
             resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
             rangePrefix: rangeSnapshot?.prefix ?? null,
         };
+    }
+
+    // ========== DOCUMENTO SOPORTE ELECTRÓNICO (DSE) ==========
+    // POST /v2/support-documents/validate — https://developers.factus.com.co/documentos-soporte/crear-validar/
+
+    /**
+     * Crear y validar un Documento Soporte Electrónico en Factus/DIAN.
+     * El documento local usa estructura espejo de FacturaCompra (proveedor, items).
+     */
+    async crearYValidarDocumentoSoporte(documento: any, referenceCode: string): Promise<FactusSupportDocumentResult> {
+        try {
+            const token = await this.obtenerToken();
+            const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_DS_NUMBERING_RANGE_ID', 'DS');
+            const payload = await this.construirPayloadDocumentoSoporte(documento, referenceCode, rangeSnapshot?.id);
+
+            this.logger.log(`📤 Enviando documento soporte ${referenceCode} a Factus...`);
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v2/support-documents/validate`,
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 60000
+                    }
+                )
+            );
+
+            this.logger.log('✅ Respuesta de documento soporte recibida de Factus');
+            return this.procesarRespuestaDocumentoSoporte(response.data, rangeSnapshot, referenceCode);
+
+        } catch (error) {
+            this.logger.error('❌ Error en Factus (documento soporte):', error.response?.data || error.message);
+
+            if (error.response?.status === 409) {
+                throw new BadRequestException('Ya existe un documento soporte pendiente por enviar a DIAN con ese código de referencia');
+            }
+
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('billing').catch(() => undefined);
+                }
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar documento soporte a Factus/DIAN');
+        }
+    }
+
+    /**
+     * Construir el objeto provider del DSE desde el proveedor local.
+     * dv es opcional (la API lo calcula); municipality_code se omite si no hay código V2.
+     */
+    private async construirProviderSoporte(proveedor: any): Promise<FactusV2SupportProvider> {
+        if (!proveedor?.identificacion) {
+            throw new BadRequestException('El proveedor debe tener número de identificación para emitir el documento soporte');
+        }
+        if (!proveedor?.direccion) {
+            throw new BadRequestException('El proveedor debe tener dirección registrada para emitir el documento soporte');
+        }
+        const nombreProveedor = proveedor.razonSocial || `${proveedor.nombre || ''} ${proveedor.apellido || ''}`.trim();
+        if (!nombreProveedor) {
+            throw new BadRequestException('El proveedor debe tener nombre o razón social para emitir el documento soporte');
+        }
+        const esPersonaNatural = String(proveedor.tipoPersona || '').toUpperCase() === 'PN'
+            || (!proveedor.razonSocial && !!proveedor.nombre);
+
+        const provider: FactusV2SupportProvider = {
+            identification_document_code: this.mapearTipoDocumentoCodigo(proveedor.tipoDocumento),
+            identification: String(proveedor.identificacion),
+            dv: proveedor.dv || null,
+            legal_organization_code: esPersonaNatural ? '2' : '1',
+            names: nombreProveedor,
+            address: proveedor.direccion,
+            country_code: 'CO',
+        };
+
+        if (proveedor.razonSocial) {
+            provider.trade_name = nombreProveedor;
+        }
+        if (!esPersonaNatural) {
+            provider.company = nombreProveedor;
+        }
+        if (proveedor.email) provider.email = proveedor.email;
+        if (proveedor.telefono) provider.phone = proveedor.telefono;
+        if (proveedor.ciudadRel?.code) {
+            provider.municipality_code = String(proveedor.ciudadRel.code);
+        } else if (proveedor.ciudad !== undefined && proveedor.ciudad !== null) {
+            const municipio = await this.municipalityRepository.findOne({ where: { id: Number(proveedor.ciudad) } });
+            if (municipio?.code) provider.municipality_code = String(municipio.code);
+        }
+
+        return provider;
+    }
+
+    private construirPaymentDetailsSoporte(formaPago: string, metodoPago: string | null, total: number, fechaVencimiento: Date | string | null): FactusV2PaymentDetail[] {
+        const esCredito = String(formaPago || '').toUpperCase() === 'CREDITO';
+        const detail: FactusV2PaymentDetail = {
+            payment_form: esCredito ? '2' : '1',
+            payment_method_code: metodoPago || '10',
+            amount: this.toDecimalString(total),
+        };
+        if (esCredito) {
+            const dueDate = this.toDateOnly(fechaVencimiento);
+            if (!dueDate) {
+                throw new BadRequestException('El documento soporte a crédito requiere fecha de vencimiento (due_date) para DIAN');
+            }
+            detail.due_date = dueDate;
+        }
+        return [detail];
+    }
+
+    private async construirItemsSoporte(items: any[], generationMode: string, startDate?: string | null): Promise<FactusV2SupportItem[]> {
+        return Promise.all(
+            (items || []).map(async (item) => {
+                const tasaIva = Number(item.porcentajeIva ?? item.iva) || 0;
+                const soporteItem: FactusV2SupportItem = {
+                    code_reference: item.articulo?.codigo || item.cuentaContable?.codigo || String(item.articuloId || item.cuentaContableId || 'ITEM'),
+                    name: (item.descripcion || item.articulo?.nombre || 'Ítem').slice(0, 500),
+                    quantity: this.toDecimalString(item.quantity ?? item.cantidad),
+                    discount_rate: this.toDecimalString(item.descuento ?? item.discount ?? 0),
+                    price: this.toDecimalString(item.unitPrice ?? item.precioUnitario),
+                    unit_measure_code: item.articulo?.unidadmedida
+                        ? await this.resolverUnidadMedidaCode(item.articulo.unidadmedida)
+                        : '94',
+                    standard_code: '999',
+                    taxes: [
+                        {
+                            code: '01',
+                            rate: this.toDecimalString(tasaIva),
+                            ...(tasaIva === 0 ? { is_excluded: true } : {}),
+                        },
+                    ],
+                };
+                if (String(generationMode) === '2') {
+                    if (!startDate) {
+                        throw new BadRequestException('El modo acumulado semanal (generation_mode=2) requiere fecha de adquisición (start_date)');
+                    }
+                    soporteItem.period = { generation_mode: '2', start_date: startDate };
+                }
+                return soporteItem;
+            }),
+        );
+    }
+
+    private async construirPayloadDocumentoSoporte(documento: any, referenceCode: string, numberingRangeId?: number | string): Promise<FactusV2SupportDocumentPayload> {
+        const empresa = await this.empresaService.getEmpresaEntity();
+        const establishment = await this.obtenerDatosEstablecimiento(empresa);
+
+        const payload: FactusV2SupportDocumentPayload = {
+            reference_code: referenceCode,
+            observation: (documento.observaciones || '').slice(0, 500) || undefined,
+            cash_rounding_amount: '0.00',
+            payment_details: this.construirPaymentDetailsSoporte(
+                documento.formaPago, documento.metodoPago, Number(documento.total), documento.fechaVencimiento,
+            ),
+            provider: await this.construirProviderSoporte(documento.proveedor),
+            items: await this.construirItemsSoporte(documento.items, documento.generationMode || '1', documento.periodStartDate),
+        };
+
+        if (numberingRangeId !== undefined) {
+            payload.numbering_range_id = numberingRangeId;
+        }
+        if (establishment) {
+            payload.establishment = establishment;
+        }
+
+        this.logger.log(`📤 Payload DSE construido para Factus (ref=${referenceCode})`);
+        return payload;
+    }
+
+    /**
+     * Procesar respuesta de creación de DSE. Tolerante al shape:
+     * data puede ser objeto o arreglo de un elemento.
+     */
+    private procesarRespuestaDocumentoSoporte(responseData: any, rangeSnapshot?: NumberingRangeSnapshot | null, referenceCode = ''): FactusSupportDocumentResult {
+        const status: string = responseData?.status || '';
+        let data: any = responseData?.data || {};
+        if (Array.isArray(data)) data = data[0] || {};
+        const warnings = this.extraerAdvertenciasDian(data?.errors);
+
+        const numeroDian: string = data?.number || '';
+        if (status === 'Created' && data?.is_validated !== false && numeroDian) {
+            const publicUrl: string = data?.links?.public_url || '';
+            return {
+                estado: 'aceptada',
+                referenceCode,
+                numeroDian,
+                cuds: data?.cuds || data?.cufe || '',
+                qrCode: data?.links?.qr || '',
+                qrImageBase64: data?.qr_image || data?.qr || '',
+                publicUrl,
+                xmlUrl: publicUrl,
+                pdfUrl: publicUrl,
+                mensaje: warnings.length > 0
+                    ? `${responseData.message} | Advertencias DIAN: ${warnings.join('; ')}`
+                    : responseData.message,
+                respuestaCompleta: responseData,
+                warnings,
+                errors: data?.errors || {},
+                numberingRangeId: rangeSnapshot?.id ?? null,
+                resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+                rangePrefix: rangeSnapshot?.prefix ?? null,
+            };
+        }
+
+        return {
+            estado: 'rechazada',
+            referenceCode,
+            numeroDian: '',
+            cuds: '',
+            qrCode: '',
+            qrImageBase64: '',
+            publicUrl: '',
+            xmlUrl: '',
+            pdfUrl: '',
+            mensaje: responseData.message || 'Documento soporte rechazado',
+            respuestaCompleta: responseData,
+            warnings,
+            errors: data?.errors || responseData?.errors || {},
+            numberingRangeId: rangeSnapshot?.id ?? null,
+            resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+            rangePrefix: rangeSnapshot?.prefix ?? null,
+        };
+    }
+
+    /** Ver documento soporte por número. GET /v2/support-documents/:number */
+    async verDocumentoSoporteByNumero(numeroDian: string): Promise<any> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v2/support-documents/${numeroDian}`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+                ),
+            );
+            return response.data;
+        } catch (error) {
+            this.logger.error('Error consultando documento soporte:', error.response?.data || error.message);
+            throw new BadRequestException('Error al consultar documento soporte en Factus/DIAN');
+        }
+    }
+
+    /** Eliminar documento soporte NO validado por reference_code (permite reenvío). */
+    async eliminarDocumentoSoporteNoValidado(referenceCode: string): Promise<void> {
+        const token = await this.obtenerToken();
+        await firstValueFrom(
+            this.httpService.delete(
+                `${this.apiUrl}/v2/support-documents/reference/${referenceCode}`,
+                { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+            ),
+        );
+        this.logger.log(`🗑️ Documento soporte no validado ${referenceCode} eliminado en Factus`);
+    }
+
+    /** Descargar PDF de documento soporte por número. GET /v2/support-documents/:number/download-pdf */
+    async descargarPDFDocumentoSoporte(numeroDian: string): Promise<{ buffer: Buffer, fileName: string }> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v2/support-documents/${numeroDian}/download-pdf`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+                ),
+            );
+            return {
+                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name,
+            };
+        } catch (error) {
+            this.logger.error('Error descargando PDF de documento soporte:', error.response?.data || error.message);
+            throw new BadRequestException('Error al descargar PDF de documento soporte');
+        }
+    }
+
+    // ========== NOTA DE AJUSTE A DOCUMENTO SOPORTE ==========
+    // POST /v2/adjustment-notes/validate — https://developers.factus.com.co/notas-ajuste-documentos-soporte/crear-validar/
+
+    /**
+     * Crear y validar una nota de ajuste a un documento soporte electrónico.
+     */
+    async crearNotaAjusteDocumentoSoporte(
+        referenceCode: string,
+        documentoSoporte: any,
+        conceptoCorreccion: string,
+        motivo: string,
+        metodoPago: string,
+        items: any[],
+    ): Promise<FactusSupportAdjustmentResult> {
+        try {
+            const token = await this.obtenerToken();
+            const rangeSnapshot = await this.resolverNumberingRangeSnapshot('FACTUS_NA_NUMBERING_RANGE_ID', 'NA');
+            const payload = await this.construirPayloadNotaAjusteSoporte(
+                referenceCode, documentoSoporte, conceptoCorreccion, motivo, metodoPago, items, rangeSnapshot?.id,
+            );
+
+            this.logger.log(`📤 Enviando nota de ajuste a documento soporte ${documentoSoporte.numeroDian} a Factus...`);
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.apiUrl}/v2/adjustment-notes/validate`,
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 60000
+                    }
+                )
+            );
+
+            this.logger.log('✅ Respuesta de nota de ajuste a soporte recibida de Factus');
+            return this.procesarRespuestaNotaAjusteSoporte(response.data, rangeSnapshot, referenceCode);
+
+        } catch (error) {
+            this.logger.error('❌ Error en Factus (nota ajuste soporte):', error.response?.data || error.message);
+
+            if (error.response?.status === 409) {
+                throw new BadRequestException('Ya existe una nota de ajuste pendiente por enviar a DIAN con ese código de referencia');
+            }
+
+            if (error.response?.status === 422) {
+                const errors = error.response.data?.errors || error.response.data?.data?.errors || {};
+                const mensajesError = Object.values(errors).flat();
+                if (this.esErrorDeRangoNumeracion(errors, mensajesError)) {
+                    await this.numberingRangeService.invalidateCache('billing').catch(() => undefined);
+                }
+                throw new BadRequestException(`Datos inválidos: ${mensajesError.join(', ')}`);
+            }
+
+            throw new BadRequestException(error.response?.data?.message || 'Error al enviar nota de ajuste a Factus/DIAN');
+        }
+    }
+
+    private async construirPayloadNotaAjusteSoporte(
+        referenceCode: string,
+        documentoSoporte: any,
+        conceptoCorreccion: string,
+        motivo: string,
+        metodoPago: string,
+        items: any[],
+        numberingRangeId?: number | string,
+    ): Promise<FactusV2SupportAdjustmentPayload> {
+        if (!documentoSoporte?.numeroDian) {
+            throw new BadRequestException('El documento soporte no tiene número DIAN (support_document_number requerido)');
+        }
+        const empresa = await this.empresaService.getEmpresaEntity();
+        const establishment = await this.obtenerDatosEstablecimiento(empresa);
+        const total = (items || []).reduce((s, it) => s + Number(it.total ?? it.itemTotal ?? 0), 0);
+
+        const payload: FactusV2SupportAdjustmentPayload = {
+            reference_code: referenceCode,
+            support_document_number: documentoSoporte.numeroDian,
+            correction_concept_code: String(conceptoCorreccion),
+            observation: (motivo || '').slice(0, 500),
+            cash_rounding_amount: '0.00',
+            payment_details: this.construirPaymentDetailsSoporte(
+                documentoSoporte.formaPago, metodoPago || documentoSoporte.metodoPago, total, documentoSoporte.fechaVencimiento,
+            ),
+            provider: await this.construirProviderSoporte(documentoSoporte.proveedor),
+            items: await this.construirItemsSoporte(items, documentoSoporte.generationMode || '1', documentoSoporte.periodStartDate),
+        };
+
+        if (numberingRangeId !== undefined) {
+            payload.numbering_range_id = numberingRangeId;
+        }
+        if (establishment) {
+            payload.establishment = establishment;
+        }
+        return payload;
+    }
+
+    private procesarRespuestaNotaAjusteSoporte(responseData: any, rangeSnapshot?: NumberingRangeSnapshot | null, referenceCode = ''): FactusSupportAdjustmentResult {
+        const status: string = responseData?.status || '';
+        let data: any = responseData?.data || {};
+        if (Array.isArray(data)) data = data[0] || {};
+        const nota: any = data.adjustment_note || data;
+        const warnings = this.extraerAdvertenciasDian(data?.errors);
+
+        const numeroDian: string = data?.number || nota?.number || '';
+        if (status === 'Created' && data?.is_validated !== false && numeroDian) {
+            const publicUrl: string = data?.links?.public_url || '';
+            return {
+                estado: 'aceptada',
+                referenceCode,
+                numeroDian,
+                cuds: data?.cuds || '',
+                qrCode: data?.links?.qr || '',
+                qrImageBase64: data?.qr_image || data?.qr || '',
+                publicUrl,
+                mensaje: warnings.length > 0
+                    ? `${responseData.message} | Advertencias DIAN: ${warnings.join('; ')}`
+                    : responseData.message,
+                respuestaCompleta: responseData,
+                warnings,
+                errors: data?.errors || {},
+                numberingRangeId: rangeSnapshot?.id ?? null,
+                resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+                rangePrefix: rangeSnapshot?.prefix ?? null,
+            };
+        }
+
+        return {
+            estado: 'rechazada',
+            referenceCode: '',
+            numeroDian: '',
+            cuds: '',
+            qrCode: '',
+            qrImageBase64: '',
+            publicUrl: '',
+            mensaje: responseData.message || 'Nota de ajuste rechazada',
+            respuestaCompleta: responseData,
+            warnings,
+            errors: data?.errors || responseData?.errors || {},
+            numberingRangeId: rangeSnapshot?.id ?? null,
+            resolutionNumber: rangeSnapshot?.resolutionNumber ?? null,
+            rangePrefix: rangeSnapshot?.prefix ?? null,
+        };
+    }
+
+    /** Descargar PDF de nota de ajuste a soporte por número. */
+    async descargarPDFNotaAjusteSoporte(numeroDian: string): Promise<{ buffer: Buffer, fileName: string }> {
+        try {
+            const token = await this.obtenerToken();
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.apiUrl}/v2/adjustment-notes/${numeroDian}/download-pdf`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } },
+                ),
+            );
+            return {
+                buffer: Buffer.from(response.data.data.pdf_base_64_encoded, 'base64'),
+                fileName: response.data.data.file_name,
+            };
+        } catch (error) {
+            this.logger.error('Error descargando PDF de nota de ajuste a soporte:', error.response?.data || error.message);
+            throw new BadRequestException('Error al descargar PDF de nota de ajuste');
+        }
     }
 
     async sendEmail(numberFull: string, email: string, pdfBase64?: string): Promise<void> {

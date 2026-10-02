@@ -12,6 +12,17 @@ import { AuthenticatedRequest } from 'src/auth/interfaces/jwt-payload.interface'
 export class InventarioController {
   constructor(private readonly inventarioService: InventarioService) { }
 
+  /**
+   * Conciliación kardex vs contabilidad (1435). Solo lectura.
+   * Va ANTES de stock/:articuloId para que 'conciliacion' no se tome como id.
+   */
+  @Get('conciliacion')
+  @Permissions(Permission.PRODUCT_READ)
+  async conciliacion() {
+    const data = await this.inventarioService.conciliacion();
+    return { success: true, message: 'Conciliación obtenida', data };
+  }
+
   /** Stock actual + últimos movimientos de un artículo. */
   @Get('stock/:articuloId')
   @Permissions(Permission.PRODUCT_READ)

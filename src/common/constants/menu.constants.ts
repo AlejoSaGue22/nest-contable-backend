@@ -99,6 +99,28 @@ export const DEFAULT_MENU_ITEMS = [
         isActive: true,
         isVisible: true,
         metadata: { badge: null },
+      },
+      // SUPPORT DOCUMENTS (DSE estándar / electrónico)
+      {
+        title: 'Documentos Soporte',
+        icon: 'description',
+        route: '/panel/compras/documentos-soporte',
+        requiredPermission: Permission.PURCHASE_READ,
+        order: 3,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
+      },
+      // ADJUSTMENT NOTES to support documents
+      {
+        title: 'Notas Ajuste Soporte',
+        icon: 'note_alt',
+        route: '/panel/compras/notas-ajuste-soporte',
+        requiredPermission: Permission.PURCHASE_READ,
+        order: 4,
+        isActive: true,
+        isVisible: true,
+        metadata: { badge: null },
       }
     ],
   },

@@ -29,7 +29,7 @@ import { MathUtil } from 'src/common/utils/math.util';
 import { MetodoPago } from 'src/core/catalogs/entities/metodo-pago.entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { PagosService } from 'src/pagos/pagos.service';
-import { InventarioService } from 'src/inventario/inventario.service';
+import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 import { Anticipo } from 'src/pagos/entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
@@ -72,6 +72,8 @@ export class FacturasVentasService {
   ) { }
 
   async create(createFacturasVentaDto: CreateFacturasVentaDto, userId: string): Promise<FacturasVenta> {
+    // Política solo-alertar: negativos del kardex como advertencias (nunca bloquea).
+    let advertenciasInventario: AdvertenciaInventario[] = [];
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -183,6 +185,15 @@ export class FacturasVentasService {
       );
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
 
+      // BLOQUEO de inventario: sin stock no se emite (rollback total, nada a medias).
+      if (statusInvoice !== InvoiceStatus.DRAFT) {
+        await this.inventarioService.validarDisponibilidad(
+          queryRunner.manager,
+          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+          `venta ${savedInvoice.comprobante_completo || 'nueva'}`,
+        );
+      }
+
       // ⭐ Procesar aplicaciones de anticipos
       if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
         for (const assoc of createFacturasVentaDto.anticiposAsociados) {
@@ -292,18 +303,24 @@ export class FacturasVentasService {
           });
         }
 
-      // Kardex best-effort: la venta emitida descuenta stock (nunca bloquea).
-      if (statusInvoice !== InvoiceStatus.DRAFT) {
-        await this.inventarioService.registrarSalidasVenta(
-          queryRunner.manager,
-          savedInvoice.id,
-          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
-          userId,
-        ).catch((invError) => this.logger.error(`Error kardex venta ${savedInvoice.comprobante_completo}: ${invError.message}`));
-      }
+        // Kardex best-effort: la venta emitida descuenta stock (nunca bloquea).
+        // Política solo-alertar: los negativos se devuelven como advertencias.
+        if (statusInvoice !== InvoiceStatus.DRAFT) {
+          await this.inventarioService.registrarSalidasVenta(
+            queryRunner.manager,
+            savedInvoice.id,
+            itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+            userId,
+          ).then((kardex: ResultadoKardex) => {
+            const alertas = InventarioService.alertasNegativo(kardex);
+            if (alertas.length) {
+              advertenciasInventario.push(...alertas);
+            }
+          }).catch((invError) => this.logger.error(`Error kardex venta ${savedInvoice.comprobante_completo}: ${invError.message}`));
+        }
 
-      // Cobro automático si es contado y estándar (dentro de la misma transacción)
-      if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
+        // Cobro automático si es contado y estándar (dentro de la misma transacción)
+        if (createFacturasVentaDto.formaPago === FormaPago.CONTADO) {
           const cobroMonto = MathUtil.sub(total, montoAnticiposTotal);
           if (cobroMonto > 0) {
             const medioPago = createFacturasVentaDto.metodoPago === '47' || createFacturasVentaDto.metodoPago === '42'
@@ -329,7 +346,11 @@ export class FacturasVentasService {
 
       await queryRunner.commitTransaction();
       this.logger.log(`Factura creada exitosamente: ${savedInvoice.comprobante_completo}`);
+      if (advertenciasInventario.length) {
+        (savedInvoice as any).advertenciasInventario = advertenciasInventario;
+      }
       return savedInvoice;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error creando factura: ${error.message}`, error.stack);
@@ -527,12 +548,12 @@ export class FacturasVentasService {
       const r = map.get(f.id);
       (f as any).notasResumen = r
         ? {
-            tieneNota: true,
-            totalNCAplicado: Number(r.aplicadas ?? 0),
-            totalNDAplicado: Number(r.aplicadasND ?? 0),
-            countNC: Number(r.countNC ?? 0),
-            countND: Number(r.countND ?? 0),
-          }
+          tieneNota: true,
+          totalNCAplicado: Number(r.aplicadas ?? 0),
+          totalNDAplicado: Number(r.aplicadasND ?? 0),
+          countNC: Number(r.countNC ?? 0),
+          countND: Number(r.countND ?? 0),
+        }
         : { tieneNota: false, totalNCAplicado: 0, totalNDAplicado: 0, countNC: 0, countND: 0 };
     }
   }
@@ -718,6 +739,8 @@ export class FacturasVentasService {
    */
   async emitir(id: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
+    // Política solo-alertar: negativos del kardex como advertencias (nunca bloquea).
+    let advertenciasKardexFE: AdvertenciaInventario[] = [];
 
     if (!factura.puedeEmitirse()) {
       throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
@@ -737,6 +760,17 @@ export class FacturasVentasService {
           intentosEnvio: (factura.intentosEnvio ?? 0) + 1,
         },
       );
+      // BLOQUEO de inventario ANTES de enviar a DIAN: sin stock no se emite
+      // (una FE aceptada por DIAN ya no se puede frenar, así que se valida aquí).
+      const itemsEmitir = await this.dataSource.manager.find(ItemsFacturaVenta, {
+        where: { facturaId: id },
+      });
+      await this.inventarioService.validarDisponibilidad(
+        this.dataSource.manager,
+        itemsEmitir.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+        `venta ${factura.comprobante_completo}`,
+      );
+
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
       const respuesta = await this.factusService.crearYValidarFactura(factura, numberFactura);
@@ -916,12 +950,15 @@ export class FacturasVentasService {
           const itemsVenta = await this.dataSource.manager.find(ItemsFacturaVenta, {
             where: { facturaId: id },
           });
-          await this.inventarioService.registrarSalidasVenta(
+
+          const kardex: ResultadoKardex = await this.inventarioService.registrarSalidasVenta(
             this.dataSource.manager,
             id,
             itemsVenta.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
             userId,
           );
+          advertenciasKardexFE = InventarioService.alertasNegativo(kardex);
+
         } catch (invError) {
           this.logger.error(`Error kardex FE ${factura.comprobante_completo}: ${invError.message}`);
         }
@@ -942,7 +979,12 @@ export class FacturasVentasService {
         );
       }
 
-      return await this.findOne(id);
+      const emitida = await this.findOne(id);
+      if (advertenciasKardexFE.length) {
+        (emitida as any).advertenciasInventario = advertenciasKardexFE;
+      }
+      return emitida;
+
     } catch (error) {
       // Revertir estado en caso de error
       await this.facturaVentaRepository.update(
@@ -999,6 +1041,13 @@ export class FacturasVentasService {
       if (factura.status !== InvoiceStatus.DRAFT) {
         throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
       }
+
+      // BLOQUEO de inventario en la misma tx: sin stock no se emite (rollback total).
+      await this.inventarioService.validarDisponibilidad(
+        queryRunner.manager,
+        (factura.items ?? []).map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+        `venta ${factura.comprobante_completo || 'estándar'}`,
+      );
 
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = 'FV';
@@ -1149,17 +1198,38 @@ export class FacturasVentasService {
       this.logger.log(
         `Factura estándar emitida: ${updatedInvoice.comprobante_completo}`,
       );
-      return await this.findOne(id);
+
+      // Kardex best-effort (post-commit): el borrador estándar emitido
+      // descuenta stock (el create() solo lo hace si nace no-borrador).
+      let advertenciasEstandar: AdvertenciaInventario[] = [];
+      try {
+        const kardex: ResultadoKardex = await this.inventarioService.registrarSalidasVenta(
+          this.dataSource.manager,
+          id,
+          (updatedInvoice.items ?? []).map((it) => ({
+            articuloId: (it as any).articuloId,
+            cantidad: Number((it as any).quantity),
+          })),
+          userId,
+        );
+        advertenciasEstandar = InventarioService.alertasNegativo(kardex);
+      } catch (invError) {
+        this.logger.error(`Error kardex estándar ${updatedInvoice.comprobante_completo}: ${invError.message}`);
+      }
+
+      const emitidaEstandar = await this.findOne(id);
+      if (advertenciasEstandar.length) {
+        (emitidaEstandar as any).advertenciasInventario = advertenciasEstandar;
+      }
+      return emitidaEstandar;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(
         `Error emitiendo factura estándar: ${error.message}`,
         error.stack,
       );
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       throw new InternalServerErrorException(
@@ -1328,19 +1398,28 @@ export class FacturasVentasService {
       }
 
       // Kardex best-effort: la venta anulada devuelve sus SALIDAs al stock.
+      let advertenciasAnulacion: AdvertenciaInventario[] = [];
       try {
-        await this.inventarioService.revertirDocumento(
+        const kardex: ResultadoKardex = await this.inventarioService.revertirDocumento(
           this.dataSource.manager,
           DocumentoInventario.FACTURA_VENTA,
           id,
           `Anulación venta ${updatedInvoice.comprobante_completo}`,
           userId,
         );
+
+        advertenciasAnulacion = InventarioService.alertasNegativo(kardex);
+
       } catch (invError) {
         this.logger.error(`Error kardex anulación venta ${updatedInvoice.comprobante_completo}: ${invError.message}`);
       }
 
-      return await this.findOne(id);
+      const anulada = await this.findOne(id);
+      if (advertenciasAnulacion.length) {
+        (anulada as any).advertenciasInventario = advertenciasAnulacion;
+      }
+      return anulada;
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error anulando factura ${id}: ${error.message}`, error.stack);

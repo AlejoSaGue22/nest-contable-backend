@@ -8,6 +8,7 @@ import { AsientosContablesModule } from 'src/asientos-contables/asientos-contabl
 import { AuthModule } from 'src/auth/auth.module';
 import { NotasAjusteComprasController } from './notas-ajuste-compras.controller';
 import { NotasAjusteComprasService } from './notas-ajuste-compras.service';
+import { InventarioModule } from 'src/inventario/inventario.module';
 
 @Module({
   imports: [
@@ -18,10 +19,11 @@ import { NotasAjusteComprasService } from './notas-ajuste-compras.service';
       Impuesto
     ]),
     forwardRef(() => AsientosContablesModule),
-    AuthModule
+    AuthModule,
+    InventarioModule
   ],
   controllers: [NotasAjusteComprasController],
   providers: [NotasAjusteComprasService],
   exports: [NotasAjusteComprasService]
 })
-export class NotasAjusteComprasModule {}
+export class NotasAjusteComprasModule { }

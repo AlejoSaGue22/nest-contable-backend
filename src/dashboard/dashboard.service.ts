@@ -87,21 +87,25 @@ export class DashboardService {
                     prevEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
             }
 
-            // 1. Ventas del Mes (o periodo) con impuestos incluidos
-            const salesCurrentQuery = await this.facturaVentaRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
-                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+            // 1. Ingresos Contables del Mes (o periodo) - Clase 4
+            const salesCurrentQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.credito) - SUM(ad.debito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
+                .andWhere('cuenta.codigo LIKE :codigo', { codigo: '4%' })
                 .getRawOne();
             const totalVentasPeriodo = parseFloat(salesCurrentQuery?.total || '0');
 
-            const salesPrevQuery = await this.facturaVentaRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
-                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+            const salesPrevQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.credito) - SUM(ad.debito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
+                .andWhere('cuenta.codigo LIKE :codigo', { codigo: '4%' })
                 .getRawOne();
             const totalVentasAnt = parseFloat(salesPrevQuery?.total || '0');
-            const crecimientoVentas = totalVentasAnt > 0 ? ((totalVentasPeriodo - totalVentasAnt) / totalVentasAnt) * 100 : 0;
+            const crecimientoVentas = totalVentasAnt !== 0 ? ((totalVentasPeriodo - totalVentasAnt) / Math.abs(totalVentasAnt)) * 100 : 0;
 
             // 2. Cuentas por Cobrar (CxC) - Filtrar por facturas hasta el fin del periodo
             const cxc = await this.facturaVentaRepository.find({
@@ -136,21 +140,25 @@ export class DashboardService {
             const proximosCxP = cxp.filter(f => f.fechaVencimiento && new Date(f.fechaVencimiento) >= endDate && new Date(f.fechaVencimiento) <= proximaReferencia)
                 .reduce((sum, f) => sum + f.saldoPendiente, 0);
 
-            // 4. Gastos del Mes (o periodo) basados en facturas de compra registradas con impuestos
-            const comprasCurrentQuery = await this.facturaCompraRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
-                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+            // 4. Gastos y Costos del Mes (o periodo) - Clases 5, 6 y 7
+            const comprasCurrentQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.debito) - SUM(ad.credito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: startDate, end: endDate })
+                .andWhere('(cuenta.codigo LIKE :gasto OR cuenta.codigo LIKE :costo OR cuenta.codigo LIKE :prod)', { gasto: '5%', costo: '6%', prod: '7%' })
                 .getRawOne();
             const totalGastosPeriodo = parseFloat(comprasCurrentQuery?.total || '0');
 
-            const comprasPrevQuery = await this.facturaCompraRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
-                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+            const comprasPrevQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.debito) - SUM(ad.credito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: prevStartDate, end: prevEndDate })
+                .andWhere('(cuenta.codigo LIKE :gasto OR cuenta.codigo LIKE :costo OR cuenta.codigo LIKE :prod)', { gasto: '5%', costo: '6%', prod: '7%' })
                 .getRawOne();
             const totalGastosAnt = parseFloat(comprasPrevQuery?.total || '0');
-            const crecimientoGastos = totalGastosAnt > 0 ? ((totalGastosPeriodo - totalGastosAnt) / totalGastosAnt) * 100 : 0;
+            const crecimientoGastos = totalGastosAnt !== 0 ? ((totalGastosPeriodo - totalGastosAnt) / Math.abs(totalGastosAnt)) * 100 : 0;
 
             // 5. Caja/Bancos (Al final del periodo seleccionado para reflejar estado histórico si aplica)
             const referenceDate = (period === 'current_month' || period === 'last_3_months' || period === 'current_year') ? now : endDate;
@@ -283,17 +291,20 @@ export class DashboardService {
         const series = await Promise.all(months.map(async (m) => {
             // No exceder la fecha fin real si es el mes actual
             const effectiveEnd = m.end > endDate ? endDate : m.end;
-
-            const salesQuery = await this.facturaVentaRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
-                .andWhere('f.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.ACCEPTED, InvoiceStatus.PAID] })
+            const salesQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.credito) - SUM(ad.debito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
+                .andWhere('cuenta.codigo LIKE :codigo', { codigo: '4%' })
                 .getRawOne();
 
-            const purchasesQuery = await this.facturaCompraRepository.createQueryBuilder('f')
-                .select('SUM(f.total)', 'total')
-                .where('f.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
-                .andWhere('f.estado = :estado', { estado: GastoEstado.REGISTRADO })
+            const purchasesQuery = await this.asientoDetalleRepository.createQueryBuilder('ad')
+                .innerJoin('ad.cuenta', 'cuenta')
+                .innerJoin('ad.asiento', 'asiento')
+                .select('SUM(ad.debito) - SUM(ad.credito)', 'total')
+                .where('asiento.fecha BETWEEN :start AND :end', { start: m.start, end: effectiveEnd })
+                .andWhere('(cuenta.codigo LIKE :gasto OR cuenta.codigo LIKE :costo OR cuenta.codigo LIKE :prod)', { gasto: '5%', costo: '6%', prod: '7%' })
                 .getRawOne();
 
             return {

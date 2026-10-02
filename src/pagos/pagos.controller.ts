@@ -213,6 +213,19 @@ export class PagosController {
   }
 
   /**
+   * GET /cxp-soporte/:documentoSoporteId/historial
+   * Historial de todos los pagos registrados sobre un documento soporte.
+   */
+  @Get('cxp-soporte/:documentoSoporteId/historial')
+  async historialPagosDocumentoSoporte(
+    @Param('documentoSoporteId', ParseUUIDPipe) documentoSoporteId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.historialPagosDocumentoSoporte(documentoSoporteId);
+    return toPagoResponse(data, 'Historial de pagos obtenido');
+  }
+
+  /**
+>>>>>>> fd653afbc4c13d933b49f1a7364aaa1f61af5ebc
    * POST /cxp/:facturaCompraId/pago
    * Registra un pago sobre una factura de compra a crédito.
    *
@@ -232,6 +245,25 @@ export class PagosController {
     const userId = req.user?.sub;
     const data = await this.pagosService.registrarPago(
       facturaCompraId,
+      dto,
+      userId,
+    );
+    return toPagoResponse(data, 'Pago registrado exitosamente');
+  }
+
+  /**
+   * POST /cxp-soporte/:documentoSoporteId/pago
+   * Registra un pago sobre un documento soporte a crédito.
+   */
+  @Post('cxp-soporte/:documentoSoporteId/pago')
+  async registrarPagoDocumentoSoporte(
+    @Param('documentoSoporteId', ParseUUIDPipe) documentoSoporteId: string,
+    @Body() dto: RegistrarPagoDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<PagoResponseDto<any>> {
+    const userId = req.user?.sub;
+    const data = await this.pagosService.registrarPagoDocumentoSoporte(
+      documentoSoporteId,
       dto,
       userId,
     );
@@ -466,6 +498,14 @@ export class PagosController {
   ): Promise<PagoResponseDto<any>> {
     const data = await this.pagosService.obtenerAplicacionesFacturaCompra(facturaId);
     return toPagoResponse(data, 'Aplicaciones de anticipo de la factura de compra obtenidas');
+  }
+
+  @Get('aplicaciones/documento-soporte/:documentoId')
+  async aplicacionesDocumentoSoporte(
+    @Param('documentoId', ParseUUIDPipe) documentoId: string,
+  ): Promise<PagoResponseDto<any>> {
+    const data = await this.pagosService.obtenerAplicacionesDocumentoSoporte(documentoId);
+    return toPagoResponse(data, 'Aplicaciones de anticipo del documento soporte obtenidas');
   }
 
   @Patch(':id/anular')

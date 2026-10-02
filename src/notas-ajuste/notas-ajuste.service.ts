@@ -19,9 +19,8 @@ import { CreateNotaCreditoV2Dto } from './dto/create-nota-credito-v2.dto';
 import { UpdateNotaCreditoV2Dto } from './dto/update-nota-credito-v2.dto';
 import { CreditNoteCalculator } from './credito/credit-note-calculator.service';
 import { CarteraNotaService } from './cartera/cartera-nota.service';
-import { InventarioService } from 'src/inventario/inventario.service';
+import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
-
 @Injectable()
 export class NotasAjusteService {
   private readonly logger = new Logger(NotasAjusteService.name);
@@ -182,7 +181,11 @@ export class NotasAjusteService {
 
         // Kardex: devolución/anulación devuelven stock (estricto, misma tx).
         notaGuardada.items = itemsToSave;
-        await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
+        const kardexCrear: ResultadoKardex = await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
+        const alertasCrear = InventarioService.alertasNegativo(kardexCrear);
+        if (alertasCrear.length) {
+          (notaGuardada as any).advertenciasInventario = alertasCrear;
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -295,7 +298,11 @@ export class NotasAjusteService {
 
         // Kardex: devolución/anulación devuelven stock (estricto, misma tx).
         notaGuardada.items = itemsToSave;
-        await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
+        const kardexCrearV2: ResultadoKardex = await this.entradasInventarioNC(queryRunner.manager, notaGuardada);
+        const alertasCrearV2 = InventarioService.alertasNegativo(kardexCrearV2);
+        if (alertasCrearV2.length) {
+          (notaGuardada as any).advertenciasInventario = alertasCrearV2;
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -581,6 +588,8 @@ export class NotasAjusteService {
       }
 
       // 3. Procesar respuesta
+      // Política solo-alertar: negativos del kardex como advertencias (nunca bloquea).
+      let advertenciasKardexNC: AdvertenciaInventario[] = [];
       if (respuesta.estado === 'aceptada') {
         // Fuente de verdad: el numeroCompleto de Factus. Fallback al local.
         const prefijoFinal = nota.tipo === TipoNota.CREDITO ? 'NC' : 'ND';
@@ -629,10 +638,13 @@ export class NotasAjusteService {
           );
 
         // 3d. Kardex best-effort: devolución/anulación devuelven stock.
+        // Política solo-alertar: los negativos viajan como advertencias.
         await this.entradasInventarioNC(
           queryRunner.manager,
           { ...nota, numeroCompleto: numeroCompletoFinal } as NotaAjuste,
-        ).catch((invError) =>
+        ).then((kardex: ResultadoKardex) => {
+          advertenciasKardexNC = InventarioService.alertasNegativo(kardex);
+        }).catch((invError) =>
           this.logger.error(`Error kardex NC ${numeroCompletoFinal}: ${invError.message}`),
         );
 
@@ -650,7 +662,12 @@ export class NotasAjusteService {
       }
 
       await queryRunner.commitTransaction();
-      return await this.findOne(id);
+
+      const emitida = await this.findOne(id);
+      if (advertenciasKardexNC.length) {
+        (emitida as any).advertenciasInventario = advertenciasKardexNC;
+      }
+      return emitida;
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -720,6 +737,7 @@ export class NotasAjusteService {
         nota.tipo === TipoNota.CREDITO ? 'credito' : 'debito'
       );
 
+      let advertenciasSinc: AdvertenciaInventario[] = [];
       if (respuesta.status === 'OK') {
         const data = nota.tipo === TipoNota.CREDITO
           ? (respuesta.data.credit_note || respuesta.data)
@@ -753,6 +771,9 @@ export class NotasAjusteService {
 
         // Kardex best-effort.
         await this.entradasInventarioNC(this.dataSource.manager, nota)
+          .then((kardex: ResultadoKardex) => {
+            advertenciasSinc = InventarioService.alertasNegativo(kardex);
+          })
           .catch((invError) =>
             this.logger.error(`Error kardex NC ${nota.numeroCompleto}: ${invError.message}`),
           );
@@ -762,7 +783,11 @@ export class NotasAjusteService {
         this.logger.warn(`La nota ${nota.numeroCompleto} aún no está aceptada en DIAN (Estado: ${respuesta.status})`);
       }
 
-      return await this.findOne(id);
+      const sincronizada = await this.findOne(id);
+      if (advertenciasSinc.length) {
+        (sincronizada as any).advertenciasInventario = advertenciasSinc;
+      }
+      return sincronizada;
 
     } catch (error) {
       this.logger.error(`Error sincronizando nota ${id}: ${error.message}`);
@@ -979,13 +1004,18 @@ export class NotasAjusteService {
     await this.carteraService.revertir(this.dataSource.manager, nota);
 
     // Kardex: reversar las entradas de la NC (estricto).
-    await this.inventarioService.revertirDocumento(
+    const kardexAnulacion: ResultadoKardex = await this.inventarioService.revertirDocumento(
       this.dataSource.manager,
       DocumentoInventario.NOTA_CREDITO,
       nota.id,
       `Anulación NC ${nota.numeroCompleto}`,
       nota.createdById,
     );
+
+    const alertasAnulacion = InventarioService.alertasNegativo(kardexAnulacion);
+    if (alertasAnulacion.length) {
+      (nota as any).advertenciasInventario = alertasAnulacion;
+    }
 
     nota.estado = EstadoNota.CANCELLED;
     nota.estadoDIAN = EstadoDIANNota.ANULADA;
@@ -1077,7 +1107,7 @@ export class NotasAjusteService {
   // ========== MÉTODOS PRIVADOS ==========
 
   /** ENTRADAs de kardex por NC (solo líneas con afectaInventario). */
-  private async entradasInventarioNC(manager: any, nota: NotaAjuste): Promise<number> {
+  private async entradasInventarioNC(manager: any, nota: NotaAjuste): Promise<ResultadoKardex> {
     return this.inventarioService.registrarEntradasNC(
       manager,
       nota.id,

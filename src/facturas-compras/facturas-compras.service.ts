@@ -11,7 +11,6 @@ import { AsientosContablesService } from 'src/asientos-contables/asientos-contab
 import { TipoAsiento } from 'src/asientos-contables/entities/asientos-contable.entity';
 import { ContabilizacionEngine } from 'src/asientos-contables/engine/contabilizacion.engine';
 import { FacturaCompraDetalle } from './entities/factura-compra-detalle.entity';
-import { InvoiceFilterDto } from 'src/facturas-ventas/dto/invoice-filter.dto';
 import { UpdateFacturaCompraDto } from './dto/update-factura-compra.dto';
 import { CreateFacturaCompraItemDto } from './dto/create-items-factura-compra.dto';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
@@ -26,7 +25,7 @@ import { ParametrizacionContableService } from 'src/settings/parametrizacion-con
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste-compra.entity';
 import { EstadoNotaCompra, TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
-import { InventarioService } from 'src/inventario/inventario.service';
+import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 
 
@@ -416,6 +415,29 @@ export class FacturasComprasService {
             await queryRunner.commitTransaction();
             this.logger.log(`Gasto creado: ${gastoGuardado.numero}`);
 
+            // Kardex best-effort (post-commit, fuera del rollback contable):
+            // la compra creada directa en REGISTRADO también suma stock
+            // (el paso por registrar() solo aplica a las nacidas en BORRADOR).
+            if (!isDraft) {
+                try {
+                    const kardex: ResultadoKardex = await this.inventarioService.registrarEntradasCompra(
+                        this.dataSource.manager,
+                        gastoGuardado.id,
+                        (detalles ?? []).map((d) => ({
+                            articuloId: d.articuloId,
+                            cantidad: Number(d.quantity),
+                        })),
+                        gastoGuardado.numero || '',
+                        userId,
+                    );
+                    const alertas = InventarioService.alertasNegativo(kardex);
+                    if (alertas.length) {
+                        (gastoGuardado as any).advertenciasInventario = alertas;
+                    }
+                } catch (invError) {
+                    this.logger.error(`Error kardex compra directa ${gastoGuardado.numero}: ${invError.message}`);
+                }
+            }
             return gastoGuardado;
 
         } catch (error) {
@@ -799,8 +821,9 @@ export class FacturasComprasService {
 
             // Kardex best-effort (post-commit, fuera del rollback contable):
             // la compra registrada suma stock. Nunca bloquea el registro.
+            let advertenciasRegistro: AdvertenciaInventario[] = [];
             try {
-                await this.inventarioService.registrarEntradasCompra(
+                const kardex: ResultadoKardex = await this.inventarioService.registrarEntradasCompra(
                     this.dataSource.manager,
                     id,
                     (facturaActualizada!.items ?? []).map((it) => ({
@@ -810,11 +833,16 @@ export class FacturasComprasService {
                     numero,
                     userId,
                 );
+                advertenciasRegistro = InventarioService.alertasNegativo(kardex);
             } catch (invError) {
                 this.logger.error(`Error kardex compra ${numero}: ${invError.message}`);
             }
 
-            return await this.findOne(id);
+            const registrada = await this.findOne(id);
+            if (advertenciasRegistro.length) {
+                (registrada as any).advertenciasInventario = advertenciasRegistro;
+            }
+            return registrada;
 
         } catch (error) {
             // Rollback total: sin asiento, sin pago, factura de vuelta a BORRADOR.
@@ -956,19 +984,25 @@ export class FacturasComprasService {
             }
 
             // Kardex best-effort: la compra anulada revierte sus ENTRADAs.
+            let advertenciasAnulacion: AdvertenciaInventario[] = [];
             try {
-                await this.inventarioService.revertirDocumento(
+                const kardex: ResultadoKardex = await this.inventarioService.revertirDocumento(
                     this.dataSource.manager,
                     DocumentoInventario.FACTURA_COMPRA,
                     id,
                     `Anulación compra ${facturaAnulada.numero}`,
                     userId,
                 );
+                advertenciasAnulacion = InventarioService.alertasNegativo(kardex);
             } catch (invError) {
                 this.logger.error(`Error kardex anulación compra ${facturaAnulada.numero}: ${invError.message}`);
             }
 
-            return await this.findOne(id);
+            const anulada = await this.findOne(id);
+            if (advertenciasAnulacion.length) {
+                (anulada as any).advertenciasInventario = advertenciasAnulacion;
+            }
+            return anulada;
         } catch (error) {
             await queryRunner.rollbackTransaction();
             this.logger.error(`Error anulando factura de compra ${id}: ${error.message}`, error.stack);

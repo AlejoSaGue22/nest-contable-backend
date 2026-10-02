@@ -70,7 +70,9 @@ export class Articulo {
     @Column({ default: 0 })
     precioventa2: number;
 
-    @Column({ default: true })
+    // Default false: los servicios no deben entrar al kardex por descuido.
+    // Solo los productos que sí manejan existencias se marcan inventariables.
+    @Column({ default: false })
     isInventariable: boolean;
 
     /** Stock vivo del kardex mínimo (solo artículos inventariables). */

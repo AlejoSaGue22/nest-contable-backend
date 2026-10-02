@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
+import { DocumentoSoporte } from 'src/documentos-soportes/entities/documento-soporte.entity';
 import { User } from 'src/users/entities/user.entity';
 import { CuentasBancarias } from 'src/cuentas-bancarias/entities/cuentas-bancaria.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
@@ -82,6 +83,13 @@ export class Pago {
 
   @Column({ nullable: true })
   facturaCompraId: string | null;
+
+  @ManyToOne(() => DocumentoSoporte, { nullable: true })
+  @JoinColumn({ name: 'documentoSoporteId' })
+  documentoSoporte: DocumentoSoporte;
+
+  @Column({ nullable: true })
+  documentoSoporteId: string | null;
 
   // ── Datos del pago ───────────────────────────────────────────────────────
   @Column({ type: 'date' })

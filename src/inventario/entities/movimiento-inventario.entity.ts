@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -18,7 +19,10 @@ export enum TipoMovimientoInventario {
 export enum DocumentoInventario {
   FACTURA_VENTA = 'factura_venta',
   FACTURA_COMPRA = 'factura_compra',
+  DOCUMENTO_SOPORTE = 'documento_soporte',
   NOTA_CREDITO = 'nota_credito',
+  NOTA_CREDITO_COMPRA = 'nota_credito_compra',
+  NOTA_CREDITO_SOPORTE = 'nota_credito_soporte',
   AJUSTE_MANUAL = 'ajuste_manual',
 }
 
@@ -39,6 +43,14 @@ export class MovimientoInventario {
 
   @Column()
   articuloId: string;
+
+  /**
+   * Base multi-empresa: el movimiento hereda la empresa del artículo.
+   * Nullable para no romper el kardex histórico existente.
+   */
+  @Index('IDX_mov_inv_empresa')
+  @Column({ type: 'uuid', nullable: true })
+  empresaId: string | null;
 
   @Column({ type: 'enum', enum: TipoMovimientoInventario })
   tipo: TipoMovimientoInventario;

@@ -9,6 +9,7 @@ import {
 import { Anticipo } from './anticipo.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
+import { DocumentoSoporte } from 'src/documentos-soportes/entities/documento-soporte.entity';
 import { User } from 'src/users/entities/user.entity';
 import { ColumnNumericTransformer } from 'src/common/transformers/column-numeric.transformer';
 
@@ -43,6 +44,13 @@ export class AnticipoAplicacion {
 
   @Column({ nullable: true })
   facturaCompraId: string | null;
+
+  @ManyToOne(() => DocumentoSoporte, { nullable: true })
+  @JoinColumn({ name: 'documentoSoporteId' })
+  documentoSoporte: DocumentoSoporte;
+
+  @Column({ nullable: true })
+  documentoSoporteId: string | null;
 
   @Column('decimal', { precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   montoAplicado: number;

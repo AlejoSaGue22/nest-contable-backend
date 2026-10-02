@@ -7,12 +7,14 @@ import { AsientoContable } from '../entities/asientos-contable.entity';
 import { NotaAjusteStrategy } from './strategies/nota-ajuste.strategy';
 import { FacturaVentaStrategy } from './strategies/factura-venta.strategy';
 import { FacturaCompraStrategy } from './strategies/factura-compra.strategy';
+import { DocumentoSoporteStrategy } from './strategies/documento-soporte.strategy';
 import { ComprobanteContableStrategy } from './strategies/comprobante-contable.strategy';
 import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticipo-aplicacion.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
+import { DocumentoSoporte } from 'src/documentos-soportes/entities/documento-soporte.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
 import { ComprobanteContable, EstadoComprobante } from 'src/comprobantes/entities/comprobante-contable.entity';
 
@@ -28,6 +30,7 @@ export class ContabilizacionEngine implements OnModuleInit {
     private readonly notaAjusteStrategy: NotaAjusteStrategy,
     private readonly facturaVentaStrategy: FacturaVentaStrategy,
     private readonly facturaCompraStrategy: FacturaCompraStrategy,
+    private readonly documentoSoporteStrategy: DocumentoSoporteStrategy,
     private readonly comprobanteContableStrategy: ComprobanteContableStrategy,
   ) { }
 
@@ -35,6 +38,7 @@ export class ContabilizacionEngine implements OnModuleInit {
     this.strategiesMap.set(this.notaAjusteStrategy.tipoDocumento, this.notaAjusteStrategy);
     this.strategiesMap.set(this.facturaVentaStrategy.tipoDocumento, this.facturaVentaStrategy);
     this.strategiesMap.set(this.facturaCompraStrategy.tipoDocumento, this.facturaCompraStrategy);
+    this.strategiesMap.set(this.documentoSoporteStrategy.tipoDocumento, this.documentoSoporteStrategy);
     this.strategiesMap.set(this.comprobanteContableStrategy.tipoDocumento, this.comprobanteContableStrategy);
     this.logger.log('Motor de Contabilización inicializado con estrategias registradas.');
   }
@@ -194,17 +198,24 @@ export class ContabilizacionEngine implements OnModuleInit {
           });
         }
       }
-    } else if (tipoDocumento === 'GASTO') {
+    } else if (tipoDocumento === 'GASTO' || tipoDocumento === 'DOCUMENTO_SOPORTE') {
       const aplicaciones = await this.dataSource.manager.find(AnticipoAplicacion, {
-        where: { facturaCompraId: documentoId, estado: AplicacionEstado.BORRADOR },
+        where: tipoDocumento === 'DOCUMENTO_SOPORTE'
+          ? { documentoSoporteId: documentoId, estado: AplicacionEstado.BORRADOR }
+          : { facturaCompraId: documentoId, estado: AplicacionEstado.BORRADOR },
         relations: ['anticipo', 'anticipo.cuentaContable'],
       });
 
       if (aplicaciones.length > 0) {
-        const gasto = await this.dataSource.manager.findOne(FacturaCompra, {
-          where: { id: documentoId },
-          relations: ['proveedor', 'proveedor.cuentaContable', 'items'],
-        });
+        const gasto = tipoDocumento === 'DOCUMENTO_SOPORTE'
+          ? await this.dataSource.manager.findOne(DocumentoSoporte, {
+            where: { id: documentoId },
+            relations: ['proveedor', 'proveedor.cuentaContable', 'items'],
+          })
+          : await this.dataSource.manager.findOne(FacturaCompra, {
+            where: { id: documentoId },
+            relations: ['proveedor', 'proveedor.cuentaContable', 'items'],
+          });
 
         const proveedorConCuenta = gasto?.proveedor;
         let codigoCxP = '2205';

@@ -213,3 +213,100 @@ export interface FactusPayrollResult {
   rangePrefix: string | null;
 }
 
+// ========== DOCUMENTO SOPORTE ELECTRÓNICO (DSE) ==========
+
+export interface FactusV2SupportProvider {
+  identification_document_code: string;
+  identification: string;
+  dv?: string | null;
+  legal_organization_code: string;
+  trade_name?: string;
+  company?: string;
+  names?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  country_code?: string;
+  municipality_code?: string;
+}
+
+export interface FactusV2SupportPeriod {
+  generation_mode: string;
+  start_date?: string;
+}
+
+export interface FactusV2SupportItem {
+  code_reference: string;
+  name: string;
+  quantity: string;
+  discount_rate?: string;
+  price: string;
+  unit_measure_code: string;
+  standard_code: string;
+  taxes: FactusV2Tax[];
+  period?: FactusV2SupportPeriod;
+}
+
+export interface FactusV2SupportDocumentPayload {
+  reference_code: string;
+  numbering_range_id?: number | string;
+  created_time?: string;
+  observation?: string;
+  cash_rounding_amount?: string;
+  payment_details: FactusV2PaymentDetail[];
+  establishment?: FactusV2Establishment;
+  provider: FactusV2SupportProvider;
+  items: FactusV2SupportItem[];
+}
+
+export interface FactusSupportDocumentResult {
+  estado: 'aceptada' | 'rechazada';
+  referenceCode: string;
+  numeroDian: string;
+  cuds: string;
+  qrCode: string;
+  qrImageBase64: string;
+  publicUrl: string;
+  xmlUrl: string;
+  pdfUrl: string;
+  mensaje: string;
+  respuestaCompleta: any;
+  warnings: string[];
+  errors: any;
+  numberingRangeId: number | null;
+  resolutionNumber: string | null;
+  rangePrefix: string | null;
+}
+
+// ========== NOTA DE AJUSTE A DOCUMENTO SOPORTE ==========
+
+export interface FactusV2SupportAdjustmentPayload {
+  reference_code: string;
+  numbering_range_id?: number | string;
+  created_time?: string;
+  support_document_number: string;
+  correction_concept_code: string;
+  observation?: string;
+  cash_rounding_amount?: string;
+  payment_details: FactusV2PaymentDetail[];
+  establishment?: FactusV2Establishment;
+  provider: FactusV2SupportProvider;
+  items: FactusV2SupportItem[];
+}
+
+export interface FactusSupportAdjustmentResult {
+  estado: 'aceptada' | 'rechazada';
+  referenceCode: string;
+  numeroDian: string;
+  cuds: string;
+  qrCode: string;
+  qrImageBase64: string;
+  publicUrl: string;
+  mensaje: string;
+  respuestaCompleta: any;
+  warnings: string[];
+  errors: any;
+  numberingRangeId: number | null;
+  resolutionNumber: string | null;
+  rangePrefix: string | null;
+}

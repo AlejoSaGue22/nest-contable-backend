@@ -1,0 +1,76 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  JoinColumn,
+} from "typeorm";
+import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
+import { Articulo } from "src/articulos/entities/articulos.entity";
+import { Impuesto } from "src/settings/impuestos/entities/impuesto.entity";
+import { CuentaContable } from "src/cuentas/entities/cuenta.entity";
+import { NotaAjusteSoporte } from "./nota-ajuste-soporte.entity";
+
+@Entity('items_nota_ajuste_soporte')
+export class ItemNotaAjusteSoporte {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @ManyToOne(() => Articulo, { nullable: true, eager: true })
+  @JoinColumn({ name: 'articuloId' })
+  articulo?: Articulo | null;
+
+  @Column({ nullable: true })
+  articuloId?: string | null;
+
+  @ManyToOne(() => CuentaContable, { nullable: true, eager: true })
+  @JoinColumn({ name: 'cuentaContableId' })
+  cuentaContable?: CuentaContable | null;
+
+  @Column({ nullable: true })
+  cuentaContableId?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  descripcion?: string | null;
+
+  @ManyToOne(() => Impuesto, { nullable: true })
+  @JoinColumn({ name: 'impuestoId' })
+  impuesto: Impuesto;
+
+  @Column({ nullable: true })
+  impuestoId: string;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+  cantidad: number;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+  valorUnitario: number;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+  subtotal: number;
+
+  @Column('int', { default: 0 })
+  porcentajeIVA: number;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer(), default: 0 })
+  valorIVA: number;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+  total: number;
+
+  @Column('int', { default: 0 })
+  descuento: number;
+
+  @Column('decimal', { precision: 10, scale: 2, transformer: new ColumnNumericTransformer(), default: 0 })
+  valorDescuento: number;
+
+  @ManyToOne(() => NotaAjusteSoporte, nota => nota.items, { onDelete: 'CASCADE' })
+  nota: NotaAjusteSoporte;
+
+  @Column()
+  notaId: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
