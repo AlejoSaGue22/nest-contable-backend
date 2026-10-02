@@ -24,7 +24,7 @@ export class AuthService {
     const user = await this.usersRepository.findOne({
       where: { email },
       relations: ['role', 'role.permissions'],
-      select: ['id', 'email', 'fullName', 'password', 'role', 'roleId', 'isActive', 'lastLogin'],
+      select: ['id', 'email', 'fullName', 'password', 'role', 'roleId', 'isActive', 'lastLogin', 'empresaId'],
     });
 
     if (!user) {
@@ -60,6 +60,8 @@ export class AuthService {
         fullName: user.fullName,
         role: user.role.name as SystemRole,
         permissions: user.role.permissions.map(p => p.name),
+        // Aditivo: expone empresa actual sin exigirla (tokens viejos siguen válidos).
+        empresaId: (user as any).empresaId ?? null,
       };
 
       const token = this.jwtService.sign(payload);
@@ -73,6 +75,7 @@ export class AuthService {
           role: user.role.name,
           permissions: user.role.permissions.map(p => p.name),
           lastLogin: user.lastLogin,
+          empresaId: (user as any).empresaId ?? null,
         },
       };
     } catch (error) {
@@ -140,6 +143,7 @@ export class AuthService {
       fullName: user.fullName,
       role: user.role,
       permissions: user.permissions,
+      empresaId: (user as any).empresaId ?? null,
     };
 
     const token = this.jwtService.sign(payload);
@@ -165,6 +169,7 @@ export class AuthService {
       fullName: user.fullName,
       role: user.role.name as SystemRole,
       permissions: user.role.permissions.map(p => p.name),
+      empresaId: (user as any).empresaId ?? null,
     };
 
     const token = this.jwtService.sign(payload);

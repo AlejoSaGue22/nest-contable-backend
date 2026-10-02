@@ -25,7 +25,8 @@ export class CompanyContext {
       return this.activeCompanyId!;
     }
 
-    // 2. Fallback: Query default company ID from DB
+    // 2. Fallback legacy mono-empresa (deploy actual): Query default company ID from DB.
+    // NO cambiar antes del deploy: enforcement estricto queda tras MULTI_EMPRESA_ENFORCED=true.
     const empresa = await this.empresaRepository.findOne({ where: {} });
     if (empresa) {
       this.activeCompanyId = empresa.id;
@@ -33,5 +34,18 @@ export class CompanyContext {
     }
 
     throw new Error('No se encontró ninguna empresa activa configurada en el sistema.');
+  }
+
+  /**
+   * Variante no-lanzadora para modo log-only pre-deploy.
+   * Devuelve null si no hay contexto, en vez de fallback silencioso o throw.
+   */
+  async getActiveCompanyIdSafe(): Promise<string | null> {
+    if (this.activeCompanyId) return this.activeCompanyId;
+    if (this.request?.companyId) {
+      this.activeCompanyId = this.request.companyId;
+      return this.activeCompanyId;
+    }
+    return null;
   }
 }

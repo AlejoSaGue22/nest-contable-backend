@@ -7,6 +7,9 @@ export interface JwtPayload {
   fullName: string;
   role: SystemRole;
   permissions: string[];
+  /** Aditivo multi-empresa: opcional para no invalidar tokens/juicios actuales. */
+  empresaId?: string | null;
+  empresasPermitidas?: string[];
   exp?: number;
 }
 

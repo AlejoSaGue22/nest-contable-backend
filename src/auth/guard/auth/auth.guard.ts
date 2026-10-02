@@ -25,6 +25,18 @@ export class AuthGuard implements CanActivate {
 
       request.user = payload;
 
+      // Multi-empresa LOG-ONLY (pre-deploy seguro): propaga contexto sin rechazar.
+      // Tokens viejos sin empresaId siguen funcionando; enforcement real será
+      // posterior con MULTI_EMPRESA_ENFORCED=true.
+      const headerCompanyId =
+        (request.headers?.['x-company-id'] as string) ?? undefined;
+      const payloadCompanyId = (payload as any)?.empresaId ?? undefined;
+      if (headerCompanyId && payloadCompanyId && headerCompanyId !== payloadCompanyId) {
+        // Solo observa: no bloquea en modo log-only.
+        console.warn(`[tenant log-only] X-Company-Id (${headerCompanyId}) != JWT empresaId (${payloadCompanyId})`);
+      }
+      request.companyId = headerCompanyId ?? payloadCompanyId ?? request.companyId ?? undefined;
+
     } catch (error) {
       console.log(error);
       throw new UnauthorizedException("Token Expirado")

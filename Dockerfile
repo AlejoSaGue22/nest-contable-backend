@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 COPY . .
 RUN npm run build
@@ -21,7 +21,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 
-RUN mkdir -p /app/storage/facturas
+RUN mkdir -p /app/storage/facturas /app/uploads/company
 
 ENV NODE_ENV=production
 ENV PORT=3000
