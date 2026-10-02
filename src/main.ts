@@ -16,17 +16,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   // Helmet: security headers
-  // app.use(helmet.default());
+  app.use(helmet.default());
 
   // CORS restrictivo
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
-    'http://localhost:4200',
-    // 'http://192.168.1.11:4200',
-    'http://192.168.1.10:4200'
+    'http://localhost:4200'
   ];
-  // const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
-  //   'http://localhost:4200',
-  // ];
+
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
@@ -40,8 +36,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT ?? 3000;
-  // await app.listen(port);
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(port, '0.0.0.0');
 
 
   if (process.env.NODE_ENV !== 'production') {

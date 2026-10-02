@@ -6,12 +6,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AsientoContable, TipoAsiento } from './entities/asientos-contable.entity';
-import { DataSource, In, Repository, QueryRunner } from 'typeorm';
+import { DataSource, In, Repository, QueryRunner, EntityManager } from 'typeorm';
 import { AsientoDetalle } from './entities/asientos-detalles.entity';
 import { CuentaContable } from 'src/cuentas/entities/cuenta.entity';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { Articulo } from 'src/articulos/entities/articulos.entity';
-import { DefinicionAsientoDto } from './dto/definicion-asiento.dto';
+import { DefinicionAsientoDto, DefinicionDetalleAsientoDto } from './dto/definicion-asiento.dto';
 import { FacturaCompra } from 'src/facturas-compras/entities/factura-compra.entity';
 import { FormaPago } from 'src/facturas-ventas/enums/factura-venta.enum';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
@@ -85,7 +85,7 @@ export class AsientosContablesService {
       const compMap = new Map(comprobantes.map(c => [c.asientoId, c.id]));
       for (const a of asientos) {
         if (compMap.has(a.id)) {
-          (a as any).comprobanteId = compMap.get(a.id);
+          (a as AsientoContable & { comprobanteId?: string }).comprobanteId = compMap.get(a.id);
         }
       }
     }
@@ -505,12 +505,12 @@ export class AsientosContablesService {
           (ingresosAgrupados.get(cuentaId) ?? 0) + item.subtotal,
         );
 
-        const valorIva = (item as any).valor_iva || 0;
+        const valorIva = (item as { valor_iva?: number }).valor_iva || 0;
         if (valorIva > 0) {
           let cuentaIvaId: string;
           const ivaPorcentaje = item.iva || 0;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.iva || 0,
             tipo: 'IVA',
             operacion: 'ventas',
@@ -651,7 +651,7 @@ export class AsientosContablesService {
         if (item.valorIva > 0) {
           let cuentaIvaId: string;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.porcentajeIva || 0,
             tipo: 'IVA',
             operacion: 'compras',
@@ -823,7 +823,7 @@ export class AsientosContablesService {
           let cuentaIvaId: string;
           const ivaPorcentaje = item.porcentajeIVA || 0;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.porcentajeIVA || 0,
             tipo: 'IVA',
             operacion: 'ventas',
@@ -1774,7 +1774,7 @@ export class AsientosContablesService {
 
     try {
       // La nota a documento soporte expone el origen como `documentoOriginal`.
-      const factura = (nota as NotaAjusteCompra).facturaOriginal ?? (nota as unknown as NotaAjusteSoporte).documentoOriginal as any;
+      const factura = (nota as NotaAjusteCompra).facturaOriginal ?? (nota as unknown as NotaAjusteSoporte).documentoOriginal as unknown as Record<string, unknown>;
       const isNotaCredito = nota.tipo === TipoNotaCompra.CREDITO;
       const detalles: DetalleAsiento[] = [];
 
@@ -1783,7 +1783,7 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
-        const itemAny = item as any;
+        const itemAny = item as { cuentaContableId?: string };
         let cuentaId: string | null = null;
         let cuentaIvaFallbackId: string | undefined;
 
@@ -1822,7 +1822,7 @@ export class AsientosContablesService {
         if (valorIva > 0) {
           const ivaPorcentaje = item.porcentajeIVA || 0;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.porcentajeIVA || 0,
             tipo: 'IVA',
             operacion: 'compras',
@@ -1890,7 +1890,7 @@ export class AsientosContablesService {
           : await this.resolverCuentaContado(factura.metodoPago!);
         cuentaContra = await this.obtenerCuentaPorCodigo(codigoCuentaContra);
       } else {
-        let proveedor: Proveedor | null = (nota as any).proveedor ?? null;
+        let proveedor: Proveedor | null = (nota as { proveedor?: any }).proveedor ?? null;
         if (!proveedor || !proveedor.cuentaContableId) {
           proveedor = await queryRunner.manager.findOne(Proveedor, {
             where: { id: factura.proveedorId },
@@ -1972,7 +1972,7 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
-        const itemAny = item as any;
+        const itemAny = item as { cuentaContableId?: string };
         let cuentaId: string | null = null;
         let cuentaIvaFallbackId: string | undefined;
 
@@ -2011,7 +2011,7 @@ export class AsientosContablesService {
         if (valorIva > 0) {
           const ivaPorcentaje = item.porcentajeIVA || 0;
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.porcentajeIVA || 0,
             tipo: 'IVA',
             operacion: 'compras',
@@ -2134,7 +2134,7 @@ export class AsientosContablesService {
       const ivaAgrupados = new Map<string, number>();
 
       for (const item of nota.items) {
-        const itemAny = item as any;
+        const itemAny = item as { cuentaContableId?: string };
         let cuentaId: string | null = null;
         let cuentaIvaFallbackId: string | undefined;
 
@@ -2172,7 +2172,7 @@ export class AsientosContablesService {
         const valorIva = Number(item.valorIVA) || 0;
         if (valorIva > 0) {
           const cuentaIvaPorcentaje = await this.obtenerCuentaImpuesto({
-            impuestoId: (item as any).impuestoId,
+            impuestoId: (item as { impuestoId?: string }).impuestoId,
             tarifa: item.porcentajeIVA || 0,
             tipo: 'IVA',
             operacion: 'compras',
@@ -2215,7 +2215,7 @@ export class AsientosContablesService {
         });
       }
 
-      const isContado = (factura as any).formaPago === FormaPago.CONTADO;
+      const isContado = (factura as { formaPago?: string; cuentaBancaria?: { codigoCuentaContable?: string }; metodoPago?: string; numero?: string; numeroDian?: string }).formaPago === FormaPago.CONTADO;
       let codigoCxP = '2205';
       if (gastosAgrupados.size > 0) {
         const cuentasInvolucradas = await queryRunner.manager.find(
@@ -2227,10 +2227,11 @@ export class AsientosContablesService {
         }
       }
 
+      const facturaBase = factura as { formaPago?: string; cuentaBancaria?: { codigoCuentaContable?: string }; metodoPago?: string; numero?: string; numeroDian?: string };
       const codigoCuentaContra = isContado
-        ? (factura as any).cuentaBancaria?.codigoCuentaContable
-          ? (factura as any).cuentaBancaria.codigoCuentaContable
-          : await this.resolverCuentaContado((factura as any).metodoPago!)
+        ? facturaBase.cuentaBancaria?.codigoCuentaContable
+          ? facturaBase.cuentaBancaria.codigoCuentaContable
+          : await this.resolverCuentaContado(facturaBase.metodoPago || '')
         : codigoCxP;
       const cuentaContra =
         await this.obtenerCuentaPorCodigo(codigoCuentaContra);
@@ -2240,7 +2241,7 @@ export class AsientosContablesService {
         cuentaId: cuentaContra.id,
         debito: isNotaCredito ? 0 : Number(nota.total),
         credito: isNotaCredito ? Number(nota.total) : 0,
-        descripcion: `ANULACIÓN - ${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Doc: ${(factura as any).numero || (factura as any).numeroDian} | Nota soporte: ${nota.numeroCompleto}`,
+        descripcion: `ANULACIÓN - ${isNotaCredito ? 'DÉBITO' : 'CRÉDITO'} Proveedor/Caja Doc: ${(factura as { formaPago?: string; cuentaBancaria?: { codigoCuentaContable?: string }; metodoPago?: string; numero?: string; numeroDian?: string }).numero || (factura as { formaPago?: string; cuentaBancaria?: { codigoCuentaContable?: string }; metodoPago?: string; numero?: string; numeroDian?: string }).numeroDian} | Nota soporte: ${nota.numeroCompleto}`,
       });
 
       const asiento = await this.crearAsiento(
@@ -2879,7 +2880,7 @@ export class AsientosContablesService {
       throw new NotFoundException(`Cuenta de anticipo no encontrada`);
     }
 
-    const detalles: any[] = [];
+    const detalles: DefinicionDetalleAsientoDto[] = [];
     const debitoMonto = Number(data.monto);
     const creditoMonto = Number(data.monto);
 
@@ -2969,7 +2970,7 @@ export class AsientosContablesService {
     // Crear los ComprobanteDetalle correspondientes
     for (const d of detalles) {
       const detail = queryRunner.manager.create(ComprobanteDetalle, {
-        comprobanteId: guardado.id,
+        comprobante: guardado,
         cuentaContableId: d.cuentaId,
         descripcion: d.concepto,
         debito: d.debito,
@@ -2983,7 +2984,7 @@ export class AsientosContablesService {
     return asientoCruce;
   }
 
-  private async obtenerTipoComprobanteCruce(manager: any): Promise<TipoComprobante> {
+  private async obtenerTipoComprobanteCruce(manager: EntityManager): Promise<TipoComprobante> {
     let tipo = await manager.findOne(TipoComprobante, { where: { codigo: 'CC' } });
     if (!tipo) {
       tipo = await manager.findOne(TipoComprobante, { where: { codigo: 'DIARIO' } });
@@ -3065,3 +3066,4 @@ export class AsientosContablesService {
     return (ultimoNumero + 1).toString().padStart(8, '0');
   }
 }
+

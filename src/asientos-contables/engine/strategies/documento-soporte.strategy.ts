@@ -56,15 +56,31 @@ export class DocumentoSoporteStrategy implements IContabilizacionStrategy {
           relations: [
             'categoriaArticulo',
             'categoriaArticulo.cuentaInventario',
+            'categoriaArticulo.cuentaCosto',
+            'categoriaArticulo.cuentaPrincipal',
             'impuestoRel',
             'impuestoRel.cuentaCompras',
           ],
         });
 
-        if (!articulo?.categoriaArticulo?.cuentaInventario) {
+        const categoria = articulo?.categoriaArticulo;
+        if (!categoria) {
+          throw new Error(`No se pudo determinar la categoría para el artículo del ítem con ID ${item.id}`);
+        }
+
+        if (articulo.isInventariable && categoria.cuentaInventario) {
+          cuentaGasto = categoria.cuentaInventario;
+        } else if (categoria.cuentaCosto) {
+          cuentaGasto = categoria.cuentaCosto;
+        } else if (categoria.cuentaInventario) {
+          cuentaGasto = categoria.cuentaInventario;
+        } else if (categoria.cuentaPrincipal) {
+          cuentaGasto = categoria.cuentaPrincipal;
+        }
+
+        if (!cuentaGasto) {
           throw new Error(`No se pudo determinar la cuenta contable para el ítem con ID ${item.id}`);
         }
-        cuentaGasto = articulo.categoriaArticulo.cuentaInventario;
         if (!impuestoId) impuestoId = articulo.impuestoId;
         if (!impuestoRel) impuestoRel = articulo.impuestoRel;
       } else if (item.cuentaContableId) {

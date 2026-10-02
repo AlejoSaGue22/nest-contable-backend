@@ -883,8 +883,14 @@ export class FactusService {
         const esPersonaNatural = String(proveedor.tipoPersona || '').toUpperCase() === 'PN'
             || (!proveedor.razonSocial && !!proveedor.nombre);
 
+        let docCode = this.mapearTipoDocumentoCodigo(proveedor.tipoDocumento);
+        // Si el proveedor tiene CC (13), RC (11) o TI (12), forzar a NIT (31) para Documento Soporte
+        if (['11', '12', '13'].includes(docCode)) {
+            docCode = '31';
+        }
+
         const provider: FactusV2SupportProvider = {
-            identification_document_code: this.mapearTipoDocumentoCodigo(proveedor.tipoDocumento),
+            identification_document_code: docCode,
             identification: String(proveedor.identificacion),
             dv: proveedor.dv || null,
             legal_organization_code: esPersonaNatural ? '2' : '1',
