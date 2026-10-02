@@ -55,7 +55,7 @@ import { InventarioModule } from './inventario/inventario.module';
       password: process.env.DB_PASSWORD?.toString() || 'MySecr3tPassWord@as2',
       database: process.env.DB_DATABASE || 'finance_tejo',
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: process.env.NODE_ENV !== 'production', // ¡Nunca en true para producción!
     }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
