@@ -367,11 +367,16 @@ export class InventarioService {
       porArticulo.set(l.articuloId, (porArticulo.get(l.articuloId) ?? 0) + Number(l.cantidad));
     }
     const faltantes: string[] = [];
+    // El lock pesimista exige transacción abierta (Postgres). Fuera de una
+    // transacción (ej. validar antes de enviar a DIAN) se lee sin lock:
+    // la validación de stock se mantiene, solo sin bloqueo de fila.
+    const inTx = !!manager.queryRunner?.isTransactionActive;
     for (const [articuloId, requerida] of porArticulo) {
-      const articulo = await manager.findOne(Articulo, {
-        where: { id: articuloId },
-        lock: { mode: 'pessimistic_write' },
-      });
+      const findOpts: any = { where: { id: articuloId } };
+      if (inTx) {
+        findOpts.lock = { mode: 'pessimistic_write' };
+      }
+      const articulo = await manager.findOne(Articulo, findOpts);
       if (!articulo) {
         this.logger.warn(`Inventario: artículo ${articuloId} no encontrado, se omite en validación`);
         continue;
