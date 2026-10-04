@@ -41,7 +41,7 @@ export class Proveedor {
     @Column({ nullable: true })
     apellido?: string;
 
-    @Column()
+    @Column({ nullable: true })
     email: string;
 
     @Column()

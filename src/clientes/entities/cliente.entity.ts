@@ -17,10 +17,10 @@ export class Cliente {
     @Column({ nullable: true })
     empresaId: string;
 
-    @Column()
+    @Column({ nullable: true })
     nombre: string;
 
-    @Column()
+    @Column({ nullable: true })
     apellido: string;
 
     @Column()
@@ -58,7 +58,7 @@ export class Cliente {
     @Column()
     email: string;
 
-    @Column()
+    @Column({ nullable: true })
     observacion: string;
 
     @Column({ comment: 'Indica si el cliente es responsable de IVA S=18, N=21' })

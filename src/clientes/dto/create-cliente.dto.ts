@@ -51,7 +51,7 @@ export class CreateClienteDto {
     telefono: string;
 
     @IsEmail()
-    @IsOptional()
+    @IsNotEmpty()
     @Transform(({ value }) => value === null ? '' : value)
     email: string;
 
