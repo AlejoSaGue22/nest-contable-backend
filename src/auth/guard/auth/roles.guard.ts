@@ -29,9 +29,9 @@ export class RolesGuard implements CanActivate {
     ]);
 
     // Si no hay permisos ni roles requeridos, permitir acceso
-    if (!requiredPermissions && !requiredRoles) {
-      return true;
-    }
+    // if (!requiredPermissions && !requiredRoles) {
+    //   return true;
+    // }
 
     const { user } = context.switchToHttp().getRequest();
 
