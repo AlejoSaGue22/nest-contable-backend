@@ -372,11 +372,11 @@ export class InventarioService {
     // la validación de stock se mantiene, solo sin bloqueo de fila.
     const inTx = !!manager.queryRunner?.isTransactionActive;
     for (const [articuloId, requerida] of porArticulo) {
-      const findOpts: any = { where: { id: articuloId } };
+      let query = manager.createQueryBuilder(Articulo, 'articulo').where('articulo.id = :id', { id: articuloId });
       if (inTx) {
-        findOpts.lock = { mode: 'pessimistic_write' };
+        query = query.setLock('pessimistic_write');
       }
-      const articulo = await manager.findOne(Articulo, findOpts);
+      const articulo = await query.getOne();
       if (!articulo) {
         this.logger.warn(`Inventario: artículo ${articuloId} no encontrado, se omite en validación`);
         continue;
