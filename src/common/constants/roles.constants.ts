@@ -32,6 +32,7 @@ export enum Permission {
 
   // Notas Creditos
   NOTA_CREDITO_READ = 'nota_credito:read',
+  NOTA_CREDITO_COMPRAS_READ = 'nota_credito_compras:read',
 
   // Clients
   CLIENT_CREATE = 'client:create',
@@ -55,7 +56,8 @@ export enum Permission {
   PURCHASE_READ = 'purchase:read',
   PURCHASE_UPDATE = 'purchase:update',
   PURCHASE_DELETE = 'purchase:delete',
-  PURCHASE_EXPORT = 'purchase:export',
+  PURCHASE_DOCUMENT_SUPPORT_READ = 'document_support:read',
+  NOTA_AJUSTE_DOCUMENT_SUPPORT_READ = 'nota_ajuste_document_support:read',
 
   // Products Purchase  
   PRODUCT_PURCHASE_CREATE = 'product_purchase:create',
@@ -105,6 +107,7 @@ export enum Permission {
   // Contabilidad
   ACCOUNTING_VIEW = 'accounting:view',
   ACCOUNTING_ACTIVOS_FIJOS = 'accounting:activos_fijos',
+  ACCOUNTING_BANCOS_CAJAS = 'accounting:bancos_cajas',
   ACCOUNTING_ACCOUNT_MANAGE = 'accounting:account_manage',
   ACCOUNTING_COMPROBANCE = 'accounting:book_manage',
 
@@ -141,13 +144,14 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.CLIENT_CREATE, Permission.CLIENT_READ, Permission.CLIENT_UPDATE, Permission.CLIENT_DELETE,
 
     Permission.PRODUCT_CREATE, Permission.PRODUCT_READ, Permission.PRODUCT_UPDATE, Permission.PRODUCT_DELETE,
-    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE, Permission.PURCHASE_EXPORT,
+    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE,
+    Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
     Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.USER_CREATE, Permission.USER_READ, Permission.USER_UPDATE, Permission.USER_MANAGE,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT, Permission.PAGO_READ, Permission.PAGO_CXC, Permission.PAGO_CXP,
     Permission.PAGO_AGING, Permission.PAGO_MOVIMIENTOS, Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
-    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE,
+    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE, Permission.ACCOUNTING_BANCOS_CAJAS,
     Permission.NOMINA_ACCESS, Permission.NOMINA_EMPLOYEE_CREATE, Permission.NOMINA_EMPLOYEE_READ,
     Permission.NOMINA_EMPLOYEE_UPDATE, Permission.NOMINA_EMPLOYEE_DELETE,
     Permission.NOMINA_PERIOD_CREATE, Permission.NOMINA_PERIOD_READ, Permission.NOMINA_PERIOD_LIQUIDATE,
@@ -165,12 +169,13 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.INVOICE_UPDATE, Permission.INVOICE_EXPORT,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ, Permission.CLIENT_UPDATE,
     Permission.PRODUCT_READ, Permission.PRODUCT_UPDATE,
-    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE, Permission.PURCHASE_EXPORT,
+    Permission.PURCHASE_CREATE, Permission.PURCHASE_READ, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE,
+    Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
     Permission.PROVIDER_CREATE, Permission.PROVIDER_READ, Permission.PROVIDER_UPDATE, Permission.PROVIDER_DELETE, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_PURCHASE_CREATE, Permission.PRODUCT_PURCHASE_READ, Permission.PRODUCT_PURCHASE_UPDATE, Permission.PRODUCT_PURCHASE_DELETE, Permission.PRODUCT_PURCHASE_EXPORT,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT, Permission.PAGO_READ, Permission.PAGO_CXC, Permission.PAGO_CXP,
     Permission.PAGO_AGING, Permission.PAGO_MOVIMIENTOS, Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
-    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE,
+    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE, Permission.ACCOUNTING_BANCOS_CAJAS,
     Permission.NOMINA_ACCESS, Permission.NOMINA_EMPLOYEE_CREATE, Permission.NOMINA_EMPLOYEE_READ,
     Permission.NOMINA_EMPLOYEE_UPDATE, Permission.NOMINA_EMPLOYEE_DELETE,
     Permission.NOMINA_PERIOD_CREATE, Permission.NOMINA_PERIOD_READ, Permission.NOMINA_PERIOD_LIQUIDATE,
@@ -186,13 +191,14 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
   [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ, Permission.INVOICE_EXPORT, Permission.NOTA_CREDITO_READ,
-    Permission.PURCHASE_READ, Permission.PURCHASE_EXPORT,
+    Permission.PURCHASE_READ,
+    Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
     Permission.PROVIDER_READ, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_READ, Permission.PRODUCT_PURCHASE_READ,
     Permission.REPORT_VIEW, Permission.REPORT_EXPORT,
     Permission.PAGO_READ, Permission.PAGO_CXC, Permission.PAGO_CXP,
     Permission.PAGO_AGING, Permission.PAGO_MOVIMIENTOS, Permission.SETTINGS_VIEW, Permission.SETTINGS_UPDATE,
-    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE,
+    Permission.ACCOUNTING_VIEW, Permission.ACCOUNTING_ACTIVOS_FIJOS, Permission.ACCOUNTING_ACCOUNT_MANAGE, Permission.ACCOUNTING_COMPROBANCE, Permission.ACCOUNTING_BANCOS_CAJAS,
     Permission.NOMINA_ACCESS, Permission.NOMINA_EMPLOYEE_CREATE, Permission.NOMINA_EMPLOYEE_READ,
     Permission.NOMINA_EMPLOYEE_UPDATE, Permission.NOMINA_EMPLOYEE_DELETE,
     Permission.NOMINA_PERIOD_CREATE, Permission.NOMINA_PERIOD_READ, Permission.NOMINA_PERIOD_LIQUIDATE,
@@ -210,7 +216,8 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.INVOICE_CREATE, Permission.INVOICE_READ,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ,
     Permission.PRODUCT_READ, Permission.PROVIDER_READ,
-    Permission.ACCOUNTING_ACTIVOS_FIJOS
+    Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
+    Permission.PAGO_CXC, Permission.PAGO_CXP, Permission.PAGO_MOVIMIENTOS
   ],
   [SystemRole.VIEWER]: [
     Permission.DASHBOARD_VIEW,
