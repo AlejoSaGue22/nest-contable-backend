@@ -39,19 +39,19 @@ export class CuentasBancariasController {
   }
 
   @Get()
-  @Permissions(Permission.ACCOUNTING_VIEW)
+  // @Permissions(Permission.ACCOUNTING_VIEW)
   findAll(@Query() paginationDto: CuentasBancariasPaginationDto) {
     return this.cuentasBancariasService.findAll(paginationDto);
   }
 
   @Get(':id')
-  @Permissions(Permission.ACCOUNTING_VIEW)
+  // @Permissions(Permission.ACCOUNTING_VIEW)
   findOne(@Param('id') id: string) {
     return this.cuentasBancariasService.findOne(id);
   }
 
   @Patch('toggle-status/:id')
-  @Permissions(Permission.ACCOUNTING_VIEW)
+  // @Permissions(Permission.ACCOUNTING_VIEW)
   toggleStatus(@Param('id') id: string) {
     return this.cuentasBancariasService.toggleStatus(id);
   }
