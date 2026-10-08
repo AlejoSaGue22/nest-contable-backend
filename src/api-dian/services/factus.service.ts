@@ -407,7 +407,7 @@ export class FactusService {
                 const tasaIva = Number(item.iva) || 0;
                 return {
                     code_reference: item.articulo?.codigo || String(item.articuloId),
-                    name: item.articulo?.nombre || item.description || 'Ítem',
+                    name: `${item.articulo?.nombre} ${item.description}`,
                     quantity: this.toDecimalString(item.quantity),
                     discount_rate: this.toDecimalString(item.discount || 0),
                     price: this.toDecimalString(item.unitPrice),
