@@ -213,11 +213,11 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
   ],
   [SystemRole.SALES]: [
     Permission.DASHBOARD_VIEW,
-    Permission.INVOICE_CREATE, Permission.INVOICE_READ,
+    Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.NOTA_CREDITO_READ,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ,
-    Permission.PRODUCT_READ, Permission.PROVIDER_READ,
-    Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
-    Permission.PAGO_CXC, Permission.PAGO_CXP, Permission.PAGO_MOVIMIENTOS
+    Permission.PRODUCT_READ,
+    Permission.PURCHASE_READ, Permission.PROVIDER_READ, Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
+    Permission.PAGO_READ, Permission.PAGO_CXC, Permission.PAGO_CXP, Permission.PAGO_MOVIMIENTOS
   ],
   [SystemRole.VIEWER]: [
     Permission.DASHBOARD_VIEW,

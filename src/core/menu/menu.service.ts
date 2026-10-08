@@ -25,7 +25,7 @@ export class MenuService {
     private menuItemRepository: TreeRepository<MenuItem>,
     @InjectRepository(PermissionEntity)
     private permissionRepository: Repository<PermissionEntity>,
-  ) {}
+  ) { }
 
   // ══════════════════════════════════════════════════════════════════
   // CREAR
@@ -101,7 +101,7 @@ export class MenuService {
   private filterMenu(items: MenuItem[], permissions: string[]): MenuItem[] {
     // Validación defensiva: asegurar que items sea un arreglo
     if (!Array.isArray(items)) return [];
-    
+
     // Asegurar que permissions sea un arreglo para evitar error en .includes
     const authPermissions = Array.isArray(permissions) ? permissions : [];
 
