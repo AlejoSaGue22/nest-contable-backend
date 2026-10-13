@@ -11,6 +11,7 @@ export const AppDataSource = new DataSource(
         entities: ['src/**/*.entity.ts', 'src/**/*-entity.ts'],
         migrations: ['src/migrations/*.ts'],
         synchronize: false,
+        logging: process.env.TYPEORM_LOGGING === 'true' ? true : ['error', 'warn'],
       }
     : {
         type: 'postgres',
@@ -22,5 +23,6 @@ export const AppDataSource = new DataSource(
         entities: ['src/**/*.entity.ts', 'src/**/*-entity.ts'],
         migrations: ['src/migrations/*.ts'],
         synchronize: false,
+        logging: process.env.TYPEORM_LOGGING === 'true' ? true : ['error', 'warn'],
       },
 );

@@ -15,15 +15,47 @@ export class BackfillMunicipalityDepartmentCodes1719000000001 implements Migrati
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const filePath = path.join(process.cwd(), 'json-municipios.json');
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+
+    // 1. Si ya no existen municipios con departmentCode nulo, no hacer nada (idempotente)
+    const pending = await queryRunner.query(
+      `SELECT 1 FROM "municipios" WHERE "departmentCode" IS NULL LIMIT 1`,
+    );
+    if (!pending || pending.length === 0) {
+      return;
+    }
+
     const content = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(content) as { municipalities?: MunicipalityJsonItem[] };
+    const municipalities = parsed.municipalities || [];
+    if (municipalities.length === 0) {
+      return;
+    }
 
-    for (const municipality of parsed.municipalities || []) {
+    // 2. Ejecutar la actualización en lotes para evitar miles de queries individuales en consola
+    const batchSize = 200;
+    for (let i = 0; i < municipalities.length; i += batchSize) {
+      const batch = municipalities.slice(i, i + batchSize);
+      const values: string[] = [];
+      const params: any[] = [];
+      let paramIdx = 1;
+
+      for (const m of batch) {
+        values.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2})`);
+        params.push(m.code, m.department.code, m.department.name);
+        paramIdx += 3;
+      }
+
       await queryRunner.query(
-        `UPDATE "municipios"
-         SET "departmentCode" = $1, "departmentName" = $2, "department" = $2
-         WHERE "code" = $3`,
-        [municipality.department.code, municipality.department.name, municipality.code],
+        `UPDATE "municipios" AS m
+         SET "departmentCode" = v.dept_code,
+             "departmentName" = v.dept_name,
+             "department"     = v.dept_name
+         FROM (VALUES ${values.join(', ')}) AS v(code, dept_code, dept_name)
+         WHERE m."code" = v.code`,
+        params,
       );
     }
   }

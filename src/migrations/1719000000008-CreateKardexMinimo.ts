@@ -34,10 +34,10 @@ export class CreateKardexMinimo1719000000008 implements MigrationInterface {
         )
       `);
       await queryRunner.query(
-        `CREATE INDEX "IDX_mov_inv_articulo" ON "movimientos_inventario" ("articuloId")`,
+        `CREATE INDEX IF NOT EXISTS "IDX_mov_inv_articulo" ON "movimientos_inventario" ("articuloId")`,
       );
       await queryRunner.query(
-        `CREATE INDEX "IDX_mov_inv_documento" ON "movimientos_inventario" ("documentoTipo", "documentoId")`,
+        `CREATE INDEX IF NOT EXISTS "IDX_mov_inv_documento" ON "movimientos_inventario" ("documentoTipo", "documentoId")`,
       );
     }
   }

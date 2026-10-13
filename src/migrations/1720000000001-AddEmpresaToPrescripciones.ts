@@ -4,9 +4,9 @@ export class AddEmpresaToPrescripciones1720000000001 implements MigrationInterfa
   name = 'AddEmpresaToPrescripciones1720000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "prescripciones_visuales" ADD COLUMN "empresaId" uuid`);
-    await queryRunner.query(`ALTER TABLE "profesionales_responsables" ADD COLUMN "empresaId" uuid`);
-    await queryRunner.query(`ALTER TABLE "tipos_examen_prescripcion" ADD COLUMN "empresaId" uuid`);
+    await queryRunner.query(`ALTER TABLE "prescripciones_visuales" ADD COLUMN IF NOT EXISTS "empresaId" uuid`);
+    await queryRunner.query(`ALTER TABLE "profesionales_responsables" ADD COLUMN IF NOT EXISTS "empresaId" uuid`);
+    await queryRunner.query(`ALTER TABLE "tipos_examen_prescripcion" ADD COLUMN IF NOT EXISTS "empresaId" uuid`);
 
     // Los registros existentes pertenecen a la empresa que ya operaba el sistema.
     // Si la empresa aún no fue inicializada, EmpresaService los completa al arrancar.
@@ -24,43 +24,58 @@ export class AddEmpresaToPrescripciones1720000000001 implements MigrationInterfa
     `);
 
     await queryRunner.query(`
-      ALTER TABLE "prescripciones_visuales"
-      ADD CONSTRAINT "FK_prescripciones_empresa" FOREIGN KEY ("empresaId")
-      REFERENCES "empresas"("id") ON DELETE SET NULL
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_prescripciones_empresa') THEN
+          ALTER TABLE "prescripciones_visuales"
+          ADD CONSTRAINT "FK_prescripciones_empresa" FOREIGN KEY ("empresaId")
+          REFERENCES "empresas"("id") ON DELETE SET NULL;
+        END IF;
+      END $$;
     `);
     await queryRunner.query(`
-      ALTER TABLE "profesionales_responsables"
-      ADD CONSTRAINT "FK_profesionales_responsables_empresa" FOREIGN KEY ("empresaId")
-      REFERENCES "empresas"("id") ON DELETE SET NULL
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_profesionales_responsables_empresa') THEN
+          ALTER TABLE "profesionales_responsables"
+          ADD CONSTRAINT "FK_profesionales_responsables_empresa" FOREIGN KEY ("empresaId")
+          REFERENCES "empresas"("id") ON DELETE SET NULL;
+        END IF;
+      END $$;
     `);
     await queryRunner.query(`
-      ALTER TABLE "tipos_examen_prescripcion"
-      ADD CONSTRAINT "FK_tipos_examen_prescripcion_empresa" FOREIGN KEY ("empresaId")
-      REFERENCES "empresas"("id") ON DELETE SET NULL
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_tipos_examen_prescripcion_empresa') THEN
+          ALTER TABLE "tipos_examen_prescripcion"
+          ADD CONSTRAINT "FK_tipos_examen_prescripcion_empresa" FOREIGN KEY ("empresaId")
+          REFERENCES "empresas"("id") ON DELETE SET NULL;
+        END IF;
+      END $$;
     `);
 
     await queryRunner.query(`ALTER TABLE "tipos_examen_prescripcion" DROP CONSTRAINT IF EXISTS "UQ_tipos_examen_prescripcion_codigo"`);
     await queryRunner.query(`
-      CREATE UNIQUE INDEX "UQ_tipos_examen_prescripcion_empresa_codigo"
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_tipos_examen_prescripcion_empresa_codigo"
       ON "tipos_examen_prescripcion" ("empresaId", "codigo") WHERE "empresaId" IS NOT NULL
     `);
     await queryRunner.query(`
-      CREATE UNIQUE INDEX "UQ_tipos_examen_prescripcion_codigo_global"
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_tipos_examen_prescripcion_codigo_global"
       ON "tipos_examen_prescripcion" ("codigo") WHERE "empresaId" IS NULL
     `);
 
     await queryRunner.query(`ALTER TABLE "prescripciones_visuales" DROP CONSTRAINT IF EXISTS "UQ_prescripciones_visuales_numero"`);
     await queryRunner.query(`
-      CREATE UNIQUE INDEX "UQ_prescripciones_visuales_empresa_numero"
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_prescripciones_visuales_empresa_numero"
       ON "prescripciones_visuales" ("empresaId", "numero") WHERE "empresaId" IS NOT NULL
     `);
     await queryRunner.query(`
-      CREATE UNIQUE INDEX "UQ_prescripciones_visuales_numero_sin_empresa"
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_prescripciones_visuales_numero_sin_empresa"
       ON "prescripciones_visuales" ("numero") WHERE "empresaId" IS NULL
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_prescripciones_visuales_empresa" ON "prescripciones_visuales" ("empresaId")`);
-    await queryRunner.query(`CREATE INDEX "IDX_profesionales_responsables_empresa" ON "profesionales_responsables" ("empresaId")`);
-    await queryRunner.query(`CREATE INDEX "IDX_tipos_examen_prescripcion_empresa" ON "tipos_examen_prescripcion" ("empresaId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_prescripciones_visuales_empresa" ON "prescripciones_visuales" ("empresaId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_profesionales_responsables_empresa" ON "profesionales_responsables" ("empresaId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tipos_examen_prescripcion_empresa" ON "tipos_examen_prescripcion" ("empresaId")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
