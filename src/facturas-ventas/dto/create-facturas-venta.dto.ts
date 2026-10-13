@@ -1,8 +1,38 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested, Min, IsDateString } from "class-validator";
 import { CreateItemsFacturasVentaDto } from "./create-items-facturas-venta.dto";
 import { Type } from "class-transformer";
 import { FormaPago, TipoFactura } from "../enums/factura-venta.enum";
 import { AplicarAnticipoDto } from "src/pagos/dto/aplicar-anticipo.dto";
+import { MedioPago } from "src/pagos/enums/pago.enum";
+
+export class AbonoInicialFacturaDto {
+    @IsNumber()
+    @Min(0.01, { message: 'El abono debe ser mayor que cero' })
+    monto: number;
+
+    @IsDateString()
+    @IsOptional()
+    fecha?: string;
+
+    @IsEnum(MedioPago)
+    medioPago: MedioPago;
+
+    @IsNumber()
+    @IsOptional()
+    metodoPagoId?: number;
+
+    @IsUUID()
+    @IsOptional()
+    cuentaBancariaId?: string;
+
+    @IsString()
+    @IsOptional()
+    referencia?: string;
+
+    @IsString()
+    @IsOptional()
+    notas?: string;
+}
 
 export class CreateFacturasVentaDto {
 
@@ -72,6 +102,12 @@ export class CreateFacturasVentaDto {
     @ValidateNested({ each: true })
     @Type(() => AplicarAnticipoDto)
     anticiposAsociados?: AplicarAnticipoDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AbonoInicialFacturaDto)
+    abonosIniciales?: AbonoInicialFacturaDto[];
 }
 
 

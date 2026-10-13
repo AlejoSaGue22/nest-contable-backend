@@ -66,6 +66,13 @@ export enum Permission {
   PRODUCT_PURCHASE_DELETE = 'product_purchase:delete',
   PRODUCT_PURCHASE_EXPORT = 'product_purchase:export',
 
+  // Management Operational
+  MANAGEMENT_OPERATIONAL_READ = 'management_operational:read',
+  MANAGEMENT_OPERATIONAL_ACCESS = 'management_operational:access',
+  MANAGEMENT_OPERATIONAL_SERVICE_CREATE = 'management_operational:service_create',
+  MANAGEMENT_OPERATIONAL_SERVICE_READ = 'management_operational:service_read',
+  MANAGEMENT_OPERATIONAL_SERVICE_UPDATE = 'management_operational:service_update',
+
   // Providers
   PROVIDER_CREATE = 'provider:create',
   PROVIDER_READ = 'provider:read',

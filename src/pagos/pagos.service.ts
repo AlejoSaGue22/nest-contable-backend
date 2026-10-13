@@ -198,8 +198,9 @@ export class PagosService {
         this.logger.log(`Asiento de cobro generado: ${asientoId}`);
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de cobro: ${asientoError.message}`);
-        // No se revierte la transacción por error de asiento — el pago se registra,
-        // pero el asientoId quedará '' para revisión manual.
+        // Un cobro sin asiento dejaría inconsistentes cartera y contabilidad.
+        // La transacción propietaria realizará rollback.
+        throw asientoError;
       }
 
       // ── 6. Generar número de comprobante ─────────────────────────────

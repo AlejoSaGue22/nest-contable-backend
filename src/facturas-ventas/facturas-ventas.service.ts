@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateFacturasVentaDto } from './dto/create-facturas-venta.dto';
+import { AbonoInicialFacturaDto, CreateFacturasVentaDto } from './dto/create-facturas-venta.dto';
 import { UpdateFacturasVentaDto } from './dto/update-facturas-venta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturasVenta } from './entities/facturas-venta.entity';
@@ -36,6 +36,7 @@ import { AnticipoAplicacion, AplicacionEstado } from 'src/pagos/entities/anticip
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
 import { EstadoNota, TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
+import { AbonoFacturaBorrador, AbonoBorradorEstado } from 'src/pagos/entities/abono-factura-borrador.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -59,6 +60,9 @@ export class FacturasVentasService {
 
     @InjectRepository(NotaAjuste)
     private readonly notaAjusteRepository: Repository<NotaAjuste>,
+
+    @InjectRepository(AbonoFacturaBorrador)
+    private readonly abonoBorradorRepository: Repository<AbonoFacturaBorrador>,
 
     private dataSource: DataSource,
 
@@ -114,7 +118,7 @@ export class FacturasVentasService {
         ? 'FE'
         : 'FV';
 
-      const { items, ...createDtoRest } = createFacturasVentaDto;
+      const { items, abonosIniciales, ...createDtoRest } = createFacturasVentaDto;
 
       const statusInvoice = createFacturasVentaDto.saveAsDraft === true
         ? InvoiceStatus.DRAFT
@@ -184,6 +188,22 @@ export class FacturasVentasService {
         }),
       );
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
+
+      if (statusInvoice === InvoiceStatus.DRAFT) {
+        await this.guardarAbonosBorrador(
+          queryRunner.manager,
+          savedInvoice.id,
+          createFacturasVentaDto.abonosIniciales ?? [],
+          createFacturasVentaDto.fecha,
+          userId,
+        );
+      }
+
+      this.validarAbonosIniciales(
+        createFacturasVentaDto,
+        total,
+        Math.max(0, total - montoAnticiposTotal),
+      );
 
       // BLOQUEO de inventario: sin stock no se emite (rollback total, nada a medias).
       if (statusInvoice !== InvoiceStatus.DRAFT) {
@@ -342,6 +362,16 @@ export class FacturasVentasService {
             );
           }
         }
+
+        if (createFacturasVentaDto.formaPago === FormaPago.CREDITO && createFacturasVentaDto.abonosIniciales?.length) {
+          await this.aplicarAbonos(
+            queryRunner,
+            savedInvoice.id,
+            createFacturasVentaDto.abonosIniciales,
+            userId,
+            createFacturasVentaDto.fecha,
+          );
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -363,6 +393,92 @@ export class FacturasVentasService {
       throw new InternalServerErrorException('Error al crear la factura');
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  private validarAbonosIniciales(dto: CreateFacturasVentaDto, totalFactura?: number, saldoDisponible?: number): void {
+    const abonos = dto.abonosIniciales ?? [];
+    if (!abonos.length) return;
+
+    if (dto.formaPago !== FormaPago.CREDITO) {
+      throw new BadRequestException('Los abonos iniciales solo están disponibles para facturas a crédito');
+    }
+
+    const totalAbonos = abonos.reduce((sum, abono) => sum + Number(abono.monto), 0);
+    if (totalAbonos <= 0) {
+      throw new BadRequestException('El valor del abono debe ser mayor que cero');
+    }
+    const total = totalFactura ?? Number(dto.total);
+    if (totalAbonos > total + 0.01) {
+      throw new BadRequestException('La suma de los abonos no puede superar el total de la factura');
+    }
+    if (saldoDisponible !== undefined && totalAbonos > saldoDisponible + 0.01) {
+      throw new BadRequestException('La suma de los abonos no puede superar el saldo disponible de la factura');
+    }
+
+    for (const abono of abonos) {
+      if (abono.medioPago !== MedioPago.CAJA && !abono.cuentaBancariaId) {
+        throw new BadRequestException('Debe especificar una cuenta bancaria para los abonos que no sean en efectivo');
+      }
+    }
+  }
+
+  private async guardarAbonosBorrador(
+    manager: any,
+    facturaVentaId: string,
+    abonos: AbonoInicialFacturaDto[],
+    fechaFactura: string,
+    userId: string,
+  ): Promise<void> {
+    for (const abono of abonos) {
+      const registro = manager.create(AbonoFacturaBorrador, {
+        facturaVentaId,
+        monto: Number(abono.monto),
+        fecha: new Date(abono.fecha || fechaFactura),
+        medioPago: abono.medioPago,
+        metodoPagoId: abono.metodoPagoId ?? null,
+        cuentaBancariaId: abono.cuentaBancariaId ?? null,
+        referencia: abono.referencia ?? null,
+        notas: abono.notas ?? null,
+        estado: AbonoBorradorEstado.PENDIENTE,
+        creadoPorId: userId,
+      });
+      await manager.save(AbonoFacturaBorrador, registro);
+    }
+  }
+
+  private async aplicarAbonos(
+    queryRunner: any,
+    facturaVentaId: string,
+    abonos: AbonoInicialFacturaDto[],
+    userId: string,
+    fechaFactura: string,
+  ): Promise<void> {
+    const registros = await queryRunner.manager.find(AbonoFacturaBorrador, {
+      where: { facturaVentaId, estado: AbonoBorradorEstado.PENDIENTE },
+      order: { createdAt: 'ASC' },
+    });
+    const lista = registros.length
+      ? registros
+      : abonos.map((abono) => ({ ...abono, fecha: abono.fecha || fechaFactura }));
+
+    for (const abono of lista) {
+      const cobro = {
+        monto: Number(abono.monto),
+        fecha: new Date(abono.fecha || fechaFactura).toISOString(),
+        medioPago: abono.medioPago,
+        metodoPagoId: abono.metodoPagoId ?? undefined,
+        cuentaBancariaId: abono.cuentaBancariaId ?? undefined,
+        referencia: abono.referencia ?? undefined,
+        notas: abono.notas ?? undefined,
+      };
+      await this.pagosService.registrarCobro(facturaVentaId, cobro, userId, queryRunner);
+
+      if ('id' in abono) {
+        await queryRunner.manager.update(AbonoFacturaBorrador, { id: abono.id }, {
+          estado: AbonoBorradorEstado.APLICADO,
+        });
+      }
     }
   }
 
@@ -588,6 +704,8 @@ export class FacturasVentasService {
         throw new BadRequestException(`No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`);
       }
 
+      this.validarAbonosIniciales(updateDto as CreateFacturasVentaDto, Number(updateDto.total ?? invoice.total));
+
       let subtotal = invoice.subtotal;
       let iva = invoice.iva;
       let descuento = invoice.descuento;
@@ -653,6 +771,17 @@ export class FacturasVentasService {
             await queryRunner.manager.save(AnticipoAplicacion, aplicacion);
           }
         }
+
+        await queryRunner.manager.delete(AbonoFacturaBorrador, { facturaVentaId: id });
+        if (updateDto.formaPago === FormaPago.CREDITO && updateDto.abonosIniciales?.length) {
+          await this.guardarAbonosBorrador(
+            queryRunner.manager,
+            id,
+            updateDto.abonosIniciales,
+            updateDto.fecha || invoice.fecha.toISOString(),
+            invoice.createdById,
+          );
+        }
       }
 
       this.logger.debug(
@@ -705,6 +834,11 @@ export class FacturasVentasService {
         throw new NotFoundException(`Factura con ID ${id} no encontrada`);
       }
 
+      const abonosPendientes = await this.abonoBorradorRepository.find({
+        where: { facturaVentaId: id, estado: AbonoBorradorEstado.PENDIENTE },
+        order: { createdAt: 'ASC' },
+      });
+      (invoice as any).abonosInicialesPendientes = abonosPendientes;
       return invoice;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -945,6 +1079,31 @@ export class FacturasVentasService {
             this.logger.error(`Error en cobro automático para factura electrónica: ${cobroError.message}`);
           }
         }
+
+        // Los abonos capturados mientras la FE estaba en borrador solo se
+        // convierten en cobros después de la aceptación de DIAN.
+        if (factura.formaPago === FormaPago.CREDITO) {
+          const qrAbonos = this.dataSource.createQueryRunner();
+          await qrAbonos.connect();
+          await qrAbonos.startTransaction();
+          try {
+            await this.aplicarAbonos(
+              qrAbonos,
+              factura.id,
+              [],
+              userId,
+              factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
+            );
+            await qrAbonos.commitTransaction();
+          } catch (abonoError) {
+            await qrAbonos.rollbackTransaction();
+            // La factura ya fue aceptada por DIAN; conservar los abonos
+            // pendientes permite reintentarlos sin perder la intención.
+            this.logger.error(`Abonos pendientes de FE ${factura.comprobante_completo}: ${abonoError.message}`);
+          } finally {
+            await qrAbonos.release();
+          }
+        }
         // Kardex best-effort: la FE aceptada descuenta stock (nunca bloquea).
         try {
           const itemsVenta = await this.dataSource.manager.find(ItemsFacturaVenta, {
@@ -1167,6 +1326,18 @@ export class FacturasVentasService {
         );
         this.logger.error(
           `Error generando asiento contable para factura estándar: ${asientoError.message}`,
+        );
+      }
+
+      // Los abonos capturados en el borrador se convierten en cobros reales
+      // únicamente después de emitir la factura estándar.
+      if (factura.formaPago === FormaPago.CREDITO) {
+        await this.aplicarAbonos(
+          queryRunner,
+          factura.id,
+          [],
+          userId,
+          factura.fecha ? new Date(factura.fecha).toISOString() : new Date().toISOString(),
         );
       }
 

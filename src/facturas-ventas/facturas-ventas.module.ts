@@ -15,10 +15,11 @@ import { PagosModule } from 'src/pagos/pagos.module';
 
 import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
 import { InventarioModule } from 'src/inventario/inventario.module';
+import { AbonoFacturaBorrador } from 'src/pagos/entities/abono-factura-borrador.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo, Impuesto, CuentasBancarias, NotaAjuste]),
+    TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo, Impuesto, CuentasBancarias, NotaAjuste, AbonoFacturaBorrador]),
     AsientosContablesModule,
     ApiDianModule,
     PagosModule,

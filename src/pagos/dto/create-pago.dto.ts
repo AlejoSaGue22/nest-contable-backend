@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsDateString, Min } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsDateString, Min } from 'class-validator';
 import { MedioPago } from '../enums/pago.enum';
 
 /**
@@ -7,7 +7,7 @@ import { MedioPago } from '../enums/pago.enum';
  * Idéntico a RegistrarCobroDto — se separa para poder extenderse independientemente.
  */
 export class RegistrarPagoDto {
-  @IsInt()
+  @IsNumber()
   @Min(1, { message: 'El monto debe ser mayor a 0' })
   monto: number;
 
@@ -42,7 +42,7 @@ export class RegistrarPagoDto {
  * Usado en POST /cxc/:facturaVentaId/cobro
  */
 export class RegistrarCobroDto {
-  @IsInt()
+  @IsNumber()
   @Min(1, { message: 'El monto debe ser mayor a 0' })
   monto: number;
 

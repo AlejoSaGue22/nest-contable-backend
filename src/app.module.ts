@@ -44,6 +44,7 @@ import { ComprobantesModule } from './comprobantes/comprobantes.module';
 import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
 import { EmpresaModule } from './settings/empresa/empresa.module';
 import { InventarioModule } from './inventario/inventario.module';
+import { PrescripcionesModule } from './prescripciones/prescripciones.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { InventarioModule } from './inventario/inventario.module';
     ActivosFijosModule,
     EmpresaModule,
     InventarioModule,
+    PrescripcionesModule,
   ],
   controllers: [],
 })
