@@ -17,12 +17,14 @@ WORKDIR /app
 RUN apk add --no-cache tini
 
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
-
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/data-source.ts ./data-source.ts
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY json-municipios.json ./
 
-RUN mkdir -p /app/storage/facturas /app/uploads/company
+RUN mkdir -p /app/storage/facturas /app/uploads/company /app/uploads/empresas
 
 ENV NODE_ENV=production
 ENV PORT=3000
