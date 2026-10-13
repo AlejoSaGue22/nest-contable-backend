@@ -23,6 +23,11 @@ export class PrescripcionFilterDto {
   profesionalId?: string;
 
   @IsOptional()
+  @Transform(({ value }) => (!value || value === 'undefined' || value === 'ALL' ? undefined : String(value).trim()))
+  @IsString()
+  tipoLente?: string;
+
+  @IsOptional()
   @Transform(({ value }) => (value && value !== 'undefined' ? Number(value) : undefined))
   page?: number;
 

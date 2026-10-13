@@ -10,8 +10,8 @@ import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
 export abstract class BaseTenantEntity {
   @ManyToOne(() => Empresa, { nullable: true })
   @JoinColumn({ name: 'empresaId' })
-  empresa: Empresa;
+  empresa: Empresa | null;
 
-  @Column({ nullable: true })
-  empresaId: string;
+  @Column('uuid', { nullable: true })
+  empresaId: string | null;
 }

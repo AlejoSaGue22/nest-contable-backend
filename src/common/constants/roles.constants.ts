@@ -69,9 +69,9 @@ export enum Permission {
   // Management Operational
   MANAGEMENT_OPERATIONAL_READ = 'management_operational:read',
   MANAGEMENT_OPERATIONAL_ACCESS = 'management_operational:access',
-  MANAGEMENT_OPERATIONAL_SERVICE_CREATE = 'management_operational:service_create',
-  MANAGEMENT_OPERATIONAL_SERVICE_READ = 'management_operational:service_read',
-  MANAGEMENT_OPERATIONAL_SERVICE_UPDATE = 'management_operational:service_update',
+  MANAGEMENT_OPERATIONAL_SERVICE_1 = 'management_operational:service_1',
+  MANAGEMENT_OPERATIONAL_SERVICE_2 = 'management_operational:service_2',
+  MANAGEMENT_OPERATIONAL_SERVICE_3 = 'management_operational:service_3',
 
   // Providers
   PROVIDER_CREATE = 'provider:create',
@@ -170,6 +170,12 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.FIXED_ASSETS_UPDATE,
     Permission.FIXED_ASSETS_DELETE,
     Permission.FIXED_ASSETS_DEPRECIATE,
+
+    Permission.MANAGEMENT_OPERATIONAL_READ,
+    Permission.MANAGEMENT_OPERATIONAL_ACCESS,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_1,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_2,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_3,
   ],
   [SystemRole.MANAGER]: [
     Permission.DASHBOARD_VIEW,
@@ -194,6 +200,12 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.FIXED_ASSETS_UPDATE,
     Permission.FIXED_ASSETS_DELETE,
     Permission.FIXED_ASSETS_DEPRECIATE,
+
+    Permission.MANAGEMENT_OPERATIONAL_READ,
+    Permission.MANAGEMENT_OPERATIONAL_ACCESS,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_1,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_2,
+    Permission.MANAGEMENT_OPERATIONAL_SERVICE_3,
   ],
   [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,

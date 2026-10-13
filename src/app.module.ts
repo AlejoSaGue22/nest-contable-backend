@@ -44,7 +44,7 @@ import { ComprobantesModule } from './comprobantes/comprobantes.module';
 import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
 import { EmpresaModule } from './settings/empresa/empresa.module';
 import { InventarioModule } from './inventario/inventario.module';
-import { PrescripcionesModule } from './prescripciones/prescripciones.module';
+import { PrescripcionesModule } from './gestion-operativa/prescripciones/prescripciones.module';
 
 @Module({
   imports: [
@@ -53,7 +53,7 @@ import { PrescripcionesModule } from './prescripciones/prescripciones.module';
       host: process.env.DB_HOST || 'localhost',
       port: Number(process.env.DB_PORT) || 5432,
       username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD?.toString() || 'MySecr3tPassWord@as2',
+      password: process.env.DB_PASSWORD?.toString() || '2201',
       database: process.env.DB_DATABASE || 'finance_tejo',
       autoLoadEntities: true,
       synchronize: process.env.NODE_ENV !== 'production', // ¡Nunca en true para producción!

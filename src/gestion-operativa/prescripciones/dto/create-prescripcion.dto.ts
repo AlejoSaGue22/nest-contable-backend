@@ -13,10 +13,8 @@ export class CreatePrescripcionDto {
   @IsOptional()
   profesionalId?: string;
 
-  @IsString()
-  @IsOptional()
-  @MaxLength(40)
-  tipoExamen?: string;
+  @IsUUID()
+  tipoExamenId: string;
 
   @IsEnum(TipoLentePrescripcion)
   tipoLente: TipoLentePrescripcion;

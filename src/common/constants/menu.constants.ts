@@ -146,7 +146,7 @@ export const DEFAULT_MENU_ITEMS = [
   },
   {
     title: 'Gestion Operativa',
-    icon: '<i class="fa-solid fa-glasses"></i>',
+    icon: '<i class="fa-solid fa-sitemap"></i>',
     route: '/panel/gestion-operativa',
     requiredPermission: Permission.MANAGEMENT_OPERATIONAL_READ,
     order: 4,

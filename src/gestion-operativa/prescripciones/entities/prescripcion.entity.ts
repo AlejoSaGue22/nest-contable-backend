@@ -1,6 +1,9 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
+import { ProfesionalResponsable } from './profesional-responsable.entity';
+import { TipoExamenPrescripcion } from './tipo-examen-prescripcion.entity';
 import { User } from 'src/users/entities/user.entity';
+import { BaseTenantEntity } from 'src/common/tenant/base-tenant.entity';
 
 export enum PrescripcionEstado {
   ACTIVA = 'ACTIVA',
@@ -13,15 +16,14 @@ export enum TipoLentePrescripcion {
   OTRO = 'OTRO',
 }
 
-/** Registro clínico de una valoración visual. Las mediciones por ojo son JSONB
- * para conservar una estructura explícita y permitir agregar parámetros sin
- * alterar la tabla principal. */
 @Entity({ name: 'prescripciones_visuales' })
-export class Prescripcion {
+@Index('UQ_prescripciones_visuales_empresa_numero', ['empresaId', 'numero'], { unique: true, where: '"empresaId" IS NOT NULL' })
+@Index('UQ_prescripciones_visuales_numero_sin_empresa', ['numero'], { unique: true, where: '"empresaId" IS NULL' })
+export class Prescripcion extends BaseTenantEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true, length: 30 })
+  @Column({ length: 30 })
   numero: string;
 
   @Column({ type: 'date' })
@@ -34,13 +36,21 @@ export class Prescripcion {
   @Column('uuid')
   clienteId: string;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => ProfesionalResponsable, { nullable: true })
   @JoinColumn({ name: 'profesionalId' })
-  profesional: User | null;
+  profesional: ProfesionalResponsable | null;
 
   @Column('uuid', { nullable: true })
   profesionalId: string | null;
 
+  @ManyToOne(() => TipoExamenPrescripcion, { nullable: false })
+  @JoinColumn({ name: 'tipoExamenId' })
+  tipoExamenRel: TipoExamenPrescripcion;
+
+  @Column('uuid')
+  tipoExamenId: string;
+
+  /** Código legado conservado para compatibilidad con prescripciones históricas. */
   @Column({ length: 40, default: 'VALORACION_VISUAL' })
   tipoExamen: string;
 

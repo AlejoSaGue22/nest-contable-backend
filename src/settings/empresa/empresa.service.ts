@@ -74,6 +74,8 @@ export class EmpresaService implements OnModuleInit {
       'centros_costo',
       'depreciaciones_activos_fijos',
       'anticipos',
+      'prescripciones_visuales',
+      'profesionales_responsables',
     ];
 
     for (const table of tables) {
