@@ -55,16 +55,6 @@ export const DEFAULT_MENU_ITEMS = [
         isVisible: true,
         metadata: { badge: null },
       },
-      {
-        title: 'Prescripciones visuales',
-        icon: 'visibility',
-        route: '/panel/ventas/prescripciones',
-        requiredPermission: Permission.INVOICE_READ,
-        order: 3,
-        isActive: true,
-        isVisible: true,
-        metadata: { badge: null },
-      },
     ],
   },
   {

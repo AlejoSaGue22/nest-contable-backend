@@ -56,7 +56,7 @@ export class ArticulosService {
     // Crear artículo con cuentas automáticas
     const articulo = this.articulosRepository.create({
       ...createArticuloDto,
-      isInventariable: createArticuloDto.isInventariable ? createArticuloDto.isInventariable : true,
+      isInventariable: createArticuloDto.isInventariable,
       tipo: categoria.tipo,
       impuestoId: createArticuloDto.impuesto,
       fullNameCategoria: categoria.nombre,
@@ -100,9 +100,8 @@ export class ArticulosService {
       });
     }
 
-    const page = options.offset || 1;
-    const limit = options.limit || 10;
-    const offset = (page - 1) * limit;
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? 10;
 
     queryBuilder.take(limit);
     queryBuilder.skip(offset);

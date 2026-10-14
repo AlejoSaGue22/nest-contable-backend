@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } f
 import { ClientesService } from './clientes.service';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
-import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { ClientesFilterDto } from './dto/clientes-filter.dto';
 import { AuthGuard } from 'src/auth/guard/auth/auth.guard';
 import { RolesGuard } from 'src/auth/guard/auth/roles.guard';
 import { Permissions } from 'src/auth/decorators/roles.decorator';
@@ -21,7 +21,7 @@ export class ClientesController {
 
     @Get()
     @Permissions(Permission.CLIENT_READ)
-    findAll(@Query() pagination: PaginatioDto) {
+    findAll(@Query() pagination: ClientesFilterDto) {
         return this.clientesService.findAll(pagination);
     }
 

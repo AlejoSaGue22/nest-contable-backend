@@ -3,9 +3,9 @@ import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cliente } from './entities/cliente.entity';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { validate as isUUID } from 'uuid';
-import { PaginatioDto } from 'src/common/dtos/pagination.dto';
+import { ClientesFilterDto } from './dto/clientes-filter.dto';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
@@ -34,27 +34,53 @@ export class ClientesService {
     return this.findOne(saved.id);
   }
 
-  async findAll(paginationDto: PaginatioDto) {
-
-    const page = paginationDto.offset || 1;
-    const limit = paginationDto.limit || 10;
-    const offset = (page - 1) * limit;
-    const { search } = paginationDto;
-
+  async findAll(paginationDto: ClientesFilterDto) {
+    const offset = paginationDto.offset ?? 0;
+    const limit = paginationDto.limit ?? 10;
+    const search = paginationDto.search?.trim();
     const queryBuilder = this.clientesRepository.createQueryBuilder('cliente');
 
     if (search) {
-      queryBuilder.andWhere('cliente.nombre LIKE :search', {
-        search: `%${search}%`
-      });
+      const normalizedSearch = search.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const term = `%${normalizedSearch}%`;
+      const textColumns = [
+        'cliente.nombre',
+        'cliente.apellido',
+        "CONCAT(COALESCE(cliente.nombre, ''), ' ', COALESCE(cliente.apellido, ''))",
+        'cliente.razonSocial',
+        'cliente.numeroDocumento',
+        'cliente.dv',
+        'tipoDocumentoRel.abreviatura',
+      ];
+
+      queryBuilder.andWhere(new Brackets((searchQuery) => {
+        textColumns.forEach((column, index) => {
+          const expression = `TRANSLATE(LOWER(COALESCE(${column}, '')), 'áéíóúüñ', 'aeiouun') LIKE :term`;
+          if (index === 0) searchQuery.where(expression, { term });
+          else searchQuery.orWhere(expression, { term });
+        });
+
+        if (/^[\d\s.+()\-]+$/.test(search)) {
+          const digits = search.replace(/\D/g, '');
+          if (digits.length >= 3) {
+            const digitsTerm = `%${digits}%`;
+            searchQuery
+              .orWhere("REGEXP_REPLACE(COALESCE(cliente.numeroDocumento, ''), '[^0-9]', '', 'g') LIKE :digitsTerm", { digitsTerm });
+          }
+        }
+      }));
     }
 
-    queryBuilder.take(limit);
-    queryBuilder.skip(offset);
-    queryBuilder.orderBy('cliente.id', 'DESC');
+    if (paginationDto.estado) {
+      queryBuilder.andWhere('cliente.isActive = :isActive', { isActive: paginationDto.estado === 'ACTIVO' });
+    }
+
     queryBuilder.leftJoinAndSelect('cliente.tipoDocumentoRel', 'tipoDocumentoRel');
     queryBuilder.leftJoinAndSelect('cliente.ciudadRel', 'ciudadRel');
     queryBuilder.leftJoinAndSelect('cliente.cuentaContable', 'cuentaContable');
+    queryBuilder.take(limit);
+    queryBuilder.skip(offset);
+    queryBuilder.orderBy('cliente.id', 'DESC');
 
     const clientes = await queryBuilder.getMany();
     const totalClients = await queryBuilder.getCount();
