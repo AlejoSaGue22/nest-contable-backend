@@ -40,11 +40,11 @@ export interface AdvertenciaInventario {
  * - AJUSTE manual (cargas iniciales, conteos) + carga bulk de saldos iniciales.
  * - Reversa al anular (espejo del movimiento original, por artículo).
  *
- * Política de inventario: BLOQUEO en registro/emisión de documentos con
- * SALIDA (ventas + NC de compra) si no hay stock. Las reversas por anulación
- * y los ajustes manuales solo alertan (nunca dejan un documento a medias).
+ * Política de inventario: las ventas pueden dejar el stock negativo y generan
+ * advertencias; las validaciones de disponibilidad se conservan para otros
+ * documentos de salida, como devoluciones a proveedor. Las reversas por
+ * anulación y los ajustes manuales solo alertan.
  * Sin costo promedio (solo cantidades + auditoría).
->>>>>>> fd653afbc4c13d933b49f1a7364aaa1f61af5ebc
  * Todo movimiento es idempotente por (documentoTipo, documentoId).
  */
 @Injectable()
@@ -66,12 +66,22 @@ export class InventarioService {
     lineas: LineaInventario[],
     userId: string,
   ): Promise<ResultadoKardex> {
+    // Si la emisión ya abrió una transacción, se reutiliza. Después de aceptar
+    // una factura electrónica se crea una transacción propia para serializar
+    // las salidas y guardar el lote completo del documento de forma atómica.
+    if (!manager.queryRunner?.isTransactionActive) {
+      return this.dataSource.transaction((transactionalManager) =>
+        this.registrarSalidasVenta(transactionalManager, facturaId, lineas, userId),
+      );
+    }
     if (await this.yaRegistrado(manager, DocumentoInventario.FACTURA_VENTA, facturaId)) {
       return { movs: 0, negativos: [] };
     }
     let movs = 0;
     const negativos: AlertaNegativo[] = [];
-    for (const l of lineas) {
+    // Orden estable de locks para reducir deadlocks en facturas con varios artículos.
+    const lineasOrdenadas = [...(lineas ?? [])].sort((a, b) => String(a.articuloId ?? '').localeCompare(String(b.articuloId ?? '')));
+    for (const l of lineasOrdenadas) {
       if (!(Number(l.cantidad) > 0)) continue;
       const r = await this.mover(manager, l.articuloId, TipoMovimientoInventario.SALIDA, Number(l.cantidad),
         DocumentoInventario.FACTURA_VENTA, facturaId, `Venta ${facturaId}`, userId);
@@ -121,12 +131,20 @@ export class InventarioService {
     numero: string,
     userId: string,
   ): Promise<ResultadoKardex> {
+    // La compra y su Kardex deben actualizar el saldo en un único lote serializado.
+    if (!manager.queryRunner?.isTransactionActive) {
+      return this.dataSource.transaction((transactionalManager) =>
+        this.registrarEntradasCompra(transactionalManager, facturaId, lineas, numero, userId),
+      );
+    }
     if (await this.yaRegistrado(manager, DocumentoInventario.FACTURA_COMPRA, facturaId)) {
       return { movs: 0, negativos: [] };
     }
     let movs = 0;
     const negativos: AlertaNegativo[] = [];
-    for (const l of lineas) {
+    // Mismo orden de locks que las ventas para movimientos con varios artículos.
+    const lineasOrdenadas = [...(lineas ?? [])].sort((a, b) => String(a.articuloId ?? '').localeCompare(String(b.articuloId ?? '')));
+    for (const l of lineasOrdenadas) {
       if (!l.articuloId) continue; // líneas solo-contables (cuentaContableId) no mueven stock
       if (!(Number(l.cantidad) > 0)) continue;
       const r = await this.mover(manager, l.articuloId, TipoMovimientoInventario.ENTRADA, Number(l.cantidad),
@@ -351,10 +369,9 @@ export class InventarioService {
   }
 
   /**
-   * BLOQUEO de inventario: valida que haya stock suficiente para las SALIDAs
-   * del documento ANTES de registrar/emitir. Agrupa por artículo, omite
-   * servicios y líneas sin artículo. Lanza BadRequestException detallando
-   * los faltantes (el llamador hace rollback: nada se mueve a medias).
+   * Valida que haya stock suficiente para documentos de salida que deben
+   * bloquearse (por ejemplo, devoluciones a proveedor). Las ventas permiten
+   * saldos negativos y no deben invocar este método.
    */
   async validarDisponibilidad(
     manager: EntityManager,
@@ -401,7 +418,7 @@ export class InventarioService {
   static alertasNegativo(kardex: ResultadoKardex | null | undefined): AdvertenciaInventario[] {
     return (kardex?.negativos ?? []).map((n) => ({
       codigo: n.codigo,
-      mensaje: `Sin stock suficiente: ${n.codigo} quedó en ${n.saldoDespues}. Revise saldos iniciales.`,
+      mensaje: `El stock de ${n.codigo} quedó en ${n.saldoDespues}. Registre una compra o entrada de inventario para compensarlo.`,
     }));
   }
 
@@ -490,7 +507,18 @@ export class InventarioService {
     userId: string,
   ): Promise<{ mov: MovimientoInventario; codigo: string } | null> {
     if (!articuloId) return null;
-    const articulo = await manager.findOne(Articulo, { where: { id: articuloId } });
+    // Todo cambio de stock ocurre bajo una transacción y bloquea la fila del
+    // artículo. Así varias ventas/compras simultáneas no leen el mismo saldo
+    // y pisan la actualización de la otra.
+    if (!manager.queryRunner?.isTransactionActive) {
+      return this.dataSource.transaction((transactionalManager) =>
+        this.mover(transactionalManager, articuloId, tipo, cantidad, documentoTipo, documentoId, motivo, userId),
+      );
+    }
+    const articulo = await manager.findOne(Articulo, {
+      where: { id: articuloId },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!articulo) {
       this.logger.warn(`Inventario: artículo ${articuloId} no encontrado, se omite`);
       return null;
@@ -503,7 +531,7 @@ export class InventarioService {
     const nuevoStock = MathUtil.sum(stockActual, delta);
     if (nuevoStock < 0) {
       this.logger.warn(
-        `Inventario: ${articulo.codigo} queda en negativo (${nuevoStock}). Cargue saldos iniciales con ajuste manual.`,
+        `Inventario: ${articulo.codigo} queda en negativo (${nuevoStock}). Una compra o entrada posterior compensará el saldo.`,
       );
     }
     await manager.update(Articulo, { id: articuloId }, { stock: nuevoStock } as any);

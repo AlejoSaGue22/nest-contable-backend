@@ -16,15 +16,18 @@ import { PagosModule } from 'src/pagos/pagos.module';
 import { ParametrizacionContableModule } from 'src/settings/parametrizacion-contable/parametrizacion-contable.module';
 import { InventarioModule } from 'src/inventario/inventario.module';
 import { AbonoFacturaBorrador } from 'src/pagos/entities/abono-factura-borrador.entity';
+import { FinanciadorasModule } from 'src/financiadoras/financiadoras.module';
+import { Vendedor } from 'src/settings/vendedores/entities/vendedor.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo, Impuesto, CuentasBancarias, NotaAjuste, AbonoFacturaBorrador]),
+    TypeOrmModule.forFeature([FacturasVenta, ItemsFacturaVenta, Cliente, Articulo, Impuesto, CuentasBancarias, NotaAjuste, AbonoFacturaBorrador, Vendedor]),
     AsientosContablesModule,
     ApiDianModule,
     PagosModule,
     ParametrizacionContableModule,
-    InventarioModule
+    InventarioModule,
+    FinanciadorasModule,
   ],
   controllers: [FacturasVentasController],
   providers: [FacturasVentasService],

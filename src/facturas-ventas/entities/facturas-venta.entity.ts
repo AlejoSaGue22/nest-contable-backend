@@ -10,6 +10,8 @@ import { PaymentStatus } from "src/pagos/enums/pago.enum";
 import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from "../enums/factura-venta.enum";
 import { ColumnNumericTransformer } from "src/common/transformers/column-numeric.transformer";
 import { CuentasBancarias } from "src/cuentas-bancarias/entities/cuentas-bancaria.entity";
+import { Financiadora } from "src/financiadoras/entities/financiadora.entity";
+import { Vendedor } from "src/settings/vendedores/entities/vendedor.entity";
 
 @Entity('facturas_venta')
 export class FacturasVenta {
@@ -45,7 +47,11 @@ export class FacturasVenta {
   @Column({ type: 'enum', enum: DianStatus, default: DianStatus.PENDING })
   dianStatus: DianStatus;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @ManyToOne(() => Vendedor, { nullable: true })
+  @JoinColumn({ name: 'vendedor', referencedColumnName: 'id' })
+  vendedorRel: Vendedor | null;
+
+  @Column({ type: 'uuid', nullable: true })
   vendedor: string | null;
 
   @ManyToOne(() => CanalVenta)
@@ -57,6 +63,16 @@ export class FacturasVenta {
 
   @Column({ type: 'enum', enum: FormaPago, default: FormaPago.CONTADO })
   formaPago: FormaPago;
+
+  @Column({ type: 'boolean', default: false })
+  esFinanciacionExterna: boolean;
+
+  @ManyToOne(() => Financiadora, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'financiadoraId' })
+  financiadora: Financiadora | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  financiadoraId: string | null;
 
   @ManyToOne(() => MetodoPago)
   @JoinColumn({ name: 'metodoPago', referencedColumnName: 'codigo' })

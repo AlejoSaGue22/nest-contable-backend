@@ -60,6 +60,14 @@ export class CreateFacturasVentaDto {
     @IsNotEmpty()
     formaPago: FormaPago;
 
+    @IsBoolean()
+    @IsOptional()
+    esFinanciacionExterna?: boolean;
+
+    @IsUUID()
+    @IsOptional()
+    financiadoraId?: string | null;
+
     @IsString()
     @IsOptional()
     metodoPago?: string;

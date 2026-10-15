@@ -37,6 +37,7 @@ import { ParametrizacionContableService } from 'src/settings/parametrizacion-con
 import { NotaAjuste } from 'src/notas-ajuste/entities/notas-ajuste.entity';
 import { EstadoNota, TipoNota } from 'src/notas-ajuste/enums/notas-ajuste.enum';
 import { AbonoFacturaBorrador, AbonoBorradorEstado } from 'src/pagos/entities/abono-factura-borrador.entity';
+import { Financiadora } from 'src/financiadoras/entities/financiadora.entity';
 
 @Injectable()
 export class FacturasVentasService {
@@ -110,6 +111,22 @@ export class FacturasVentasService {
         createFacturasVentaDto.metodoPago = metodoPago.codigo;
       }
 
+      const esFinanciacionExterna = createFacturasVentaDto.formaPago === FormaPago.CREDITO
+        && createFacturasVentaDto.esFinanciacionExterna === true;
+      let financiadoraId: string | null = null;
+      if (esFinanciacionExterna) {
+        if (!createFacturasVentaDto.financiadoraId) {
+          throw new BadRequestException('Seleccione la entidad financiadora de la venta');
+        }
+        const financiadora = await queryRunner.manager.findOne(Financiadora, {
+          where: { id: createFacturasVentaDto.financiadoraId, activo: true },
+        });
+        if (!financiadora) {
+          throw new NotFoundException('La financiadora seleccionada no existe o está inactiva');
+        }
+        financiadoraId = financiadora.id;
+      }
+
       const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
@@ -160,6 +177,8 @@ export class FacturasVentasService {
       const facturaVenta = queryRunner.manager.create(FacturasVenta, {
         ...createDtoRest,
         fechaVencimiento: createFacturasVentaDto.fechaVencimiento || null,
+        esFinanciacionExterna,
+        financiadoraId,
         metodoPago: createFacturasVentaDto.metodoPago || null,
         cuentaBancariaId: createFacturasVentaDto.cuentaBancariaId || null,
         vendedor: createFacturasVentaDto.vendedor || null,
@@ -204,15 +223,6 @@ export class FacturasVentasService {
         total,
         Math.max(0, total - montoAnticiposTotal),
       );
-
-      // BLOQUEO de inventario: sin stock no se emite (rollback total, nada a medias).
-      if (statusInvoice !== InvoiceStatus.DRAFT) {
-        await this.inventarioService.validarDisponibilidad(
-          queryRunner.manager,
-          itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
-          `venta ${savedInvoice.comprobante_completo || 'nueva'}`,
-        );
-      }
 
       // ⭐ Procesar aplicaciones de anticipos
       if (createFacturasVentaDto.anticiposAsociados && createFacturasVentaDto.anticiposAsociados.length > 0) {
@@ -495,7 +505,9 @@ export class FacturasVentasService {
         .leftJoinAndSelect('invoice.createdBy', 'createdBy')
         .leftJoinAndSelect('invoice.cuentaBancaria', 'cuentaBancaria')
         .leftJoinAndSelect('invoice.canalVentaRel', 'canalVentaRel')
+        .leftJoinAndSelect('invoice.vendedorRel', 'vendedorRel')
         .leftJoinAndSelect('invoice.metodoPagoRel', 'metodoPagoRel')
+        .leftJoinAndSelect('invoice.financiadora', 'financiadora')
         .where('1=1');
 
       // Filtros
@@ -704,6 +716,29 @@ export class FacturasVentasService {
         throw new BadRequestException(`No se pueden modificar facturas en estado ${invoice.obtenerEstadoLegible()}`);
       }
 
+      const formaPagoActualizada = updateDto.formaPago ?? invoice.formaPago;
+      let esFinanciacionExterna = updateDto.esFinanciacionExterna ?? invoice.esFinanciacionExterna ?? false;
+      let financiadoraId: string | null = updateDto.financiadoraId !== undefined
+        ? updateDto.financiadoraId ?? null
+        : invoice.financiadoraId ?? null;
+      if (formaPagoActualizada !== FormaPago.CREDITO) {
+        esFinanciacionExterna = false;
+        financiadoraId = null;
+      } else if (esFinanciacionExterna) {
+        if (!financiadoraId) {
+          throw new BadRequestException('Seleccione la entidad financiadora de la venta');
+        }
+        const financiadora = await queryRunner.manager.findOne(Financiadora, {
+          where: { id: financiadoraId, activo: true },
+        });
+        if (!financiadora) {
+          throw new NotFoundException('La financiadora seleccionada no existe o está inactiva');
+        }
+        financiadoraId = financiadora.id;
+      } else {
+        financiadoraId = null;
+      }
+
       this.validarAbonosIniciales(updateDto as CreateFacturasVentaDto, Number(updateDto.total ?? invoice.total));
 
       let subtotal = invoice.subtotal;
@@ -738,7 +773,9 @@ export class FacturasVentasService {
         canalVenta: Number(updateDto.canalVenta) || invoice.canalVenta,
         vendedor: updateDto.vendedor || null,
         fecha: updateDto.fecha,
-        formaPago: updateDto.formaPago,
+        formaPago: formaPagoActualizada,
+        esFinanciacionExterna,
+        financiadoraId,
         metodoPago: updateDto.metodoPago || null,
         cuentaBancariaId: updateDto.cuentaBancariaId || null,
         fechaVencimiento: updateDto.fechaVencimiento || null,
@@ -824,9 +861,11 @@ export class FacturasVentasService {
           'items.impuestoRel',
           'metodoPagoRel',
           'canalVentaRel',
+          'vendedorRel',
           'createdBy',
           'cuentaBancaria',
           'cuentaBancaria.banco',
+          'financiadora',
         ],
       });
 
@@ -894,17 +933,6 @@ export class FacturasVentasService {
           intentosEnvio: (factura.intentosEnvio ?? 0) + 1,
         },
       );
-      // BLOQUEO de inventario ANTES de enviar a DIAN: sin stock no se emite
-      // (una FE aceptada por DIAN ya no se puede frenar, así que se valida aquí).
-      const itemsEmitir = await this.dataSource.manager.find(ItemsFacturaVenta, {
-        where: { facturaId: id },
-      });
-      await this.inventarioService.validarDisponibilidad(
-        this.dataSource.manager,
-        itemsEmitir.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
-        `venta ${factura.comprobante_completo}`,
-      );
-
       // 2. ✅ ENVIAR A FACTUS/DIAN (REAL)
       this.logger.log('📤 Enviando factura a Factus...');
       const respuesta = await this.factusService.crearYValidarFactura(factura, numberFactura);
@@ -1200,13 +1228,6 @@ export class FacturasVentasService {
       if (factura.status !== InvoiceStatus.DRAFT) {
         throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
       }
-
-      // BLOQUEO de inventario en la misma tx: sin stock no se emite (rollback total).
-      await this.inventarioService.validarDisponibilidad(
-        queryRunner.manager,
-        (factura.items ?? []).map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
-        `venta ${factura.comprobante_completo || 'estándar'}`,
-      );
 
       const numberFactura = await this.generateInvoiceNumber();
       const prefijo = 'FV';

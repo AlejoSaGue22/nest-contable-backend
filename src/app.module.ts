@@ -45,6 +45,7 @@ import { ActivosFijosModule } from './activos-fijos/activos-fijos.module';
 import { EmpresaModule } from './settings/empresa/empresa.module';
 import { InventarioModule } from './inventario/inventario.module';
 import { PrescripcionesModule } from './gestion-operativa/prescripciones/prescripciones.module';
+import { FinanciadorasModule } from './financiadoras/financiadoras.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { PrescripcionesModule } from './gestion-operativa/prescripciones/prescri
     EmpresaModule,
     InventarioModule,
     PrescripcionesModule,
+    FinanciadorasModule,
   ],
   controllers: [],
 })
