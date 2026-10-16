@@ -204,6 +204,7 @@ export class FacturasVentasService {
         queryRunner.manager.create(ItemsFacturaVenta, {
           ...item,
           facturaId: savedInvoice.id,
+          description: item.description || '',
         }),
       );
       await queryRunner.manager.save(ItemsFacturaVenta, itemsToSave);
@@ -333,20 +334,21 @@ export class FacturasVentasService {
           });
         }
 
-        // Kardex best-effort: la venta emitida descuenta stock (nunca bloquea).
-        // Política solo-alertar: los negativos se devuelven como advertencias.
+        // El kardex forma parte de la misma transacción de la factura. Los
+        // saldos negativos son permitidos por política y se devuelven como
+        // advertencia, pero un fallo técnico del kardex sí debe abortar toda
+        // la operación para no dejar factura/asiento sin movimiento de stock.
         if (statusInvoice !== InvoiceStatus.DRAFT) {
-          await this.inventarioService.registrarSalidasVenta(
+          const kardex = await this.inventarioService.registrarSalidasVenta(
             queryRunner.manager,
             savedInvoice.id,
             itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
             userId,
-          ).then((kardex: ResultadoKardex) => {
-            const alertas = InventarioService.alertasNegativo(kardex);
-            if (alertas.length) {
-              advertenciasInventario.push(...alertas);
-            }
-          }).catch((invError) => this.logger.error(`Error kardex venta ${savedInvoice.comprobante_completo}: ${invError.message}`));
+          );
+          const alertas = InventarioService.alertasNegativo(kardex);
+          if (alertas.length) {
+            advertenciasInventario.push(...alertas);
+          }
         }
 
         // Cobro automático si es contado y estándar (dentro de la misma transacción)

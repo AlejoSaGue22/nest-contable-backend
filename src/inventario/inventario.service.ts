@@ -515,10 +515,17 @@ export class InventarioService {
         this.mover(transactionalManager, articuloId, tipo, cantidad, documentoTipo, documentoId, motivo, userId),
       );
     }
-    const articulo = await manager.findOne(Articulo, {
-      where: { id: articuloId },
-      lock: { mode: 'pessimistic_write' },
-    });
+    // No usar manager.findOne() aquí: Articulo tiene relaciones eager y
+    // TypeORM puede generar LEFT JOINs. PostgreSQL rechaza FOR UPDATE cuando
+    // intenta bloquear el lado nullable de uno de esos joins
+    // ("FOR UPDATE cannot be applied to the nullable side of an outer join").
+    // Este query bloquea únicamente la fila de artículos, que es la que se
+    // modifica, y evita cargar relaciones innecesarias durante el kardex.
+    const articulo = await manager
+      .createQueryBuilder(Articulo, 'articulo')
+      .where('articulo.id = :articuloId', { articuloId })
+      .setLock('pessimistic_write')
+      .getOne();
     if (!articulo) {
       this.logger.warn(`Inventario: artículo ${articuloId} no encontrado, se omite`);
       return null;
