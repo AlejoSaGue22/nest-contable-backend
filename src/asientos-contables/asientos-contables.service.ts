@@ -609,6 +609,73 @@ export class AsientosContablesService {
     await queryRunner.startTransaction();
 
     try {
+      // ── 1. Reversa exacta del asiento original si existe ──────────────────────────
+      if (gasto.numero) {
+        const asientoOriginal = await queryRunner.manager.findOne(AsientoContable, {
+          where: [
+            { referencia: gasto.numero, tipo: TipoAsiento.GASTO },
+            { referencia: gasto.numero, tipo: 'DOCUMENTO_SOPORTE' as any },
+          ],
+          relations: [
+            'detalles',
+            'detalles.cuenta',
+            'detalles.proveedor',
+            'detalles.cliente',
+            'detalles.impuesto',
+            'detalles.centroCosto',
+          ],
+          order: { createdAt: 'DESC' },
+        });
+
+        if (asientoOriginal && asientoOriginal.detalles && asientoOriginal.detalles.length > 0) {
+          const detallesReverso: DetalleAsiento[] = asientoOriginal.detalles.map((d) => ({
+            cuentaId: d.cuentaId,
+            debito: Number(d.credito),
+            credito: Number(d.debito),
+            descripcion: d.descripcion?.toUpperCase().startsWith('ANULACIÓN')
+              ? d.descripcion
+              : `ANULACIÓN ${d.descripcion || ''}`.trim(),
+            proveedorId: d.proveedorId || gasto.proveedorId || undefined,
+            clienteId: d.clienteId || undefined,
+            centroCostoId: d.centroCostoId || undefined,
+            impuestoId: d.impuestoId || undefined,
+            baseGravable: d.baseGravable || undefined,
+            porcentajeImpuesto: d.porcentajeImpuesto || undefined,
+            tipoImpuesto: d.tipoImpuesto || undefined,
+            documentoReferencia: gasto.numero || d.documentoReferencia,
+          }));
+
+          const asientoReverso = await this.crearAsiento(
+            {
+              tipo: TipoAsiento.ANULACION_FACTURA_COMPRA,
+              fecha: new Date(),
+              referencia: gasto.numero,
+              descripcion: `Asiento ANULACIÓN - Compra ${gasto.numero}`,
+              detalles: detallesReverso,
+              userId,
+            },
+            queryRunner,
+          );
+
+          // Si hay un comprobante contable asociado al asiento original, anularlo
+          const comprobante = await queryRunner.manager.findOne(ComprobanteContable, {
+            where: { asientoId: asientoOriginal.id },
+          });
+          if (comprobante) {
+            comprobante.estado = EstadoComprobante.ANULADO;
+            comprobante.fechaAnulacion = new Date();
+            comprobante.anuladoPorId = userId;
+            comprobante.motivoAnulacion = `Anulado automáticamente por anulación de factura de compra`;
+            await queryRunner.manager.save(ComprobanteContable, comprobante);
+          }
+
+          await queryRunner.commitTransaction();
+          this.logger.log(`Asiento ANULACION_COMPRA generado (reversa exacta #${asientoOriginal.numero}): ${asientoReverso.numero}`);
+          return asientoReverso;
+        }
+      }
+
+      // ── 2. Fallback: Recalcular si no existe el asiento original ───────────────────
       const detalles: DetalleAsiento[] = [];
 
       // ── Agrupar Gastos por artículo (se necesita para determinar la cuenta de CxP y para las líneas de crédito) ──
@@ -624,19 +691,32 @@ export class AsientosContablesService {
             where: { id: item.articuloId },
             relations: [
               'categoriaArticulo',
+              'categoriaArticulo.cuentaInventario',
+              'categoriaArticulo.cuentaCosto',
               'categoriaArticulo.cuentaPrincipal',
               'impuestoRel',
               'impuestoRel.cuentaCompras',
             ],
           });
 
-          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-            throw new Error(
-              `Artículo ${item.articuloId} no tiene cuenta contable principal configurada en su categoría`,
-            );
+          const categoria = articulo?.categoriaArticulo;
+          if (!articulo || !categoria) {
+            throw new Error(`Artículo ${item.articuloId} no encontrado o no tiene categoría configurada`);
           }
 
-          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          if (articulo.isInventariable && categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaCosto) {
+            cuentaId = categoria.cuentaCostoId || categoria.cuentaCosto.id;
+          } else if (categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaPrincipal) {
+            cuentaId = categoria.cuentaPrincipalId || categoria.cuentaPrincipal.id;
+          } else {
+            throw new Error(
+              `Artículo ${item.articuloId} no tiene cuenta contable configurada en su categoría`,
+            );
+          }
         } else if (item.cuentaContableId) {
           cuentaId = item.cuentaContableId;
         }
@@ -644,7 +724,7 @@ export class AsientosContablesService {
         if (cuentaId) {
           gastosAgrupados.set(
             cuentaId,
-            (gastosAgrupados.get(cuentaId) ?? 0) + item.valorSubtotal,
+            (gastosAgrupados.get(cuentaId) ?? 0) + Number(item.valorSubtotal),
           );
         }
 
@@ -661,11 +741,11 @@ export class AsientosContablesService {
           } else if (articulo?.impuestoRel?.cuentaComprasId) {
             cuentaIvaId = articulo.impuestoRel.cuentaComprasId;
           } else {
-            cuentaIvaId = '1355';
+            cuentaIvaId = (await this.obtenerCuentaPorCodigo('1355')).id;
           }
           ivaAgrupados.set(
             cuentaIvaId,
-            (ivaAgrupados.get(cuentaIvaId) ?? 0) + item.valorIva,
+            (ivaAgrupados.get(cuentaIvaId) ?? 0) + Number(item.valorIva),
           );
         }
       }
@@ -711,10 +791,24 @@ export class AsientosContablesService {
 
       detalles.push({
         cuentaId: cuentaDebito.id,
-        debito: gasto.total,
+        debito: Number(gasto.total),
         credito: 0,
         descripcion: descDebito,
+        proveedorId: gasto.proveedorId,
       });
+
+      // ── Débito: reversa de Descuentos en compras (si aplica) ──────────
+      const descuento = Number(gasto.descuento) || 0;
+      if (descuento > 0) {
+        const cuentaDescuento = await this.obtenerCuentaPorCodigo('421015');
+        detalles.push({
+          cuentaId: cuentaDescuento.id,
+          debito: descuento,
+          credito: 0,
+          descripcion: 'ANULACIÓN - Descuento obtenido en compra',
+          proveedorId: gasto.proveedorId,
+        });
+      }
 
       // ── Crédito: reversa de Gastos agrupados por artículo ────────────
       // Lo que originalmente fue DÉBITO ahora es CRÉDITO
@@ -726,7 +820,8 @@ export class AsientosContablesService {
           cuentaId,
           debito: 0,
           credito: valor,
-          descripcion: `ANULACIÓN - Gasto ${cuenta?.nombre}`,
+          descripcion: `ANULACIÓN - Gasto ${cuenta?.nombre || ''}`.trim(),
+          proveedorId: gasto.proveedorId,
         });
       }
 
@@ -737,6 +832,7 @@ export class AsientosContablesService {
           debito: 0,
           credito: valor,
           descripcion: 'ANULACIÓN - IVA descontable en compra',
+          proveedorId: gasto.proveedorId,
         });
       }
 
@@ -753,7 +849,7 @@ export class AsientosContablesService {
       );
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Asiento ANULACION_COMPRA generado: ${asiento.numero}`);
+      this.logger.log(`Asiento ANULACION_COMPRA generado (fallback): ${asiento.numero}`);
       return asiento;
 
     } catch (error) {
@@ -1794,19 +1890,31 @@ export class AsientosContablesService {
             where: { id: item.articuloId },
             relations: [
               'categoriaArticulo',
+              'categoriaArticulo.cuentaInventario',
+              'categoriaArticulo.cuentaCosto',
               'categoriaArticulo.cuentaPrincipal',
               'impuestoRel',
               'impuestoRel.cuentaCompras',
             ],
           });
 
-          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-            throw new Error(
-              `Artículo no tiene cuenta contable principal configurada`,
-            );
+          const categoria = articulo?.categoriaArticulo;
+          if (!articulo || !categoria) {
+            throw new Error(`Artículo no encontrado o no tiene categoría configurada`);
           }
 
-          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          if (articulo.isInventariable && categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaCosto) {
+            cuentaId = categoria.cuentaCostoId || categoria.cuentaCosto.id;
+          } else if (categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaPrincipal) {
+            cuentaId = categoria.cuentaPrincipalId || categoria.cuentaPrincipal.id;
+          } else {
+            throw new Error(`Artículo no tiene cuenta contable configurada`);
+          }
+
           cuentaIvaFallbackId = articulo.impuestoRel?.cuentaComprasId;
         } else {
           continue;
@@ -1833,7 +1941,7 @@ export class AsientosContablesService {
           } else if (cuentaIvaFallbackId) {
             cuentaIvaId = cuentaIvaFallbackId;
           } else {
-            cuentaIvaId = '1355';
+            cuentaIvaId = (await this.obtenerCuentaPorCodigo('1355')).id;
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -1983,19 +2091,31 @@ export class AsientosContablesService {
             where: { id: item.articuloId },
             relations: [
               'categoriaArticulo',
+              'categoriaArticulo.cuentaInventario',
+              'categoriaArticulo.cuentaCosto',
               'categoriaArticulo.cuentaPrincipal',
               'impuestoRel',
               'impuestoRel.cuentaCompras',
             ],
           });
 
-          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-            throw new Error(
-              `Artículo no tiene cuenta contable principal configurada`,
-            );
+          const categoria = articulo?.categoriaArticulo;
+          if (!articulo || !categoria) {
+            throw new Error(`Artículo no encontrado o no tiene categoría configurada`);
           }
 
-          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          if (articulo.isInventariable && categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaCosto) {
+            cuentaId = categoria.cuentaCostoId || categoria.cuentaCosto.id;
+          } else if (categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaPrincipal) {
+            cuentaId = categoria.cuentaPrincipalId || categoria.cuentaPrincipal.id;
+          } else {
+            throw new Error(`Artículo no tiene cuenta contable configurada`);
+          }
+
           cuentaIvaFallbackId = articulo.impuestoRel?.cuentaComprasId;
         } else {
           continue;
@@ -2022,7 +2142,7 @@ export class AsientosContablesService {
           } else if (cuentaIvaFallbackId) {
             cuentaIvaId = cuentaIvaFallbackId;
           } else {
-            cuentaIvaId = '1355';
+            cuentaIvaId = (await this.obtenerCuentaPorCodigo('1355')).id;
           }
           ivaAgrupados.set(
             cuentaIvaId,
@@ -2145,19 +2265,31 @@ export class AsientosContablesService {
             where: { id: item.articuloId },
             relations: [
               'categoriaArticulo',
+              'categoriaArticulo.cuentaInventario',
+              'categoriaArticulo.cuentaCosto',
               'categoriaArticulo.cuentaPrincipal',
               'impuestoRel',
               'impuestoRel.cuentaCompras',
             ],
           });
 
-          if (!articulo?.categoriaArticulo?.cuentaPrincipal) {
-            throw new Error(
-              `Artículo no tiene cuenta contable principal configurada`,
-            );
+          const categoria = articulo?.categoriaArticulo;
+          if (!articulo || !categoria) {
+            throw new Error(`Artículo no encontrado o no tiene categoría configurada`);
           }
 
-          cuentaId = articulo.categoriaArticulo.cuentaPrincipalId;
+          if (articulo.isInventariable && categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaCosto) {
+            cuentaId = categoria.cuentaCostoId || categoria.cuentaCosto.id;
+          } else if (categoria.cuentaInventario) {
+            cuentaId = categoria.cuentaInventarioId || categoria.cuentaInventario.id;
+          } else if (categoria.cuentaPrincipal) {
+            cuentaId = categoria.cuentaPrincipalId || categoria.cuentaPrincipal.id;
+          } else {
+            throw new Error(`Artículo no tiene cuenta contable configurada`);
+          }
+
           cuentaIvaFallbackId = articulo.impuestoRel?.cuentaComprasId;
         } else {
           continue;
@@ -2183,7 +2315,7 @@ export class AsientosContablesService {
           } else if (cuentaIvaFallbackId) {
             cuentaIvaId = cuentaIvaFallbackId;
           } else {
-            cuentaIvaId = '1355';
+            cuentaIvaId = (await this.obtenerCuentaPorCodigo('1355')).id;
           }
           ivaAgrupados.set(
             cuentaIvaId,
