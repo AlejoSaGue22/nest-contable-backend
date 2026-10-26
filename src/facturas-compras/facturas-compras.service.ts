@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateFacturaCompraDto } from './dto/create-factura-compra.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FacturaCompra, GastoEstado } from './entities/factura-compra.entity';
-import { DataSource, QueryRunner, Repository, In } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository, In } from 'typeorm';
 import { Pago } from 'src/pagos/entities/pago.entity';
 import { PaymentStatus, MedioPago, AnticipoEstado } from 'src/pagos/enums/pago.enum';
 import { Proveedor } from 'src/proveedores/entities/proveedor.entity';
@@ -477,14 +477,38 @@ export class FacturasComprasService {
                 queryBuilder.andWhere('invoice.paymentStatus = :paymentStatus', { paymentStatus: where.paymentStatus });
             }
 
-            // if (where.providerName) {
-            //     queryBuilder.andWhere('proveedor.nombre LIKE :proveedorName', {
-            //         proveedorName: `%${where.providerName}%`
-            //     });
-            // }
+            if (where.providerName?.trim()) {
+                const providerName = `%${where.providerName.trim()}%`;
+                queryBuilder.andWhere(new Brackets((providerQuery) => {
+                    providerQuery
+                        .where("COALESCE(proveedor.razonSocial, '') ILIKE :providerName", { providerName })
+                        .orWhere("CONCAT_WS(' ', proveedor.nombre, proveedor.apellido) ILIKE :providerName", { providerName })
+                        .orWhere("COALESCE(proveedor.identificacion, '') ILIKE :providerName", { providerName });
+                }));
+            }
 
-            if (where.numeroFactura) {
-                queryBuilder.andWhere('invoice.numero = :numeroFactura', { numeroFactura: where.numeroFactura });
+            if (where.numeroFactura?.trim()) {
+                queryBuilder.andWhere('invoice.numero ILIKE :numeroFactura', {
+                    numeroFactura: `%${where.numeroFactura.trim()}%`,
+                });
+            }
+
+            if (where.numeroFacturaProveedor?.trim()) {
+                queryBuilder.andWhere('invoice.numeroFacturaProveedor ILIKE :numeroFacturaProveedor', {
+                    numeroFacturaProveedor: `%${where.numeroFacturaProveedor.trim()}%`,
+                });
+            }
+
+            if (where.search?.trim()) {
+                const search = `%${where.search.trim()}%`;
+                queryBuilder.andWhere(new Brackets((searchQuery) => {
+                    searchQuery
+                        .where("COALESCE(invoice.numero, '') ILIKE :search", { search })
+                        .orWhere("COALESCE(invoice.numeroFacturaProveedor, '') ILIKE :search", { search })
+                        .orWhere("COALESCE(proveedor.razonSocial, '') ILIKE :search", { search })
+                        .orWhere("CONCAT_WS(' ', proveedor.nombre, proveedor.apellido) ILIKE :search", { search })
+                        .orWhere("COALESCE(proveedor.identificacion, '') ILIKE :search", { search });
+                }));
             }
 
             if (where.startDate && where.endDate) {

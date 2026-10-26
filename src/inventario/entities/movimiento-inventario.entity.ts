@@ -44,10 +44,6 @@ export class MovimientoInventario {
   @Column()
   articuloId: string;
 
-  /**
-   * Base multi-empresa: el movimiento hereda la empresa del artículo.
-   * Nullable para no romper el kardex histórico existente.
-   */
   @Index('IDX_mov_inv_empresa')
   @Column({ type: 'uuid', nullable: true })
   empresaId: string | null;

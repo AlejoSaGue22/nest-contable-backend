@@ -1,12 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProveedorDto } from './dto/create-proveedor.dto';
 import { UpdateProveedorDto } from './dto/update-proveedor.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Proveedor } from './entities/proveedor.entity';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { PaginatioDto } from 'src/common/dtos/pagination.dto';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
+
+const PROVIDER_SEARCH_TEXT = `TRANSLATE(LOWER(COALESCE(
+  COALESCE(p.nombre, '') || ' ' || COALESCE(p.apellido, '') || CHR(1) ||
+  COALESCE(p.razonSocial, '') || CHR(1) ||
+  COALESCE(p.identificacion, '') || CHR(1) ||
+  COALESCE(p.dv, '') || CHR(1) ||
+  REGEXP_REPLACE(COALESCE(p.identificacion, ''), '[^0-9]', '', 'g') || CHR(1) ||
+  COALESCE(p.email, '') || CHR(1) ||
+  COALESCE(p.telefono, ''),
+  ''
+)), 'áéíóúüñ', 'aeiouun')`;
 
 @Injectable()
 export class ProveedoresService {
@@ -19,6 +30,19 @@ export class ProveedoresService {
     ) { }
     async create(createProveedorDto: CreateProveedorDto) {
         let { cuentaContableId, ...rest } = createProveedorDto;
+
+        if (createProveedorDto.identificacion) {
+            const proveedor = await this.proveedorRepository.findOne({
+                where: {
+                    identificacion: createProveedorDto.identificacion,
+                    isActive: true
+                }
+            });
+            if (proveedor) {
+                throw new BadRequestException('El numero de documento ya se encuentra registrado');
+            }
+        }
+
         if (!cuentaContableId || cuentaContableId.trim() === '') {
             const config = await this.parametrizacionService.getConfiguracion();
             cuentaContableId = config?.cuentaPagarProveedoresId || undefined;
@@ -49,16 +73,21 @@ export class ProveedoresService {
             .skip(offset);
 
         if (search && search.trim().length > 0) {
-            const term = `%${search.trim().toLowerCase()}%`;
-            qb.andWhere(
-                `(LOWER(p.nombre) LIKE :term 
-                OR LOWER(p.apellido) LIKE :term 
-                OR LOWER(p.razonSocial) LIKE :term 
-                OR LOWER(p.identificacion) LIKE :term 
-                OR LOWER(p.email) LIKE :term 
-                OR LOWER(p.telefono) LIKE :term)`,
-                { term }
-            );
+            const normalizedSearch = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const term = `%${normalizedSearch}%`;
+            qb.andWhere(new Brackets((searchQuery) => {
+                searchQuery.where(`${PROVIDER_SEARCH_TEXT} LIKE :term`, { term });
+
+                if (/^[\d\s.+()\-]+$/.test(search)) {
+                    const digits = search.replace(/\D/g, '');
+                    if (digits.length >= 3) {
+                        searchQuery.orWhere(
+                            `${PROVIDER_SEARCH_TEXT} LIKE :digitsTerm`,
+                            { digitsTerm: `%${digits}%` },
+                        );
+                    }
+                }
+            }));
         }
 
         const [proveedores, totalProveedores] = await qb.getManyAndCount();

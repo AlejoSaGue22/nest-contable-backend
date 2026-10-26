@@ -15,7 +15,7 @@ export class PaginatioDto {
 
     @IsString()
     @IsOptional()
-    venta_compra?: 'venta' | 'costo';
+    venta_compra?: 'venta' | 'costo' | 'compra';
 
     @IsString()
     @IsOptional()

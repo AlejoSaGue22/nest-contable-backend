@@ -15,7 +15,7 @@ import {
   InvoiceStatus,
   TipoFactura,
 } from './enums/factura-venta.enum';
-import { DataSource, Not, Repository } from 'typeorm';
+import { Brackets, DataSource, Not, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { PaymentStatus, MedioPago, AnticipoEstado } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
@@ -92,12 +92,25 @@ export class FacturasVentasService {
         throw new NotFoundException('Cliente no encontrado');
       }
 
-      if (createFacturasVentaDto.fechaVencimiento && createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA) {
-        const fechaVencimiento = new Date(createFacturasVentaDto.fechaVencimiento);
-        if (fechaVencimiento < new Date()) {
+      if (
+        createFacturasVentaDto.fechaVencimiento &&
+        createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA &&
+        !createFacturasVentaDto.saveAsDraft
+      ) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const parts = createFacturasVentaDto.fechaVencimiento.split('-').map(Number);
+        const fechaVenc = parts.length === 3
+          ? new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0)
+          : new Date(createFacturasVentaDto.fechaVencimiento);
+        fechaVenc.setHours(0, 0, 0, 0);
+
+        if (fechaVenc < hoy) {
           throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
         }
       }
+
 
       if (createFacturasVentaDto.metodoPago) {
         const metodoPago = await queryRunner.manager.findOne(MetodoPago, {
@@ -537,16 +550,27 @@ export class FacturasVentasService {
         });
       }
 
-      if (where.numeroFactura) {
-        queryBuilder.andWhere('invoice.comprobante = :numeroFactura', {
-          numeroFactura: where.numeroFactura,
+      if (where.numeroFactura?.trim()) {
+        queryBuilder.andWhere('invoice.comprobante_completo ILIKE :numeroFactura', {
+          numeroFactura: `%${where.numeroFactura.trim()}%`,
         });
       }
 
-      if (where.clientName) {
+      if (where.clientName?.trim()) {
         queryBuilder.andWhere('client.nombre LIKE :clientName', {
           clientName: `%${where.clientName}%`,
         });
+      }
+
+      if (where.search?.trim()) {
+        const search = `%${where.search.trim()}%`;
+        queryBuilder.andWhere(new Brackets((searchQuery) => {
+          searchQuery
+            .where("COALESCE(invoice.comprobante_completo, '') ILIKE :search", { search })
+            .orWhere("COALESCE(client.razonSocial, '') ILIKE :search", { search })
+            .orWhere("CONCAT_WS(' ', client.nombre, client.apellido) ILIKE :search", { search })
+            .orWhere("COALESCE(client.numeroDocumento, '') ILIKE :search", { search });
+        }));
       }
 
       if (where.startDate && where.endDate) {
@@ -693,12 +717,21 @@ export class FacturasVentasService {
       throw new BadRequestException('La factura debe tener al menos un item');
     }
 
-    if (updateDto.fechaVencimiento) {
-      const fechaVencimiento = new Date(updateDto.fechaVencimiento);
-      if (fechaVencimiento < new Date()) {
+    if (updateDto.fechaVencimiento && !updateDto.saveAsDraft) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const parts = updateDto.fechaVencimiento.split('-').map(Number);
+      const fechaVenc = parts.length === 3
+        ? new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0)
+        : new Date(updateDto.fechaVencimiento);
+      fechaVenc.setHours(0, 0, 0, 0);
+
+      if (fechaVenc < hoy) {
         throw new BadRequestException('La fecha de vencimiento no puede ser menor a la fecha actual');
       }
     }
+
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

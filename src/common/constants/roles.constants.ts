@@ -170,7 +170,6 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.FIXED_ASSETS_UPDATE,
     Permission.FIXED_ASSETS_DELETE,
     Permission.FIXED_ASSETS_DEPRECIATE,
-
     Permission.MANAGEMENT_OPERATIONAL_READ,
     Permission.MANAGEMENT_OPERATIONAL_ACCESS,
     Permission.MANAGEMENT_OPERATIONAL_SERVICE_1,
@@ -210,7 +209,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
   [SystemRole.ACCOUNTANT]: [
     Permission.DASHBOARD_VIEW,
     Permission.INVOICE_READ, Permission.INVOICE_EXPORT, Permission.NOTA_CREDITO_READ,
-    Permission.PURCHASE_READ,
+    Permission.PURCHASE_READ, Permission.PURCHASE_CREATE, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE,
     Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
     Permission.PROVIDER_READ, Permission.PROVIDER_EXPORT,
     Permission.PRODUCT_READ, Permission.PRODUCT_PURCHASE_READ,
@@ -235,7 +234,9 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     Permission.INVOICE_CREATE, Permission.INVOICE_READ, Permission.NOTA_CREDITO_READ,
     Permission.CLIENT_CREATE, Permission.CLIENT_READ,
     Permission.PRODUCT_READ,
-    Permission.PURCHASE_READ, Permission.PROVIDER_READ, Permission.NOTA_CREDITO_COMPRAS_READ, Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
+    Permission.PURCHASE_READ, Permission.PURCHASE_CREATE, Permission.PURCHASE_UPDATE, Permission.PURCHASE_DELETE,
+    Permission.PROVIDER_READ, Permission.NOTA_CREDITO_COMPRAS_READ,
+    Permission.PURCHASE_DOCUMENT_SUPPORT_READ, Permission.NOTA_AJUSTE_DOCUMENT_SUPPORT_READ,
     Permission.PAGO_READ, Permission.PAGO_CXC, Permission.PAGO_CXP, Permission.PAGO_MOVIMIENTOS
   ],
   [SystemRole.VIEWER]: [

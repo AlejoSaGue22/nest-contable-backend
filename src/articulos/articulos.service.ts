@@ -12,6 +12,11 @@ import { CategoriaArticulo } from 'src/core/catalogs/entities/categorias-articul
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { tipoCategoria } from 'src/common/constants/categorias-articulos.config';
 
+const ARTICLE_SEARCH_TEXT = `TRANSLATE(LOWER(COALESCE(
+  COALESCE(articulo.nombre, '') || CHR(1) || COALESCE(articulo.codigo, ''),
+  ''
+)), 'áéíóúüñ', 'aeiouun')`;
+
 @Injectable()
 export class ArticulosService {
   constructor(
@@ -79,10 +84,14 @@ export class ArticulosService {
     queryBuilder.leftJoinAndSelect('articulo.impuestoRel', 'impuestoRe');
     queryBuilder.leftJoinAndSelect('articulo.categoriaArticulo', 'categoriaArticulo');
 
-    if (venta_compra) {
+    if (venta_compra === 'compra') {
+      queryBuilder.andWhere('categoriaArticulo.codigo != :categoriaActivoFijo', {
+        categoriaActivoFijo: 'activos-fijos',
+      });
+    } else if (venta_compra) {
       const tiposFiltro: Record<string, string[]> = {
-        'costo': ['costo', 'gasto'],
-        'venta': ['venta', 'servicio'],
+        'costo': ['COSTO', 'GASTO'],
+        'venta': ['VENTA', 'SERVICIO'],
       };
 
       const tiposAFiltrar = tiposFiltro[venta_compra];
@@ -94,9 +103,10 @@ export class ArticulosService {
       }
     }
 
-    if (search) {
-      queryBuilder.andWhere('articulo.nombre LIKE :search', {
-        search: `%${search}%`
+    if (search?.trim()) {
+      const normalizedSearch = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      queryBuilder.andWhere(`${ARTICLE_SEARCH_TEXT} LIKE :search`, {
+        search: `%${normalizedSearch}%`,
       });
     }
 

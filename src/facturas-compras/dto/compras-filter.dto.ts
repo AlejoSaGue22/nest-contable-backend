@@ -9,6 +9,18 @@ export class ComprasFilterDto {
 
     @IsOptional()
     @IsString()
+    numeroFacturaProveedor?: string;
+
+    @IsOptional()
+    @IsString()
+    providerName?: string;
+
+    @IsOptional()
+    @IsString()
+    search?: string;
+
+    @IsOptional()
+    @IsString()
     estado?: string;
 
     @IsOptional()

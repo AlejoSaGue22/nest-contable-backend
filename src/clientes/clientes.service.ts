@@ -9,6 +9,15 @@ import { ClientesFilterDto } from './dto/clientes-filter.dto';
 import { TipoDocumento } from 'src/core/catalogs/entities/tipo-documento.entity';
 import { ParametrizacionContableService } from 'src/settings/parametrizacion-contable/parametrizacion-contable.service';
 
+const CLIENT_SEARCH_TEXT = `TRANSLATE(LOWER(COALESCE(
+  COALESCE(cliente.nombre, '') || ' ' || COALESCE(cliente.apellido, '') || CHR(1) ||
+  COALESCE(cliente.razonSocial, '') || CHR(1) ||
+  COALESCE(cliente.numeroDocumento, '') || CHR(1) ||
+  COALESCE(cliente.dv, '') || CHR(1) ||
+  REGEXP_REPLACE(COALESCE(cliente.numeroDocumento, ''), '[^0-9]', '', 'g'),
+  ''
+)), 'áéíóúüñ', 'aeiouun')`;
+
 @Injectable()
 export class ClientesService {
   constructor(
@@ -21,6 +30,19 @@ export class ClientesService {
 
   async create(createClienteDto: CreateClienteDto) {
     let { cuentaContableId, ...rest } = createClienteDto;
+
+    if (createClienteDto.numeroDocumento) {
+      const cliente = await this.clientesRepository.findOne({
+        where: {
+          numeroDocumento: createClienteDto.numeroDocumento,
+          isActive: true
+        }
+      });
+      if (cliente) {
+        throw new BadRequestException('El numero de documento ya se encuentra registrado');
+      }
+    }
+
     if (!cuentaContableId || cuentaContableId.trim() === '') {
       const config = await this.parametrizacionService.getConfiguracion();
       cuentaContableId = config?.cuentaCobrarClientesId || undefined;
@@ -43,29 +65,17 @@ export class ClientesService {
     if (search) {
       const normalizedSearch = search.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       const term = `%${normalizedSearch}%`;
-      const textColumns = [
-        'cliente.nombre',
-        'cliente.apellido',
-        "CONCAT(COALESCE(cliente.nombre, ''), ' ', COALESCE(cliente.apellido, ''))",
-        'cliente.razonSocial',
-        'cliente.numeroDocumento',
-        'cliente.dv',
-        'tipoDocumentoRel.abreviatura',
-      ];
 
       queryBuilder.andWhere(new Brackets((searchQuery) => {
-        textColumns.forEach((column, index) => {
-          const expression = `TRANSLATE(LOWER(COALESCE(${column}, '')), 'áéíóúüñ', 'aeiouun') LIKE :term`;
-          if (index === 0) searchQuery.where(expression, { term });
-          else searchQuery.orWhere(expression, { term });
-        });
+        searchQuery
+          .where(`${CLIENT_SEARCH_TEXT} LIKE :term`, { term })
+          .orWhere("TRANSLATE(LOWER(COALESCE(tipoDocumentoRel.abreviatura, '')), 'áéíóúüñ', 'aeiouun') LIKE :term", { term });
 
         if (/^[\d\s.+()\-]+$/.test(search)) {
           const digits = search.replace(/\D/g, '');
           if (digits.length >= 3) {
             const digitsTerm = `%${digits}%`;
-            searchQuery
-              .orWhere("REGEXP_REPLACE(COALESCE(cliente.numeroDocumento, ''), '[^0-9]', '', 'g') LIKE :digitsTerm", { digitsTerm });
+            searchQuery.orWhere(`${CLIENT_SEARCH_TEXT} LIKE :digitsTerm`, { digitsTerm });
           }
         }
       }));

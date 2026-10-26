@@ -30,6 +30,10 @@ export class InvoiceFilterDto {
 
   @IsOptional()
   @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
   providerName?: string;
 
   @IsOptional()
