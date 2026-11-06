@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { NotaAjusteCompra } from './entities/notas-ajuste-compra.entity';
 import { ItemNotaAjusteCompra } from './entities/items-notas-ajuste-compra.entity';
 import { FacturaCompra, GastoEstado } from 'src/facturas-compras/entities/factura-compra.entity';
@@ -12,6 +12,7 @@ import { PaymentStatus } from 'src/pagos/enums/pago.enum';
 import { MathUtil } from 'src/common/utils/math.util';
 import { InventarioService, ResultadoKardex, AdvertenciaInventario } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 @Injectable()
 export class NotasAjusteComprasService {
@@ -73,7 +74,7 @@ export class NotasAjusteComprasService {
 
       // 3. Generar número de nota solo si NO es borrador
       const isDraft = dto.isDraft || false;
-      const numeroNota = isDraft ? '' : await this.generateNotaNumber(tipo);
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(queryRunner.manager, tipo);
 
       // 4. Crear nota
       const nota = queryRunner.manager.create(NotaAjusteCompra, {
@@ -292,7 +293,7 @@ export class NotasAjusteComprasService {
 
     try {
       // Generar número consecutivo
-      const numero = await this.generateNotaNumber(nota.tipo);
+      const numero = await this.generateNotaNumber(queryRunner.manager, nota.tipo);
       const prefijo = nota.tipo === TipoNotaCompra.CREDITO ? 'NCC' : 'NDC';
 
       nota.numero = numero;
@@ -736,13 +737,8 @@ export class NotasAjusteComprasService {
     return { subtotal, iva, total, itemsCalculados };
   }
 
-  private async generateNotaNumber(tipo: TipoNotaCompra): Promise<string> {
-    const lastNota = await this.notaRepository.findOne({
-      where: { tipo },
-      order: { createdAt: 'DESC' }
-    });
-
-    const lastNumber = lastNota?.numero ? parseInt(lastNota.numero) : 0;
-    return (lastNumber + 1).toString().padStart(8, '0');
+  private async generateNotaNumber(manager: EntityManager, tipo: TipoNotaCompra): Promise<string> {
+    const numero = await nextSequentialNumber(manager, `nota-compra:${tipo}`);
+    return numero.padStart(8, '0');
   }
 }

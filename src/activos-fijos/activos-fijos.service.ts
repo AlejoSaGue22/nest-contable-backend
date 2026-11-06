@@ -7,6 +7,7 @@ import { CreateActivoFijoDto } from './dto/create-activo-fijo.dto';
 import { UpdateActivoFijoDto } from './dto/update-activo-fijo.dto';
 import { DepreciarPeriodoDto } from './dto/depreciar-periodo.dto';
 import { RetirarActivoDto } from './dto/retirar-activo.dto';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 import { AsientosContablesService } from '../asientos-contables/asientos-contables.service';
 import { CuentaContable } from '../cuentas/entities/cuenta.entity';
 import { DefinicionAsientoDto, DefinicionDetalleAsientoDto } from '../asientos-contables/dto/definicion-asiento.dto';
@@ -24,23 +25,8 @@ export class ActivosFijosService {
   ) { }
 
   private async generateNextCode(): Promise<string> {
-    const lastActivo = await this.activoRepository.findOne({
-      where: {},
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!lastActivo) {
-      return 'AF-000001';
-    }
-
-    const match = lastActivo.codigo.match(/AF-(\d+)/);
-    if (match) {
-      const nextNum = parseInt(match[1], 10) + 1;
-      return `AF-${nextNum.toString().padStart(6, '0')}`;
-    }
-
-    const count = await this.activoRepository.count();
-    return `AF-${(count + 1).toString().padStart(6, '0')}`;
+    const numero = await nextSequentialNumber(this.dataSource.manager, 'activo-fijo:codigo');
+    return `AF-${numero.padStart(6, '0')}`;
   }
 
   async create(createDto: CreateActivoFijoDto): Promise<ActivoFijo> {

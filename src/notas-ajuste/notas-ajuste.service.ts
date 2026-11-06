@@ -7,7 +7,7 @@ import { ItemNotaAjuste } from './entities/items-notas-ajuste.entity';
 import { NotasAjusteFilterDto } from './dto/nota-ajuste-filter.dto';
 import { FacturasVenta } from 'src/facturas-ventas/entities/facturas-venta.entity';
 import { InvoiceStatus, TipoFactura } from 'src/facturas-ventas/enums/factura-venta.enum';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FactusService } from 'src/api-dian/services/factus.service';
 import { AsientosContablesService } from 'src/asientos-contables/asientos-contables.service';
@@ -21,6 +21,7 @@ import { CreditNoteCalculator } from './credito/credit-note-calculator.service';
 import { CarteraNotaService } from './cartera/cartera-nota.service';
 import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 @Injectable()
 export class NotasAjusteService {
   private readonly logger = new Logger(NotasAjusteService.name);
@@ -87,7 +88,7 @@ export class NotasAjusteService {
 
       // 3. Generar número de nota solo si NO es borrador
       const isDraft = factura.esElectronica() ? true : createDto.isDraft ? true : false;
-      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.CREDITO);
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(queryRunner.manager, TipoNota.CREDITO);
 
       // 4. Crear nota crédito
       const notaCredito = queryRunner.manager.create(NotaAjuste, {
@@ -235,7 +236,7 @@ export class NotasAjusteService {
 
       // Electrónica siempre borrador → emitir. Estándar según isDraft.
       const isDraft = factura.esElectronica() ? true : createDto.isDraft ? true : false;
-      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.CREDITO);
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(queryRunner.manager, TipoNota.CREDITO);
 
       const notaCredito = queryRunner.manager.create(NotaAjuste, {
         tipo: TipoNota.CREDITO,
@@ -424,7 +425,7 @@ export class NotasAjusteService {
 
       // 3. Generar número de nota solo si NO es borrador
       const isDraft = createDto.isDraft ?? false;
-      const numeroNota = isDraft ? '' : await this.generateNotaNumber(TipoNota.DEBITO);
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(queryRunner.manager, TipoNota.DEBITO);
 
       // 4. Crear nota débito
       const notaDebito = queryRunner.manager.create(NotaAjuste, {
@@ -533,7 +534,7 @@ export class NotasAjusteService {
     }
 
     this.logger.log(`📤 Emitiendo ${nota.tipo} ${nota.numeroCompleto} a DIAN`);
-    const numeroNota = await this.generateNotaNumber(nota.tipo);
+    const numeroNota = await this.generateNotaNumber(this.dataSource.manager, nota.tipo);
     const tipoFactus = nota.esNotaCredito() ? 'credito' : 'debito';
 
     // reference_code estable: se persiste ANTES de enviar (idempotencia).
@@ -1181,13 +1182,8 @@ export class NotasAjusteService {
     return total;
   }
 
-  private async generateNotaNumber(tipo: TipoNota): Promise<string> {
-    const lastNota = await this.notaRepository.findOne({
-      where: { tipo },
-      order: { createdAt: 'DESC' }
-    });
-
-    const lastNumber = lastNota?.numero ? parseInt(lastNota.numero) : 0;
-    return (lastNumber + 1).toString().padStart(8, '0');
+  private async generateNotaNumber(manager: EntityManager, tipo: TipoNota): Promise<string> {
+    const numero = await nextSequentialNumber(manager, `nota-venta:${tipo}`);
+    return numero.padStart(8, '0');
   }
 }

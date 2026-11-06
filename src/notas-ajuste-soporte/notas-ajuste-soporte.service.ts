@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { NotaAjusteSoporte } from './entities/nota-ajuste-soporte.entity';
 import { ItemNotaAjusteSoporte } from './entities/item-nota-ajuste-soporte.entity';
 import { DianStatusSoporte, DocumentoSoporte, TipoDocumentoSoporte } from 'src/documentos-soportes/entities/documento-soporte.entity';
@@ -14,6 +14,7 @@ import { MathUtil } from 'src/common/utils/math.util';
 import { InventarioService, ResultadoKardex, AdvertenciaInventario } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
 import { FactusService } from 'src/api-dian/services/factus.service';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 @Injectable()
 export class NotasAjusteSoporteService {
@@ -79,7 +80,7 @@ export class NotasAjusteSoporteService {
       }
 
       const isDraft = dto.isDraft || false;
-      const numeroNota = isDraft ? '' : await this.generateNotaNumber(tipo);
+      const numeroNota = isDraft ? '' : await this.generateNotaNumber(queryRunner.manager, tipo);
       const prefijo = tipo === TipoNotaCompra.CREDITO ? 'NCS' : 'NDS';
 
       const nota = queryRunner.manager.create(NotaAjusteSoporte, {
@@ -275,13 +276,8 @@ export class NotasAjusteSoporteService {
   private async generarReferenceCode(): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `NAS-${year}-`;
-    const ultima = await this.notaRepository.createQueryBuilder('nota')
-      .where('nota.referenceCode LIKE :prefix', { prefix: `${prefix}%` })
-      .orderBy('nota.referenceCode', 'DESC')
-      .getOne();
-
-    const ultimoNumero = ultima?.referenceCode ? parseInt(ultima.referenceCode.split('-')[2]) : 0;
-    return `${prefix}${(ultimoNumero + 1).toString().padStart(6, '0')}`;
+    const numero = await nextSequentialNumber(this.dataSource.manager, `nota-soporte:reference:${year}`);
+    return `${prefix}${numero.padStart(6, '0')}`;
   }
 
   async findOne(id: string) {
@@ -369,7 +365,7 @@ export class NotasAjusteSoporteService {
     await queryRunner.startTransaction();
 
     try {
-      const numero = await this.generateNotaNumber(nota.tipo);
+      const numero = await this.generateNotaNumber(queryRunner.manager, nota.tipo);
       const prefijo = nota.tipo === TipoNotaCompra.CREDITO ? 'NCS' : 'NDS';
 
       nota.numero = numero;
@@ -807,13 +803,8 @@ export class NotasAjusteSoporteService {
     return { subtotal, iva, total, itemsCalculados };
   }
 
-  private async generateNotaNumber(tipo: TipoNotaCompra): Promise<string> {
-    const lastNota = await this.notaRepository.findOne({
-      where: { tipo },
-      order: { createdAt: 'DESC' }
-    });
-
-    const lastNumber = lastNota?.numero ? parseInt(lastNota.numero) : 0;
-    return (lastNumber + 1).toString().padStart(8, '0');
+  private async generateNotaNumber(manager: EntityManager, tipo: TipoNotaCompra): Promise<string> {
+    const numero = await nextSequentialNumber(manager, `nota-soporte:${tipo}`);
+    return numero.padStart(8, '0');
   }
 }

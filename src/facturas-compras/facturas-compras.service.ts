@@ -27,6 +27,7 @@ import { NotaAjusteCompra } from 'src/notas-ajuste-compras/entities/notas-ajuste
 import { EstadoNotaCompra, TipoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
 import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 
 @Injectable()
@@ -893,14 +894,8 @@ export class FacturasComprasService {
     }
 
     private async generarNumeroGasto(queryRunner: any): Promise<string> {
-        const queryBuilder = queryRunner.manager.createQueryBuilder(FacturaCompra, 'gasto')
-            .where('gasto.numero IS NOT NULL')
-            .orderBy('gasto.numero', 'DESC');
-
-        const ultimoGasto = await queryBuilder.getOne();
-
-        const ultimoNumero = ultimoGasto ? parseInt(ultimoGasto.numero?.split('-')[1]) : 0;
-        return `FC-${(ultimoNumero + 1).toString().padStart(6, '0')}`;
+        const numero = await nextSequentialNumber(queryRunner.manager, 'factura-compra:FC');
+        return `FC-${numero.padStart(6, '0')}`;
     }
 
     async anular(id: string, userId: string): Promise<FacturaCompra> {

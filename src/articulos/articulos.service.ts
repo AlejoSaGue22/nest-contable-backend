@@ -11,6 +11,7 @@ import { UnidadMedida } from 'src/core/catalogs/entities/unidad-medida.entity';
 import { CategoriaArticulo } from 'src/core/catalogs/entities/categorias-articulos-entity';
 import { Impuesto } from 'src/settings/impuestos/entities/impuesto.entity';
 import { tipoCategoria } from 'src/common/constants/categorias-articulos.config';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 const ARTICLE_SEARCH_TEXT = `TRANSLATE(LOWER(COALESCE(
   COALESCE(articulo.nombre, '') || CHR(1) || COALESCE(articulo.codigo, ''),
@@ -235,16 +236,9 @@ export class ArticulosService {
   }
 
   async generateCodigo(tipo: tipoCategoria): Promise<string> {
-    const lastArticulo = await this.articulosRepository.find({
-      order: { createdAt: 'DESC' },
-      take: 1,
-    });
-
-    const lastNumber = lastArticulo.length > 0 ? (lastArticulo[0]).codigo as any || '0' : 0;
-    const lastNumberSplit = lastNumber != '0' ? parseInt(lastNumber.split('-')[1]) : parseInt(lastNumber);
     const tipoArticulo = tipo === 'VENTA' ? 'V' : tipo === 'COSTO' ? 'C' : tipo === 'GASTO' ? 'G' : 'S';
-
-    return `${tipoArticulo}-${(lastNumberSplit + 1).toString().padStart(6, '0')}`;
+    const numero = await nextSequentialNumber(this.articulosRepository.manager, 'articulo:codigo');
+    return `${tipoArticulo}-${numero.padStart(6, '0')}`;
   }
 
 }

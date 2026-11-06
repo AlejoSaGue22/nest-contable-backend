@@ -12,6 +12,7 @@ import { ProfesionalResponsable } from './entities/profesional-responsable.entit
 import { TipoExamenPrescripcion } from './entities/tipo-examen-prescripcion.entity';
 import { SaveTipoExamenDto } from './dto/save-tipo-examen.dto';
 import { SaveProfesionalResponsableDto } from './dto/save-profesional-responsable.dto';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 @Injectable()
 export class PrescripcionesService implements OnModuleInit {
@@ -246,11 +247,9 @@ export class PrescripcionesService implements OnModuleInit {
 
   private async nextNumber(empresaId: string | null) {
     const year = new Date().getFullYear();
-    const qb = this.repo.createQueryBuilder('p').where('p.numero LIKE :prefix', { prefix: `PV-${year}-%` });
-    this.applyCompanyScope(qb, 'p', empresaId);
-    const last = await qb.orderBy('p.numero', 'DESC').getOne();
-    const sequence = last ? Number(last.numero.split('-').pop()) + 1 : 1;
-    return `PV-${year}-${String(sequence).padStart(6, '0')}`;
+    const scope = empresaId?.toLowerCase() ?? 'global';
+    const sequence = await nextSequentialNumber(this.repo.manager, `prescripcion:${scope}:${year}`);
+    return `PV-${year}-${sequence.padStart(6, '0')}`;
   }
 
   private applyCompanyScope(qb: any, alias: string, empresaId: string | null, includeGlobal = false) {

@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { TipoComprobante } from './entities/tipo-comprobante.entity';
+import { nextTipoComprobanteNumber } from 'src/common/utils/numbering.util';
 import { ComprobanteContable, EstadoComprobante } from './entities/comprobante-contable.entity';
 import { ComprobanteDetalle } from './entities/comprobante-detalle.entity';
 import { ComprobantesValidatorService } from './comprobantes-validator.service';
@@ -108,12 +109,9 @@ export class ComprobantesService {
       // Generar consecutivo secuencial
       let numero = '';
       if (tipo.numeracionAutomatica) {
-        const consecutivoStr = String(tipo.consecutivoActual).padStart(4, '0');
+        const consecutivo = await nextTipoComprobanteNumber(queryRunner.manager, tipo.id);
+        const consecutivoStr = consecutivo.padStart(4, '0');
         numero = tipo.prefijo ? `${tipo.prefijo}-${consecutivoStr}` : consecutivoStr;
-
-        // Incrementar el consecutivo
-        tipo.consecutivoActual += 1;
-        await queryRunner.manager.save(TipoComprobante, tipo);
       } else {
         // En caso de numeraciÃ³n manual, se podrÃ­a pasar en el DTO (ampliaciÃ³n futura)
         throw new BadRequestException('La numeracion manual no esta soportada en esta fase.');

@@ -15,7 +15,7 @@ import {
   InvoiceStatus,
   TipoFactura,
 } from './enums/factura-venta.enum';
-import { Brackets, DataSource, Not, Repository } from 'typeorm';
+import { Brackets, DataSource, EntityManager, Repository } from 'typeorm';
 import { ItemsFacturaVenta } from './entities/items-facturas-venta.entity';
 import { PaymentStatus, MedioPago, AnticipoEstado } from 'src/pagos/enums/pago.enum';
 import { Cliente } from 'src/clientes/entities/cliente.entity';
@@ -143,18 +143,20 @@ export class FacturasVentasService {
       const { subtotal, iva, descuento, itemsCalculados } = await this.calcularTotales(queryRunner, createFacturasVentaDto.items);
       const total = MathUtil.sum(MathUtil.sub(subtotal, descuento), iva);
 
-      const numberFactura = await this.generateInvoiceNumber();
+      const statusInvoice = createFacturasVentaDto.saveAsDraft === true
+        ? InvoiceStatus.DRAFT
+        : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
+          ? InvoiceStatus.DRAFT
+          : InvoiceStatus.ISSUED;
+      const numberFactura = statusInvoice === InvoiceStatus.DRAFT
+        ? ''
+        : await this.generateInvoiceNumber(queryRunner.manager);
       const prefijo = createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
         ? 'FE'
         : 'FV';
 
       const { items, abonosIniciales, ...createDtoRest } = createFacturasVentaDto;
 
-      const statusInvoice = createFacturasVentaDto.saveAsDraft === true
-        ? InvoiceStatus.DRAFT
-        : createFacturasVentaDto.tipoFactura === TipoFactura.ELECTRONICA
-          ? InvoiceStatus.DRAFT
-          : InvoiceStatus.ISSUED;
       // ⭐ Determinar estado de pago según si es borrador o no y considerando anticipos
       let paymentStatus: PaymentStatus;
       let saldoPendiente: number;
@@ -356,6 +358,7 @@ export class FacturasVentasService {
             queryRunner.manager,
             savedInvoice.id,
             itemsToSave.map((it: any) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+            savedInvoice.comprobante_completo,
             userId,
           );
           const alertas = InventarioService.alertasNegativo(kardex);
@@ -409,10 +412,7 @@ export class FacturasVentasService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error creando factura: ${error.message}`, error.stack);
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       throw new InternalServerErrorException('Error al crear la factura');
@@ -954,7 +954,7 @@ export class FacturasVentasService {
       throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
     }
     this.logger.log(`Emitiendo factura electrónica: ${factura.comprobante_completo}`);
-    const numberFactura = await this.generateInvoiceNumber();
+    const numberFactura = await this.generateInvoiceNumber(this.dataSource.manager);
 
     try {
       // 1. Cambiar estado a "enviando a DIAN"
@@ -1177,6 +1177,7 @@ export class FacturasVentasService {
             this.dataSource.manager,
             id,
             itemsVenta.map((it) => ({ articuloId: it.articuloId, cantidad: Number(it.quantity) })),
+            facturaParaAsiento.comprobante_completo,
             userId,
           );
           advertenciasKardexFE = InventarioService.alertasNegativo(kardex);
@@ -1264,7 +1265,7 @@ export class FacturasVentasService {
         throw new BadRequestException(`No se puede emitir una factura en estado ${factura.obtenerEstadoLegible()}`);
       }
 
-      const numberFactura = await this.generateInvoiceNumber();
+      const numberFactura = await this.generateInvoiceNumber(queryRunner.manager);
       const prefijo = 'FV';
 
       // 1. Obtener y procesar los anticipos en borrador
@@ -1437,6 +1438,7 @@ export class FacturasVentasService {
             articuloId: (it as any).articuloId,
             cantidad: Number((it as any).quantity),
           })),
+          factura.comprobante_completo,
           userId,
         );
         advertenciasEstandar = InventarioService.alertasNegativo(kardex);
@@ -1452,34 +1454,20 @@ export class FacturasVentasService {
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(
-        `Error emitiendo factura estándar: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error emitiendo factura estándar: ${error.message}`, error.stack);
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Error al emitir factura estándar: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Error al emitir factura estándar: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
   }
 
-  async registrarPago(
-    id: string,
-    metodoPago: string,
-    userId: string,
-  ): Promise<FacturasVenta> {
+  async registrarPago(id: string, metodoPago: string, userId: string): Promise<FacturasVenta> {
     const factura = await this.findOne(id);
-    if (
-      !factura.estaAceptada() &&
-      factura.tipoFactura === TipoFactura.ELECTRONICA
-    ) {
-      throw new BadRequestException(
-        'Solo se puede registrar pago de facturas aceptadas por DIAN',
-      );
+    if (!factura.estaAceptada() && factura.tipoFactura === TipoFactura.ELECTRONICA) {
+      throw new BadRequestException('Solo se puede registrar pago de facturas aceptadas por DIAN');
     }
 
     // ✅ FIX: update() selectivo — no toca campos financieros
@@ -1492,13 +1480,8 @@ export class FacturasVentasService {
 
     // Generar asiento contable de pago (Cartera)
     try {
-      await this.asientosContablesService.generarAsientoPagoFacturaVenta(
-        updatedInvoice,
-        userId,
-      );
-      this.logger.log(
-        `Asiento de pago generado para factura ${updatedInvoice.comprobante_completo}`,
-      );
+      await this.asientosContablesService.generarAsientoPagoFacturaVenta(updatedInvoice, userId);
+      this.logger.log(`Asiento de pago generado para factura ${updatedInvoice.comprobante_completo}`);
     } catch (error) {
       this.logger.error(`Error generando asiento de pago: ${error.message}`);
     }
@@ -1573,16 +1556,10 @@ export class FacturasVentasService {
       await queryRunner.commitTransaction();
 
       const updatedInvoice = await this.findOne(id);
-
       // Generar asiento contable de anulación y de reversión de cruces de anticipo
       try {
-        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(
-          updatedInvoice,
-          userId,
-        );
-        this.logger.log(
-          `Asiento de anulación generado para factura ${updatedInvoice.comprobante_completo}`,
-        );
+        await this.asientosContablesService.generarAsientoAnulacionFacturaVenta(updatedInvoice, userId);
+        this.logger.log(`Asiento de anulación generado para factura ${updatedInvoice.comprobante_completo}`);
 
         // Anular los asientos contables de cruce asociados
         if (aplicaciones.length > 0) {
@@ -1786,17 +1763,15 @@ export class FacturasVentasService {
     };
   }
 
-  private async generateInvoiceNumber(): Promise<string> {
-    const lastInvoice = await this.facturaVentaRepository.findOne({
-      where: {
-        comprobante: Not(''),
-      },
-      order: { createdAt: 'DESC' },
-    });
-
-    const lastNumber = lastInvoice ? parseInt(lastInvoice.comprobante, 10) : 0;
-    const nextNumber = isNaN(lastNumber) ? 0 : lastNumber;
-    return (nextNumber + 1).toString().padStart(8, '0');
+  private async generateInvoiceNumber(manager: EntityManager): Promise<string> {
+    const [row] = await manager.query(
+      `SELECT nextval('"facturas_venta_comprobante_seq"') AS "number"`,
+    );
+    const nextNumber = String(row?.number ?? '');
+    if (!/^[1-9]\d*$/.test(nextNumber)) {
+      throw new InternalServerErrorException('No fue posible reservar un número de comprobante');
+    }
+    return nextNumber.padStart(8, '0');
   }
 
   async reintentarAsiento(id: string, userId: string): Promise<FacturasVenta> {

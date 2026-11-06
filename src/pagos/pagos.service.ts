@@ -25,6 +25,7 @@ import { MathUtil } from 'src/common/utils/math.util';
 import { AsientoContable, TipoAsiento } from 'src/asientos-contables/entities/asientos-contable.entity';
 import { Anticipo } from './entities/anticipo.entity';
 import { AnticipoAplicacion, AplicacionEstado } from './entities/anticipo-aplicacion.entity';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 
 @Injectable()
 export class PagosService {
@@ -396,6 +397,7 @@ export class PagosService {
         this.logger.log(`Asiento de pago generado: ${asientoId}`);
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de pago: ${asientoError.message}`);
+        throw asientoError;
       }
 
       // ── 6. Generar número de comprobante ─────────────────────────────
@@ -575,6 +577,7 @@ export class PagosService {
         this.logger.log(`Asiento de pago generado: ${asientoId}`);
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de pago: ${asientoError.message}`);
+        throw asientoError;
       }
 
       const numeroComprobante = await this.generarNumeroPago(queryRunner, TipoPago.PAGO);
@@ -1197,22 +1200,8 @@ export class PagosService {
     const esIngreso = tipo === TipoPago.COBRO || (tipo as any) === 'otro_ingreso';
     const prefijo = esIngreso ? 'RC' : 'CE';
 
-    // Buscar el último pago que empiece con el prefijo correspondiente
-    const ultimoPago = await queryRunner.manager
-      .createQueryBuilder(Pago, 'p')
-      .where('p.numero LIKE :prefix', { prefix: `${prefijo}-%` })
-      .orWhere('p.numero LIKE :legacyPrefix', { legacyPrefix: esIngreso ? 'COB-%' : 'PAG-%' })
-      .orderBy('p.createdAt', 'DESC')
-      .getOne();
-
-    let correlativo = 1;
-    if (ultimoPago?.numero) {
-      const partes = ultimoPago.numero.split('-');
-      const ultimoNum = parseInt(partes[1], 10);
-      correlativo = isNaN(ultimoNum) ? 1 : ultimoNum + 1;
-    }
-
-    return `${prefijo}-${String(correlativo).padStart(4, '0')}`;
+    const correlativo = await nextSequentialNumber(queryRunner.manager, `pago:${prefijo}`);
+    return `${prefijo}-${correlativo.padStart(4, '0')}`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1367,6 +1356,7 @@ export class PagosService {
         asientoId = asiento.id;
       } catch (asientoError) {
         this.logger.error(`Error generando asiento cobro múltiple: ${asientoError.message}`);
+        throw asientoError;
       }
 
       // 5. Crear cabecera de Pago
@@ -1526,6 +1516,7 @@ export class PagosService {
         asientoId = asiento.id;
       } catch (asientoError) {
         this.logger.error(`Error generando asiento pago múltiple: ${asientoError.message}`);
+        throw asientoError;
       }
 
       // 5. Crear cabecera de Pago
@@ -1671,6 +1662,7 @@ export class PagosService {
         asientoId = asiento.id;
       } catch (asientoError) {
         this.logger.error(`Error generando asiento de otros movimientos: ${asientoError.message}`);
+        throw asientoError;
       }
 
       // 5. Crear cabecera de Pago

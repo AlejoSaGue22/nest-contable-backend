@@ -27,6 +27,7 @@ import { NotaAjusteSoporte } from 'src/notas-ajuste-soporte/entities/nota-ajuste
 import { TipoNotaCompra, EstadoNotaCompra } from 'src/notas-ajuste-compras/enums/notas-ajuste-compra.enum';
 import { AdvertenciaInventario, InventarioService, ResultadoKardex } from 'src/inventario/inventario.service';
 import { DocumentoInventario } from 'src/inventario/entities/movimiento-inventario.entity';
+import { nextSequentialNumber } from 'src/common/utils/numbering.util';
 import { FactusService } from 'src/api-dian/services/factus.service';
 
 
@@ -1345,13 +1346,8 @@ export class DocumentosSoportesService {
     }
 
     private async generarNumeroDocumento(queryRunner: QueryRunner): Promise<string> {
-        const ultimo = await queryRunner.manager.createQueryBuilder(DocumentoSoporte, 'doc')
-            .where('doc.numero IS NOT NULL')
-            .orderBy('doc.numero', 'DESC')
-            .getOne();
-
-        const ultimoNumero = ultimo?.numero ? parseInt(ultimo.numero.split('-')[1]) : 0;
-        return `DS-${(ultimoNumero + 1).toString().padStart(6, '0')}`;
+        const numero = await nextSequentialNumber(queryRunner.manager, 'documento-soporte:DS');
+        return `DS-${numero.padStart(6, '0')}`;
     }
 
     /**
@@ -1360,13 +1356,8 @@ export class DocumentosSoportesService {
     private async generarReferenceCode(): Promise<string> {
         const year = new Date().getFullYear();
         const prefix = `DS-${year}-`;
-        const ultimo = await this.documentoRepository.createQueryBuilder('doc')
-            .where('doc.referenceCode LIKE :prefix', { prefix: `${prefix}%` })
-            .orderBy('doc.referenceCode', 'DESC')
-            .getOne();
-
-        const ultimoNumero = ultimo?.referenceCode ? parseInt(ultimo.referenceCode.split('-')[2]) : 0;
-        return `${prefix}${(ultimoNumero + 1).toString().padStart(6, '0')}`;
+        const numero = await nextSequentialNumber(this.dataSource.manager, `documento-soporte:reference:${year}`);
+        return `${prefix}${numero.padStart(6, '0')}`;
     }
 
     private async calcularTotales(queryRunner: QueryRunner, items: CreateDocumentoSoporteItemDto[]):

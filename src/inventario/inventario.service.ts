@@ -64,6 +64,7 @@ export class InventarioService {
     manager: EntityManager,
     facturaId: string,
     lineas: LineaInventario[],
+    numero: string,
     userId: string,
   ): Promise<ResultadoKardex> {
     // Si la emisión ya abrió una transacción, se reutiliza. Después de aceptar
@@ -71,7 +72,7 @@ export class InventarioService {
     // las salidas y guardar el lote completo del documento de forma atómica.
     if (!manager.queryRunner?.isTransactionActive) {
       return this.dataSource.transaction((transactionalManager) =>
-        this.registrarSalidasVenta(transactionalManager, facturaId, lineas, userId),
+        this.registrarSalidasVenta(transactionalManager, facturaId, lineas, numero, userId),
       );
     }
     if (await this.yaRegistrado(manager, DocumentoInventario.FACTURA_VENTA, facturaId)) {
@@ -84,7 +85,7 @@ export class InventarioService {
     for (const l of lineasOrdenadas) {
       if (!(Number(l.cantidad) > 0)) continue;
       const r = await this.mover(manager, l.articuloId, TipoMovimientoInventario.SALIDA, Number(l.cantidad),
-        DocumentoInventario.FACTURA_VENTA, facturaId, `Venta ${facturaId}`, userId);
+        DocumentoInventario.FACTURA_VENTA, facturaId, `Venta ${numero}`, userId);
       if (r) {
         movs++;
         if (Number(r.mov.saldoDespues) < 0) {

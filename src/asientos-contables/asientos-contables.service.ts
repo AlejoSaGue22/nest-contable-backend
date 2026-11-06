@@ -30,6 +30,7 @@ import { TipoPago } from 'src/pagos/enums/pago.enum';
 import { ComprobanteContable, EstadoComprobante } from 'src/comprobantes/entities/comprobante-contable.entity';
 import { TipoComprobante } from 'src/comprobantes/entities/tipo-comprobante.entity';
 import { ComprobanteDetalle } from 'src/comprobantes/entities/comprobante-detalle.entity';
+import { nextSequentialNumber, nextTipoComprobanteNumber } from 'src/common/utils/numbering.util';
 
 interface DetalleAsiento {
   cuentaId: string;
@@ -3078,11 +3079,9 @@ export class AsientosContablesService {
 
     // Generar el ComprobanteContable asociado
     const tipoCruce = await this.obtenerTipoComprobanteCruce(queryRunner.manager);
-    const consecutivoStr = String(tipoCruce.consecutivoActual).padStart(4, '0');
+    const consecutivoActual = await nextTipoComprobanteNumber(queryRunner.manager, tipoCruce.id);
+    const consecutivoStr = consecutivoActual.padStart(4, '0');
     const numeroComp = tipoCruce.prefijo ? `${tipoCruce.prefijo}-${consecutivoStr}` : consecutivoStr;
-
-    tipoCruce.consecutivoActual += 1;
-    await queryRunner.manager.save(TipoComprobante, tipoCruce);
 
     const comprobante = queryRunner.manager.create(ComprobanteContable, {
       tipoComprobanteId: tipoCruce.id,
@@ -3190,12 +3189,7 @@ export class AsientosContablesService {
   }
 
   private async generarNumeroAsiento(queryRunner: QueryRunner): Promise<string> {
-    const ultimoAsiento = await queryRunner.manager.findOne(AsientoContable, {
-      where: {},
-      order: { createdAt: 'DESC' },
-    });
-    const ultimoNumero = ultimoAsiento ? parseInt(ultimoAsiento.numero) : 0;
-    return (ultimoNumero + 1).toString().padStart(8, '0');
+    const numero = await nextSequentialNumber(queryRunner.manager, 'asiento');
+    return numero.padStart(8, '0');
   }
 }
-
