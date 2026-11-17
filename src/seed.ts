@@ -10,12 +10,6 @@ import { Cliente } from './clientes/entities/cliente.entity';
 import { Proveedor } from './proveedores/entities/proveedor.entity';
 import { Articulo, ArticuloTipo } from './articulos/entities/articulos.entity';
 import { MovimientoInventario, TipoMovimientoInventario, DocumentoInventario } from './inventario/entities/movimiento-inventario.entity';
-import { FacturasVenta } from './facturas-ventas/entities/facturas-venta.entity';
-import { ItemsFacturaVenta } from './facturas-ventas/entities/items-facturas-venta.entity';
-import { DianStatus, FormaPago, InvoiceStatus, TipoFactura } from './facturas-ventas/enums/factura-venta.enum';
-import { PaymentStatus } from './pagos/enums/pago.enum';
-import { FacturaCompra, GastoEstado } from './facturas-compras/entities/factura-compra.entity';
-import { FacturaCompraDetalle } from './facturas-compras/entities/factura-compra-detalle.entity';
 import { Impuesto } from './settings/impuestos/entities/impuesto.entity';
 import { CategoriaArticulo } from './core/catalogs/entities/categorias-articulos-entity';
 import { TipoCategoria } from './common/constants/categorias-articulos.config';
@@ -32,7 +26,8 @@ async function runSeed() {
   console.log('🌱 ========================================================');
 
   // 1. Inicializar conexión directa vía AppDataSource
-  console.log('⏳ Conectando a la base de datos...');
+  const dbTarget = (AppDataSource.options as any).url || `${(AppDataSource.options as any).host}:${(AppDataSource.options as any).port}/${(AppDataSource.options as any).database}`;
+  console.log(`⏳ Conectando a la base de datos (${dbTarget})...`);
   await AppDataSource.initialize();
   console.log('✅ Base de datos conectada.');
 
@@ -213,7 +208,7 @@ async function runSeed() {
     // ----------------------------------------------------
     // 3. EMPRESA DEMO
     // ----------------------------------------------------
-    console.log('\n🏢 [1/5] Configurando Empresa Demo...');
+    console.log('\n🏢 [1/4] Configurando Empresa Demo...');
     const empresaRepo = AppDataSource.getRepository(Empresa);
     let empresa = await empresaRepo.findOne({ where: { nit: '901234567-8' } });
 
@@ -235,7 +230,7 @@ async function runSeed() {
     // ----------------------------------------------------
     // 4. USUARIO ADMINISTRADOR DEMO
     // ----------------------------------------------------
-    console.log('\n👤 [2/5] Configurando Usuario Administrador...');
+    console.log('\n👤 [2/4] Configurando Usuario Administrador...');
     const userRepo = AppDataSource.getRepository(User);
     let adminUser = await userRepo.findOne({ where: { email: 'admin@demo.com' } });
     const hashedPassword = await bcryptjs.hash('Demo1234*', 10);
@@ -280,7 +275,7 @@ async function runSeed() {
     // ----------------------------------------------------
     // 5. CLIENTES Y PROVEEDORES (TERCEROS)
     // ----------------------------------------------------
-    console.log('\n👥 [3/5] Creando Terceros (5 Clientes y 5 Proveedores)...');
+    console.log('\n👥 [3/4] Creando Terceros (5 Clientes y 5 Proveedores)...');
     const clienteRepo = AppDataSource.getRepository(Cliente);
     const proveedorRepo = AppDataSource.getRepository(Proveedor);
 
@@ -472,7 +467,7 @@ async function runSeed() {
     // ----------------------------------------------------
     // 6. CATÁLOGO DE ARTÍCULOS E INVENTARIO (KARDEX)
     // ----------------------------------------------------
-    console.log('\n📦 [4/5] Creando 12 Artículos y Stock inicial en Kardex...');
+    console.log('\n📦 [4/4] Creando 12 Artículos y Stock inicial en Kardex...');
     const articuloRepo = AppDataSource.getRepository(Articulo);
     const movInvRepo = AppDataSource.getRepository(MovimientoInventario);
 
@@ -702,224 +697,6 @@ async function runSeed() {
     console.log(`   ✔ ${seededArticulos.length} Artículos verificados con stock y kardex inicial.`);
 
     // ----------------------------------------------------
-    // 7. FACTURAS DE VENTA (Pagada, Pendiente, Vencida)
-    // ----------------------------------------------------
-    console.log('\n🧾 [5/5] Creando Facturas de Venta y Compra...');
-    const facturaVentaRepo = AppDataSource.getRepository(FacturasVenta);
-    const itemVentaRepo = AppDataSource.getRepository(ItemsFacturaVenta);
-
-    const facturasVentaConfig = [
-      {
-        comprobante: '1001',
-        comprobante_completo: 'FV-1001',
-        prefijo: 'FV',
-        cliente: seededClientes[0],
-        formaPago: FormaPago.CONTADO,
-        paymentStatus: PaymentStatus.PAID,
-        fecha: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        fechaVencimiento: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        articulos: [
-          { art: seededArticulos[0], cantidad: 1 },
-          { art: seededArticulos[2], cantidad: 2 },
-        ],
-      },
-      {
-        comprobante: '1002',
-        comprobante_completo: 'FV-1002',
-        prefijo: 'FV',
-        cliente: seededClientes[1],
-        formaPago: FormaPago.CREDITO,
-        paymentStatus: PaymentStatus.PENDING,
-        fecha: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        fechaVencimiento: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000),
-        articulos: [
-          { art: seededArticulos[1], cantidad: 3 },
-          { art: seededArticulos[5], cantidad: 2 },
-        ],
-      },
-      {
-        comprobante: '1003',
-        comprobante_completo: 'FV-1003',
-        prefijo: 'FV',
-        cliente: seededClientes[2],
-        formaPago: FormaPago.CREDITO,
-        paymentStatus: PaymentStatus.PENDING,
-        fecha: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
-        fechaVencimiento: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-        articulos: [
-          { art: seededArticulos[3], cantidad: 20 },
-          { art: seededArticulos[6], cantidad: 10 },
-        ],
-      },
-    ];
-
-    for (const fv of facturasVentaConfig) {
-      const exists = await facturaVentaRepo.findOne({
-        where: { comprobante_completo: fv.comprobante_completo, empresaId: empresa.id },
-      });
-
-      if (!exists) {
-        let subtotal = 0;
-        let ivaTotal = 0;
-
-        for (const item of fv.articulos) {
-          const itemSubtotal = item.art.precio * item.cantidad;
-          const itemIva = (itemSubtotal * (item.art.porcentajeIva || 19)) / 100;
-          subtotal += itemSubtotal;
-          ivaTotal += itemIva;
-        }
-
-        const total = subtotal + ivaTotal;
-        const totalPagado = fv.paymentStatus === PaymentStatus.PAID ? total : 0;
-        const saldoPendiente = total - totalPagado;
-
-        const nuevaFactura = facturaVentaRepo.create({
-          tipoFactura: TipoFactura.STANDARD,
-          prefijo: fv.prefijo,
-          comprobante: fv.comprobante,
-          comprobante_completo: fv.comprobante_completo,
-          status: InvoiceStatus.ISSUED,
-          dianStatus: DianStatus.ACCEPTED,
-          formaPago: fv.formaPago,
-          metodoPago: metodoPago.codigo,
-          canalVenta: canalVentaId,
-          fecha: fv.fecha,
-          fechaVencimiento: fv.fechaVencimiento,
-          clientId: fv.cliente.id,
-          client: fv.cliente,
-          empresaId: empresa.id,
-          subtotal,
-          iva: ivaTotal,
-          descuento: 0,
-          total,
-          totalPagado,
-          saldoPendiente,
-          paymentStatus: fv.paymentStatus,
-          createdById: adminUser.id,
-        });
-
-        const savedFactura = await facturaVentaRepo.save(nuevaFactura);
-
-        for (const item of fv.articulos) {
-          const itemSub = item.art.precio * item.cantidad;
-          const itemIv = (itemSub * (item.art.porcentajeIva || 19)) / 100;
-
-          await itemVentaRepo.save(
-            itemVentaRepo.create({
-              facturaId: savedFactura.id,
-              articuloId: item.art.id,
-              articulo: item.art,
-              quantity: item.cantidad,
-              unitPrice: item.art.precio,
-              iva: item.art.porcentajeIva || 19,
-              valor_iva: itemIv,
-              discount: 0,
-              valor_discount: 0,
-              subtotal: itemSub,
-              importe: itemSub,
-              total: itemSub + itemIv,
-              description: item.art.nombre,
-            })
-          );
-        }
-      }
-    }
-    console.log('   ✔ Facturas de venta creadas (1 Pagada, 1 Pendiente, 1 Vencida).');
-
-    // Facturas de Compra (1 Pagada, 1 Pendiente)
-    const facturaCompraRepo = AppDataSource.getRepository(FacturaCompra);
-    const itemCompraRepo = AppDataSource.getRepository(FacturaCompraDetalle);
-
-    const facturasCompraConfig = [
-      {
-        numero: 'FC-501',
-        numeroFacturaProveedor: 'FAC-PROV-9874',
-        proveedor: seededProveedores[0],
-        formaPago: FormaPago.CONTADO,
-        paymentStatus: PaymentStatus.PAID,
-        fecha: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-        fechaVencimiento: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-        items: [
-          { art: seededArticulos[3], cantidad: 50, costo: 12000 },
-        ],
-      },
-      {
-        numero: 'FC-502',
-        numeroFacturaProveedor: 'FAC-PROV-1123',
-        proveedor: seededProveedores[1],
-        formaPago: FormaPago.CREDITO,
-        paymentStatus: PaymentStatus.PENDING,
-        fecha: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-        fechaVencimiento: new Date(Date.now() + 27 * 24 * 60 * 60 * 1000),
-        items: [
-          { art: seededArticulos[1], cantidad: 5, costo: 420000 },
-        ],
-      },
-    ];
-
-    for (const fc of facturasCompraConfig) {
-      const exists = await facturaCompraRepo.findOne({
-        where: { numero: fc.numero, empresaId: empresa.id },
-      });
-
-      if (!exists) {
-        let subtotal = 0;
-        let iva = 0;
-        for (const it of fc.items) {
-          const s = it.costo * it.cantidad;
-          subtotal += s;
-          iva += (s * 0.19);
-        }
-        const total = subtotal + iva;
-        const totalPagado = fc.paymentStatus === PaymentStatus.PAID ? total : 0;
-        const saldoPendiente = total - totalPagado;
-
-        const nuevaCompra = await facturaCompraRepo.save(
-          facturaCompraRepo.create({
-            numero: fc.numero,
-            numeroFacturaProveedor: fc.numeroFacturaProveedor,
-            proveedorId: fc.proveedor.id,
-            formaPago: fc.formaPago,
-            paymentStatus: fc.paymentStatus,
-            estado: GastoEstado.REGISTRADO,
-            fecha: fc.fecha,
-            fechaVencimiento: fc.fechaVencimiento,
-            empresaId: empresa.id,
-            subtotal,
-            iva,
-            descuento: 0,
-            total,
-            totalPagado,
-            saldoPendiente,
-            observaciones: 'Compra de inventario de prueba - Entorno Demo',
-            createdById: adminUser.id,
-          })
-        );
-
-        for (const it of fc.items) {
-          const s = it.costo * it.cantidad;
-          await itemCompraRepo.save(
-            itemCompraRepo.create({
-              facturaCompraId: nuevaCompra.id,
-              articuloId: it.art.id,
-              articulo: it.art,
-              quantity: it.cantidad,
-              unitPrice: it.costo,
-              porcentajeIva: 19,
-              valorIva: s * 0.19,
-              descuento: 0,
-              valorDescuento: 0,
-              valorSubtotal: s,
-              itemTotal: s * 1.19,
-              descripcion: it.art.nombre,
-            })
-          );
-        }
-      }
-    }
-    console.log('   ✔ Facturas de compra creadas (1 Pagada, 1 Pendiente).');
-
-    // ----------------------------------------------------
     // RESUMEN FINAL
     // ----------------------------------------------------
     console.log('\n========================================================');
@@ -930,7 +707,6 @@ async function runSeed() {
     console.log('🔑 Clave:     Demo1234*');
     console.log('👥 Terceros:  5 Clientes y 5 Proveedores creados');
     console.log('📦 Productos: 12 Artículos con stock y movimientos de Kardex');
-    console.log('🧾 Facturas:  Ventas y Compras (Pagadas, Pendientes y Vencidas)');
     console.log('ℹ️  Nota:      El PUC lo gestiona y sincroniza AppModule al iniciar.');
     console.log('========================================================\n');
 
