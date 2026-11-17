@@ -18,16 +18,26 @@ async function bootstrap() {
   // Helmet: security headers
   app.use(helmet.default());
 
-  // CORS restrictivo
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
-    'http://localhost:4200'
-  ];
+  // CORS configuration
+  const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:4200';
+  const corsOrigins = rawOrigins
+    .split(',')
+    .map((originStr) => {
+      const trimmed = originStr.trim();
+      if (!trimmed) return null;
+      try {
+        return new URL(trimmed).origin;
+      } catch {
+        return trimmed.replace(/\/+$/, '');
+      }
+    })
+    .filter(Boolean) as string[];
 
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
   });
 
   app.useGlobalPipes(new GlobalValidationPipe());
@@ -38,10 +48,7 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
 
-
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`🚀 Server running on http://localhost:${port}`);
-    console.log(`🔒 CORS origins: ${corsOrigins.join(', ')}`);
-  }
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`🔒 Allowed CORS origins: ${corsOrigins.join(', ')}`);
 }
 bootstrap();
