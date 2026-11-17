@@ -6,6 +6,9 @@ import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import { Role } from 'src/core/roles/entities/role.entity';
 import { SystemRole } from 'src/common/constants/roles.constants';
+import { Empresa } from 'src/settings/empresa/entities/empresa.entity';
+import { UserEmpresa } from './entities/user-empresa.entity';
+import { Municipality } from 'src/core/municipalities/entities/municipality.entity';
 import * as bcryptjs from 'bcryptjs';
 
 @Injectable()
@@ -204,5 +207,92 @@ export class UsersService {
 
   async countUsers(): Promise<number> {
     return await this.usersRepository.count({ where: { isActive: true } });
+  }
+
+  async seedDefaultAdminUser(): Promise<void> {
+    const manager = this.usersRepository.manager;
+    const roleRepo = manager.getRepository(Role);
+    const empresaRepo = manager.getRepository(Empresa);
+    const userEmpresaRepo = manager.getRepository(UserEmpresa);
+    const munRepo = manager.getRepository(Municipality);
+
+    // 1. Obtener o crear Empresa Demo
+    let empresa = await empresaRepo.findOne({ where: { nit: '901234567-8' } });
+    if (!empresa) {
+      let ciudadId = 11001;
+      const primerMun = await munRepo.findOne({ where: { code: '11001' } });
+      if (primerMun) ciudadId = primerMun.id;
+
+      empresa = await empresaRepo.save(
+        empresaRepo.create({
+          nit: '901234567-8',
+          razonSocial: 'Empresa Demo Colombia S.A.S.',
+          direccion: 'Calle 100 # 15-20, Piso 5, Bogotá D.C.',
+          telefono: '6013001234',
+          email: 'contacto@democolombia.com',
+          ciudad: ciudadId,
+        }),
+      );
+      console.log(`🏢 Empresa demo configurada: ${empresa.razonSocial}`);
+    }
+
+    // 2. Obtener rol de Administrador
+    let adminRole = await roleRepo.findOne({ where: { name: SystemRole.SUPER_ADMIN } });
+    if (!adminRole) {
+      adminRole = await roleRepo.findOne({ where: { name: SystemRole.ADMIN } });
+    }
+    if (!adminRole) {
+      adminRole = await roleRepo.save(
+        roleRepo.create({
+          name: SystemRole.ADMIN,
+          description: 'Administrador del sistema con acceso total',
+          isSystem: true,
+          isActive: true,
+        }),
+      );
+    }
+
+    // 3. Obtener o crear Usuario Admin
+    const hashedPassword = await bcryptjs.hash('Demo1234*', 10);
+    let adminUser = await this.usersRepository.findOne({
+      where: { email: 'admin@demo.com' },
+      select: ['id', 'email', 'password', 'isActive', 'empresaId', 'roleId'],
+    });
+
+    if (!adminUser) {
+      adminUser = await this.usersRepository.save(
+        this.usersRepository.create({
+          fullName: 'Administrador Demo',
+          email: 'admin@demo.com',
+          password: hashedPassword,
+          phone: '3001234567',
+          isActive: true,
+          roleId: adminRole.id,
+          empresaId: empresa.id,
+        }),
+      );
+      console.log(`👤 Usuario demo creado: ${adminUser.email}`);
+    } else {
+      adminUser.password = hashedPassword;
+      adminUser.empresaId = empresa.id;
+      adminUser.roleId = adminRole.id;
+      adminUser.isActive = true;
+      await this.usersRepository.save(adminUser);
+      console.log(`👤 Usuario demo verificado/actualizado: ${adminUser.email}`);
+    }
+
+    // 4. Vincular en user_empresas
+    const userEmpresaExists = await userEmpresaRepo.findOne({
+      where: { userId: adminUser.id, empresaId: empresa.id },
+    });
+    if (!userEmpresaExists) {
+      await userEmpresaRepo.save(
+        userEmpresaRepo.create({
+          userId: adminUser.id,
+          empresaId: empresa.id,
+          isDefault: true,
+        }),
+      );
+    }
   }
 }

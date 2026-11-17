@@ -795,6 +795,7 @@ async function runSeed() {
           totalPagado,
           saldoPendiente,
           paymentStatus: fv.paymentStatus,
+          createdById: adminUser.id,
         });
 
         const savedFactura = await facturaVentaRepo.save(nuevaFactura);
@@ -891,6 +892,7 @@ async function runSeed() {
             totalPagado,
             saldoPendiente,
             observaciones: 'Compra de inventario de prueba - Entorno Demo',
+            createdById: adminUser.id,
           })
         );
 

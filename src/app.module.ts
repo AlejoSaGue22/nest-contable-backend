@@ -1,6 +1,7 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ClientesModule } from './clientes/clientes.module';
 import { UsersModule } from './users/users.module';
+import { UsersService } from './users/users.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -49,11 +50,15 @@ import { InventarioModule } from './inventario/inventario.module';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST || 'iriguchi.proxy.rlwy.net',
-      port: Number(process.env.DB_PORT) || 26753,
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD?.toString() || 'XVSGYXqAauYwCBofVSPFsbmJgKaSJLvb',
-      database: process.env.DB_DATABASE || 'railway',
+      ...(process.env.DATABASE_URL
+        ? { url: process.env.DATABASE_URL }
+        : {
+            host: process.env.DB_HOST || 'iriguchi.proxy.rlwy.net',
+            port: Number(process.env.DB_PORT) || 26753,
+            username: process.env.DB_USERNAME || 'postgres',
+            password: process.env.DB_PASSWORD?.toString() || 'XVSGYXqAauYwCBofVSPFsbmJgKaSJLvb',
+            database: process.env.DB_DATABASE || 'railway',
+          }),
       autoLoadEntities: true,
       synchronize: true,
     }),
@@ -112,6 +117,7 @@ export class AppModule implements OnModuleInit {
     private readonly municipalitiesService: MunicipalitiesService,
     private readonly catalogsService: CatalogsService,
     private readonly impuestosService: ImpuestosService,
+    private readonly usersService: UsersService,
     private datasource: DataSource,
   ) { }
 
@@ -137,6 +143,9 @@ export class AppModule implements OnModuleInit {
 
     // Seed otros catálogos
     await this.catalogsService.seedAll();
+
+    // Seed usuario administrador demo
+    await this.usersService.seedDefaultAdminUser();
 
     console.log('Sistema inicializado con datos por defecto');
   }
