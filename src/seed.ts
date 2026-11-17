@@ -21,6 +21,9 @@ import { CategoriaArticulo } from './core/catalogs/entities/categorias-articulos
 import { TipoCategoria } from './common/constants/categorias-articulos.config';
 import { UnidadMedida } from './core/catalogs/entities/unidad-medida.entity';
 import { Municipality } from './core/municipalities/entities/municipality.entity';
+import { TipoDocumento } from './core/catalogs/entities/tipo-documento.entity';
+import { CanalVenta } from './core/catalogs/entities/canal-venta.entity';
+import { MetodoPago } from './core/catalogs/entities/metodo-pago.entity';
 
 async function runSeed() {
   console.log('🌱 ========================================================');
@@ -120,7 +123,7 @@ async function runSeed() {
 
     const unidadMedidaRepo = AppDataSource.getRepository(UnidadMedida);
     let unidadDefecto = await unidadMedidaRepo.findOne({ where: { codigo: '94' } }) ||
-                        await unidadMedidaRepo.findOne({ where: { state: true } });
+      await unidadMedidaRepo.findOne({ where: { state: true } });
     if (!unidadDefecto) {
       unidadDefecto = await unidadMedidaRepo.save(
         unidadMedidaRepo.create({
@@ -134,8 +137,75 @@ async function runSeed() {
 
     const munRepo = AppDataSource.getRepository(Municipality);
     let municipioDefault = await munRepo.findOne({ where: { code: '11001' } }) ||
-                           await munRepo.findOne({ where: { id: 1 } });
-    const ciudadId = municipioDefault ? municipioDefault.id : 1;
+                           await munRepo.findOne({});
+    if (!municipioDefault) {
+      municipioDefault = await munRepo.save(
+        munRepo.create({
+          id: 11001,
+          code: '11001',
+          name: 'Bogotá, D.C.',
+          department: 'Bogotá, D.C.',
+          departmentCode: '11',
+          departmentName: 'Bogotá, D.C.',
+        })
+      );
+    }
+    const ciudadId = municipioDefault.id;
+
+    // Validar o crear Tipos de Documento (NIT y CC)
+    const tipoDocRepo = AppDataSource.getRepository(TipoDocumento);
+    let docNit = await tipoDocRepo.findOne({ where: { abreviatura: 'NIT' } });
+    if (!docNit) {
+      docNit = await tipoDocRepo.save(
+        tipoDocRepo.create({
+          id: '6',
+          abreviatura: 'NIT',
+          nombre: 'NIT',
+          state: true,
+        })
+      );
+    }
+    let docCC = await tipoDocRepo.findOne({ where: { abreviatura: 'CC' } });
+    if (!docCC) {
+      docCC = await tipoDocRepo.save(
+        tipoDocRepo.create({
+          id: '3',
+          abreviatura: 'CC',
+          nombre: 'Cédula de ciudadanía',
+          state: true,
+        })
+      );
+    }
+    const tipoDocNitId = Number(docNit.id);
+    const tipoDocCCId = Number(docCC.id);
+
+    // Validar o crear Canal de Venta
+    const canalVentaRepo = AppDataSource.getRepository(CanalVenta);
+    let canalVenta = await canalVentaRepo.findOne({ where: { state: true } });
+    if (!canalVenta) {
+      canalVenta = await canalVentaRepo.save(
+        canalVentaRepo.create({
+          id: '1',
+          codigo: 'DIR',
+          nombre: 'Venta Directa',
+          state: true,
+        })
+      );
+    }
+    const canalVentaId = Number(canalVenta.id);
+
+    // Validar o crear Método de Pago Efectivo (código 10)
+    const metodoPagoRepo = AppDataSource.getRepository(MetodoPago);
+    let metodoPago = await metodoPagoRepo.findOne({ where: { codigo: '10' } });
+    if (!metodoPago) {
+      metodoPago = await metodoPagoRepo.save(
+        metodoPagoRepo.create({
+          codigo: '10',
+          nombre: 'Efectivo',
+          state: true,
+        })
+      );
+    }
 
     // ----------------------------------------------------
     // 3. EMPRESA DEMO
@@ -216,7 +286,7 @@ async function runSeed() {
         nombre: 'Distribuidora Andina',
         apellido: 'S.A.S.',
         razonSocial: 'Distribuidora Andina S.A.S.',
-        tipoDocumento: 6, // NIT
+        tipoDocumento: tipoDocNitId,
         numeroDocumento: '900888111',
         dv: '1',
         tipoPersona: '2', // Jurídica
@@ -233,7 +303,7 @@ async function runSeed() {
         nombre: 'Tecnología Global',
         apellido: 'Ltda.',
         razonSocial: 'Tecnología Global Ltda.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         numeroDocumento: '900777222',
         dv: '2',
         tipoPersona: '2',
@@ -250,7 +320,7 @@ async function runSeed() {
         nombre: 'Comercializadora El Sol',
         apellido: '',
         razonSocial: 'Comercializadora El Sol S.A.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         numeroDocumento: '900666333',
         dv: '3',
         tipoPersona: '2',
@@ -267,7 +337,7 @@ async function runSeed() {
         nombre: 'Inversiones Bogotá',
         apellido: 'S.A.',
         razonSocial: 'Inversiones Bogotá S.A.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         numeroDocumento: '900555444',
         dv: '4',
         tipoPersona: '2',
@@ -284,7 +354,7 @@ async function runSeed() {
         nombre: 'Carlos Andrés',
         apellido: 'Gómez Restrepo',
         razonSocial: 'Carlos Andrés Gómez',
-        tipoDocumento: 3, // CC
+        tipoDocumento: tipoDocCCId,
         numeroDocumento: '1020304050',
         dv: '',
         tipoPersona: '1', // Natural
@@ -315,7 +385,7 @@ async function runSeed() {
       {
         nombre: 'Mayorista Textil de Colombia',
         razonSocial: 'Mayorista Textil de Colombia S.A.S.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         identificacion: '900111999',
         dv: '9',
         tipoPersona: '2',
@@ -329,7 +399,7 @@ async function runSeed() {
       {
         nombre: 'Importaciones Asia-América',
         razonSocial: 'Importaciones Asia-América Ltda.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         identificacion: '900222888',
         dv: '8',
         tipoPersona: '2',
@@ -343,7 +413,7 @@ async function runSeed() {
       {
         nombre: 'Papelería & Suministros Nacional',
         razonSocial: 'Papelería & Suministros Nacional S.A.S.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         identificacion: '900333777',
         dv: '7',
         tipoPersona: '2',
@@ -357,7 +427,7 @@ async function runSeed() {
       {
         nombre: 'Servicios Cloud Colombia',
         razonSocial: 'Servicios Cloud Colombia S.A.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         identificacion: '900444666',
         dv: '6',
         tipoPersona: '2',
@@ -371,7 +441,7 @@ async function runSeed() {
       {
         nombre: 'Empaque y Logística del Valle',
         razonSocial: 'Empaque y Logística del Valle S.A.S.',
-        tipoDocumento: 6,
+        tipoDocumento: tipoDocNitId,
         identificacion: '900555555',
         dv: '5',
         tipoPersona: '2',
@@ -708,8 +778,8 @@ async function runSeed() {
           status: InvoiceStatus.ISSUED,
           dianStatus: DianStatus.ACCEPTED,
           formaPago: fv.formaPago,
-          metodoPago: '10',
-          canalVenta: 1,
+          metodoPago: metodoPago.codigo,
+          canalVenta: canalVentaId,
           fecha: fv.fecha,
           fechaVencimiento: fv.fechaVencimiento,
           clientId: fv.cliente.id,
