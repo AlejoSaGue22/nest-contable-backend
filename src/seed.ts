@@ -136,8 +136,11 @@ async function runSeed() {
     }
 
     const munRepo = AppDataSource.getRepository(Municipality);
-    let municipioDefault = await munRepo.findOne({ where: { code: '11001' } }) ||
-                           await munRepo.findOne({});
+    let municipioDefault = await munRepo.findOne({ where: { code: '11001' } });
+    if (!municipioDefault) {
+      const primerMunicipio = await munRepo.find({ take: 1 });
+      municipioDefault = primerMunicipio.length > 0 ? primerMunicipio[0] : null;
+    }
     if (!municipioDefault) {
       municipioDefault = await munRepo.save(
         munRepo.create({
